@@ -59,9 +59,9 @@
   Async: `cx.spawn(async move |cx| …)` with `cx.background_executor().timer(...)`.
 - Cargo git deps auto-discover `gpui`/`gpui_platform` by name across the zed workspace;
   Cargo.lock pins the resolved commit — reproducible until we deliberately bump.
-- **BLOCKER (env)**: macOS gpui build compiles `shaders.metal` via `xcrun metal`; CLT-only
-  machines (this one, macOS 15.8) lack it AND lack `xcodebuild` to download the Metal
-  toolchain component. Requires full Xcode + `sudo xcode-select -s`. No workaround.
+- **RESOLVED (2026-08-24)**: user installed full Xcode + Metal toolchain
+  (`xcrun metal` → Apple metal 32023.864); helper builds/tests green.
+  First build of zed git deps ≈ minutes, cached thereafter.
 - Parity contract pattern: Rust `#[ignore]`d generator test writes the snapshot fixture;
   Rust locks its own emission byte-exact; bun decodes the same snapshot. Rust→TS drift
   now caught by committed tests on both sides.

@@ -25,13 +25,12 @@ snapshotted in-repo and parsed by bun test) and helper smoke run
 - [x] Scout: current gpui API on zed main — done directly from upstream sources:
       `gpui_platform::application()` entry, macOS feature `font-kit`, examples
       hello_world.rs / on_window_close_quit.rs / window.rs (spawn syntax)
-- [ ] Helper crate: git dep gpui, `--smoke` mode — code written (crates/helper),
-      **BLOCKED on env: machine has CLT only, no Xcode/Metal toolchain**
-      (`xcrun metal` missing → gpui_apple build script cannot compile shaders.metal;
-      needs full Xcode + `sudo xcode-select -s`, user action)
-- [ ] VERIFY: `cargo test -p solid-gpui-helper` green (smoke exits 0),
-      `cargo run -p solid-gpui-helper -- --smoke 2000` exit 0, user visually
-      confirms window; clippy/fmt; commit
+- [x] Helper crate: git dep gpui, `--smoke` mode — built clean after adding
+      `move` to the run closure; Metal toolchain installed by user (commit 31a97d2)
+- [x] VERIFY: `cargo test -p solid-gpui-helper` 2/2 green (smoke exit 0,
+      ≥700ms elapsed), `cargo run -- --smoke 2000` exit 0 in 2.6s; clippy clean
+      (zed-tree 'block' future-incompat warning only); fmt; commit 31a97d2.
+      User visual confirmation of the window: pending (asked)
 
 Cross-ref: PLAN.md#2026-08-24---solid--gpui-oss-repo-spec-frozen-2026-08-24-after-q1q3
 
