@@ -37,6 +37,23 @@
 - Local dir renamed to `solid-gpui` on 2026-08-24 (user action).
 - Phase 1 = macOS-first walking skeleton; artifacts in .pi/artifacts/.
 
+## Slice 6 learnings (2026-08-24)
+
+- DEADLOCK INVARIANT (cost us one review round): never hold the process-global
+  stdout lock across a blocking read. The stdin thread and the GPUI main thread
+  (emit_click) share std stdout; the lock must be scoped per write. See the
+  comment at run_stdio_window in crates/helper/src/main.rs.
+- gpui interactive elements: `.id()` comes from InteractiveElement, `.on_click`
+  from StatefulInteractiveElement (needs Stateful<Div>); `Pixels` field is
+  private — use `.to_f64()`. `cx.listener` is how a render-time closure reaches
+  view state.
+- serde f64 40.0 serializes as "40.0" — committed fixtures must use the
+  canonical form or Rust byte-equality tests fail while TS parses fine.
+- Events are async server-push: NOT seq-correlated like replies; client demuxes
+  per line by trying decodeReply then decodeEvent.
+- TS narrowing trap: `(EVENT_TYPES as string[]).includes(v)` does NOT narrow;
+  write an explicit `v is EventType` predicate.
+
 ## Slice 1 learnings (2026-08-24)
 
 - Wire contract pattern that works: one shared fixture JSON parsed by BOTH bun:test and cargo test — cross-language parity proven without transport. Keep for every protocol change.

@@ -22,13 +22,17 @@ NDJSON events on stdout → client demultiplexes lines (reply vs event) and
 routes to the renderer handler registry → Solid onClick actually fires.
 Demo: counter button increments for real; bun --hot remount pattern.
 
-- [ ] RED: Rust event fixture parity + TS decodeEvent tests (absent)
-- [ ] GREEN: protocol Event type (Rust+TS); helper emits clicks via cx.listener
-- [ ] RED: client event-routing test (fake helper emitting an event line)
-- [ ] GREEN: client demultiplex (decodeReply ↔ decodeEvent) + onEvent callback
+- [x] RED: Rust event fixture parity + TS decodeEvent tests (absent)
+- [x] GREEN: protocol Event type (Rust+TS); helper emits clicks via cx.listener
+- [x] RED: client event-routing test (fake helper emitting an event line)
+- [x] GREEN: client demultiplex (decodeReply ↔ decodeEvent) + onEvent callback
       wired into @solid-gpui/solid render() registry
-- [ ] Demo: user clicks increment the count in the GPUI window
-- [ ] VERIFY: all suites green, tsc, clippy/fmt; commit; independent review
+- [ ] Demo: user clicks increment the count in the GPUI window (USER visual
+      confirmation pending — run `bun run demo:solid`, click the button)
+- [x] VERIFY: bun 41/41 (--conditions=browser) · tsc x3 · cargo 38 passed ·
+      clippy clean · node smoke OK; commits 8ddf0e5 + deadlock fix 8154aed;
+      independent review round 1 found stdout-lock blocker (fixed), round 2
+      verdict: **Slice 6 mergeable**
 
 Design notes: events are async server-push (not request/response) — separate
 wire family from Reply; helper writes directly under the global stdout lock;

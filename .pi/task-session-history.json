@@ -168,5 +168,53 @@
     "reportedStatus": "success",
     "resultValid": true,
     "completedAt": 1787560743606
+  },
+  {
+    "id": "mt73bb4j-150b",
+    "agentType": "reviewer",
+    "description": "Review Slice 6 event backchannel",
+    "sessionName": "task-mt73bb4j-150b",
+    "startedAt": 1787567133659,
+    "paneId": "w3:pDB",
+    "handle": {
+      "backend": "herdr",
+      "resourceId": "w3:pDB",
+      "socketPath": "/Users/huynhgiabuu/.config/herdr/herdr.sock",
+      "terminalId": "term_659c867a80b1f1a",
+      "agentName": "reviewer-mt73bb4j",
+      "foregroundProcessGroupId": 95667
+    },
+    "piDir": "/Users/huynhgiabuu/dev/projects/solid-gpui/.pi",
+    "dir": "/Users/huynhgiabuu/dev/projects/solid-gpui/.pi/artifacts/tasks",
+    "cwd": "/Users/huynhgiabuu/dev/projects/solid-gpui",
+    "status": "done",
+    "background": true,
+    "reportedStatus": "success",
+    "resultValid": true,
+    "completedAt": 1787567886348
+  },
+  {
+    "id": "mt73vnpl-d7d0",
+    "agentType": "reviewer",
+    "description": "Verify Slice 6 deadlock fix",
+    "sessionName": "task-mt73vnpl-d7d0",
+    "startedAt": 1787568083515,
+    "paneId": "w3:pDC",
+    "handle": {
+      "backend": "herdr",
+      "resourceId": "w3:pDC",
+      "socketPath": "/Users/huynhgiabuu/.config/herdr/herdr.sock",
+      "terminalId": "term_659c8a03f01461b",
+      "agentName": "reviewer-mt73vnpl",
+      "foregroundProcessGroupId": 98339
+    },
+    "piDir": "/Users/huynhgiabuu/dev/projects/solid-gpui/.pi",
+    "dir": "/Users/huynhgiabuu/dev/projects/solid-gpui/.pi/artifacts/tasks",
+    "cwd": "/Users/huynhgiabuu/dev/projects/solid-gpui",
+    "status": "done",
+    "background": true,
+    "reportedStatus": "success",
+    "resultValid": true,
+    "completedAt": 1787568266399
   }
 ]
