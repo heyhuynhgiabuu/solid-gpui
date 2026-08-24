@@ -187,12 +187,11 @@ Cross-ref: PLAN.md#2026-08-24---solid--gpui-oss-repo-spec-frozen-2026-08-24-afte
 ### 2026-08-24 - S7: perf & visual-test instrumentation (Phase 2 opener)
 status: active
 
-- [ ] S7a FrameStats (Rust): ring-buffer of build durations, p50/p90/p99/max,
-      frames count; pure module, unit tests FIRST (percentile math incl.
-      empty/single/large buffers)
-- [ ] S7a Wire into HostView::render (measure build_element wall time);
-      debugFrameOverlay flag paints stats text bottom-left via native gpui
-      styling (no StyleValue protocol change)
+- [x] S7a FrameStats (Rust): ring-buffer of build durations, p50/p90/p99/max,
+      frames count; unit-tested (percentile math incl. wraparound/unsorted)
+- [x] S7a Wire into HostView::render (measures build_element wall time);
+      SOLID_GPUI_DEBUG_OVERLAY=1 paints stats block bottom-left via native
+      gpui styling (no StyleValue protocol change); overlay run verified no-crash
 - [ ] S7b Wire command family extension: {"type":"command","command":
       "getStats"} -> Reply carrying stats JSON; TS decoder parity + fixture
 - [ ] S7b captureFrame {path} command: helper writes PNG of its own window
