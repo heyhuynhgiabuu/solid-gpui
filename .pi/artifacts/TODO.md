@@ -261,6 +261,12 @@ optional key:String + modifiers{ctrl,alt,shift,cmd}; focus/blur need neither.
       (subscription-activation race); window test autoFocus->focus event
       (dee9e38). Tab cycling itself needs real input (no key injection in
       window tests)
-- [ ] VERIFY: suites green; commits 95828b6 + dee9e38; reviewer pending
+- [x] VERIFY S9: suites green; commits 95828b6 + dee9e38; reviewer r1:
+      **mergeable** (0 blocker/major). Minor follow-ups (non-blocking, tracked):
+      focus_subscriptions never freed for long-lived sessions (bounded by
+      distinct focusable ids); autoFocus on a node with no onFocus listener
+      focuses but emits no event; window tests use fixed sleeps (acceptable,
+      serialized by lock).
+      Closed 2026-08-24.
 
 Cross-ref: PLAN.md Phase 2 roadmap (S9 entry)
