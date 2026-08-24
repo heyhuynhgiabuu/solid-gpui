@@ -51,6 +51,12 @@
   canonical form or Rust byte-equality tests fail while TS parses fine.
 - Events are async server-push: NOT seq-correlated like replies; client demuxes
   per line by trying decodeReply then decodeEvent.
+- render() in packages/solid/src/render.ts is the ONLY path that wires
+  event→handler routing; bypassing it (demo did) silently kills clicks.
+  Post-handler flush is render()'s job — flush() pumps Solid's scheduler
+  until the queue settles, safe to call right after a sync handler.
+- Write-tool slip twice this slice: full-file content landed on the wrong
+  sibling path (index.ts, then render.test.ts). Always re-read after writes.
 - TS narrowing trap: `(EVENT_TYPES as string[]).includes(v)` does NOT narrow;
   write an explicit `v is EventType` predicate.
 
