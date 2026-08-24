@@ -451,7 +451,10 @@
     "piDir": "/Users/huynhgiabuu/dev/projects/solid-gpui/.pi",
     "dir": "/Users/huynhgiabuu/dev/projects/solid-gpui/.pi/artifacts/tasks",
     "cwd": "/Users/huynhgiabuu/dev/projects/solid-gpui",
-    "status": "running",
-    "background": true
+    "status": "done",
+    "background": true,
+    "reportedStatus": "failure",
+    "resultValid": true,
+    "completedAt": 1787591990452
   }
 ]

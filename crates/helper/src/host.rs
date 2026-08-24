@@ -200,6 +200,8 @@ pub struct HostView {
     list_alignment: HashMap<ElementId, ListAlignment>,
     /// Lists that already had FollowMode::Tail armed (see RenderCtx).
     list_follow_armed: HashSet<ElementId>,
+    /// Children each list rendered last frame (see RenderCtx).
+    list_children: HashMap<ElementId, Vec<ElementId>>,
 }
 
 impl HostView {
@@ -219,6 +221,7 @@ impl HostView {
             list_render_counts: HashMap::new(),
             list_alignment: HashMap::new(),
             list_follow_armed: HashSet::new(),
+            list_children: HashMap::new(),
         }
     }
 
@@ -550,6 +553,9 @@ struct RenderCtx<'a> {
     /// the scroll position to the end every call, so it must run ONCE — a
     /// per-render call would fight the user's manual scroll-up.
     list_follow_armed: &'a mut HashSet<ElementId>,
+    /// Children each list rendered last frame — the splice diff baseline
+    /// (prefix/suffix diff keeps append/remove from resetting the scroll).
+    list_children: &'a mut HashMap<ElementId, Vec<ElementId>>,
 }
 
 /// The per-frame gpui InputHandler registered for a focused input/textarea.
@@ -741,6 +747,31 @@ impl IntoElement for ImeAnchor {
     }
 }
 
+/// The precise splice range between last frame's children and the current
+/// ones: the changed MIDDLE after the longest common prefix/suffix. Splicing
+/// only this range keeps gpui's scroll rebase away from scroll positions
+/// outside it — an append must not yank a manually scrolled-up chat to the
+/// top (splice(0..old, new) rebases the scroll-top INTO the range). Pure —
+/// unit-tested.
+fn splice_range(old: &[ElementId], new: &[ElementId]) -> (Range<usize>, usize) {
+    let prefix = old
+        .iter()
+        .zip(new.iter())
+        .take_while(|(a, b)| a == b)
+        .count();
+    let suffix = old
+        .iter()
+        .rev()
+        .zip(new.iter().rev())
+        .take_while(|(a, b)| a == b)
+        .count()
+        .min(old.len() - prefix)
+        .min(new.len() - prefix);
+    let old_mid = old.len() - prefix - suffix;
+    let new_mid = new.len() - prefix - suffix;
+    (prefix..prefix + old_mid, new_mid)
+}
+
 /// If `id` is (inside) a list item, return the list element and the item
 /// index. Walks up the parent chain; a list's DIRECT children are items, so
 /// a changed node inside an item maps to that item (content changes must
@@ -806,6 +837,7 @@ impl Render for HostView {
             list_render_counts: &mut self.list_render_counts,
             list_alignment: &mut self.list_alignment,
             list_follow_armed: &mut self.list_follow_armed,
+            list_children: &mut self.list_children,
         };
         let mut content = match self.tree.root() {
             Some(root) => build_element(&self.tree, root, window, cx, &mut ctx),
@@ -1200,10 +1232,18 @@ fn build_list_element(
         .entry(id)
         .or_insert_with(|| ListState::new(0, alignment, px(500.)))
         .clone();
-    let old_count = state.item_count();
-    let new_count = node.children.len();
-    if old_count != new_count {
-        state.splice(0..old_count, new_count);
+    // Precise splice via prefix/suffix diff against last frame's children:
+    // splice(0..old, new) rebases the scroll-top INTO the range and resets
+    // it to the top on EVERY count change — an append would yank a manually
+    // scrolled-up chat back to the top. Splicing only the changed middle
+    // keeps scroll positions outside the range untouched.
+    {
+        let prev = ctx.list_children.entry(id).or_default();
+        let (range, new_mid) = splice_range(prev, &node.children);
+        if !range.is_empty() || new_mid != 0 {
+            state.splice(range, new_mid);
+        }
+        *prev = node.children.clone();
     }
     let state = match item_height {
         Some(h) => state.with_uniform_item_height(h),
@@ -1238,6 +1278,7 @@ fn build_list_element(
                 list_render_counts: &mut view.list_render_counts,
                 list_alignment: &mut view.list_alignment,
                 list_follow_armed: &mut view.list_follow_armed,
+                list_children: &mut view.list_children,
             };
             build_element(&view.tree, cid, window, vcx, &mut ctx)
         })
@@ -1249,11 +1290,18 @@ fn build_list_element(
     // height, so the List would measure all items and never virtualize. A
     // flex ROW stretches the List's cross axis (height) to the container's
     // definite height, so the List only measures the visible subset.
-    let mut el = div()
-        .w_full()
-        .h(px(window.bounds().size.height.into()))
-        .flex()
-        .child(list(state_el, render_item));
+    //
+    // The wrapper's height: an explicit height style wins; a root list falls
+    // back to the window height (the window root has no definite parent for
+    // percentages); any other list uses 100% of its parent — which resolves
+    // only when the parent chain provides a definite height (the CSS rule;
+    // a list inside an auto-height column must be given a height).
+    let wrapper = match style_num(&node.style, "height") {
+        Some(h) => div().w_full().h(px(h as f32)),
+        None if tree.root() == Some(id) => div().w_full().h(px(window.bounds().size.height.into())),
+        None => div().w_full().h_full(),
+    };
+    let mut el = wrapper.flex().child(list(state_el, render_item));
     for (key, value) in &node.style {
         el = apply_style(el, key, value);
     }
@@ -1571,6 +1619,30 @@ mod tests {
         assert_eq!(list_item_containing(&tree, 3.into()), Some((1.into(), 1)));
         assert_eq!(list_item_containing(&tree, 1.into()), None); // the list itself
         assert_eq!(list_item_containing(&tree, 99.into()), None); // missing
+    }
+
+    #[test]
+    fn splice_range_only_covers_the_changed_middle() {
+        let id = |n: u32| ElementId(n);
+        // Append at the end: empty old range — the scroll rebase never
+        // touches positions at or before the old end.
+        assert_eq!(
+            splice_range(&[id(1), id(2)], &[id(1), id(2), id(3)]),
+            (2..2, 1)
+        );
+        // Remove the first item: only that slot.
+        assert_eq!(
+            splice_range(&[id(1), id(2), id(3)], &[id(2), id(3)]),
+            (0..1, 0)
+        );
+        // Insert mid-list.
+        assert_eq!(
+            splice_range(&[id(1), id(3)], &[id(1), id(2), id(3)]),
+            (1..1, 1)
+        );
+        // Identical: an EMPTY range (position varies; only emptiness matters).
+        let (r, n) = splice_range(&[id(1)], &[id(1)]);
+        assert!(r.is_empty() && n == 0, "got {r:?} {n}");
     }
 
     #[test]

@@ -93,7 +93,9 @@ describe("decodeCommand", () => {
   test("listInfo fixture parses and re-encodes exactly (parity)", () => {
     const parsed = decodeCommand(JSON.stringify(listInfoFixture))
     expect(parsed).toEqual({ ok: true, value: { type: "listInfo", seq: 33, id: 4 } })
-    expect(encodeCommand(parsed.value)).toBe(JSON.stringify(listInfoFixture))
+    expect(
+      encodeCommand((parsed as { value: Parameters<typeof encodeCommand>[0] }).value),
+    ).toBe(JSON.stringify(listInfoFixture))
   })
 
   test("encodeCommand emits simulateInput correctly (not getStats)", () => {
