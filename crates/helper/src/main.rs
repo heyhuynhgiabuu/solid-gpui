@@ -174,11 +174,17 @@ fn run_stdio_window() {
         std::thread::spawn(move || {
             let stdin = std::io::stdin();
             let stdout = std::io::stdout();
-            let mut out = stdout.lock();
+            // DEADLOCK INVARIANT: never hold the stdout lock across a blocking
+            // read. The GPUI main thread writes click events under the same
+            // process-global lock (host.rs emit_click); a lock held across
+            // `stdin.lock().lines()` would freeze the window on first click.
+            // Scope each reply write instead — lines cannot interleave because
+            // a full line + flush completes before the lock drops.
             for line in stdin.lock().lines() {
                 let line = match line {
                     Ok(l) => l,
                     Err(e) => {
+                        let mut out = stdout.lock();
                         let _ = writeln!(
                             out,
                             "{}",
@@ -205,6 +211,7 @@ fn run_stdio_window() {
                 // Wait for this job's reply to keep strict line ordering.
                 match reply_rx.recv() {
                     Ok(reply) => {
+                        let mut out = stdout.lock();
                         if writeln!(out, "{}", reply_to_json(&reply)).is_err()
                             || out.flush().is_err()
                         {
