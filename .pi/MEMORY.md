@@ -55,6 +55,15 @@
   event→handler routing; bypassing it (demo did) silently kills clicks.
   Post-handler flush is render()'s job — flush() pumps Solid's scheduler
   until the queue settles, safe to call right after a sync handler.
+- BYPASSED-SEAM BUG (bit us TWICE in slice 6): anything that wires
+  spawnHelper/createSolidRenderer by hand has NO event routing and NO
+  auto-flush. render() in packages/solid/src/render.ts is the only wired
+  entry point; examples must use it (RenderHandle.update for remounts), and
+  code review should reject hand-rolled wiring outside render.ts.
+- handle.update() must dispose the previous Solid tree BEFORE mounting the
+  new one: zombie effects from the replaced tree touch destroyed nodes
+  (replaceText(undefined)); disposer also emits destroyElement + clears
+  handler registry.
 - Write-tool slip twice this slice: full-file content landed on the wrong
   sibling path (index.ts, then render.test.ts). Always re-read after writes.
 - TS narrowing trap: `(EVENT_TYPES as string[]).includes(v)` does NOT narrow;
