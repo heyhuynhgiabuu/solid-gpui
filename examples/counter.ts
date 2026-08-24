@@ -17,6 +17,7 @@ const g = globalThis as { __counterHandle?: RenderHandle; __counterWired?: boole
 function tree(h: Parameters<RenderHandle["update"]>[0]) {
   const [count, setCount] = createSignal(0)
   const [pressed, setPressed] = createSignal(false)
+  const [text, setText] = createSignal("")
   return h(
     "div",
     {
@@ -46,7 +47,23 @@ function tree(h: Parameters<RenderHandle["update"]>[0]) {
       },
       "increment (click me — events work!)",
     ),
-    h("div", { style: { fontSize: 12, color: "#6c7086" } }, "solid-gpui Phase 1 demo"),
+    h(
+      "input",
+      {
+        style: {
+          width: 220,
+          padding: 8,
+          fontSize: 16,
+          color: "#cdd6f4",
+          backgroundColor: "#313244",
+          borderRadius: 6,
+        },
+        placeholder: "Type here (IME/native caret)",
+        value: text(),
+        onChange: (e) => setText((e as { value?: string }).value ?? ""),
+      },
+    ),
+    h("div", { style: { fontSize: 12, color: "#6c7086" } }, "solid-gpui demo — input is live"),
   )
 }
 

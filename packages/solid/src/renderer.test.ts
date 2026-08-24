@@ -137,3 +137,96 @@ describe("lifecycle", () => {
     expect(rec.batches.length).toBe(0)
   })
 })
+
+describe("input/textarea", () => {
+  test("input tag maps to elementType input and value to setValue", async () => {
+    const rec = recording()
+    const { renderer: R, render, flush } = createSolidRenderer(rec.send)
+    const container = R.createElement("#root")
+    const dispose = render(() => {
+      const root = R.createElement("div")
+      const input = R.createElement("input")
+      R.setProp(input, "value", "hi")
+      R.insertNode(root, input)
+      return root
+    }, container)
+    await flush()
+
+    const m = rec.batches[0]!.mutations
+    const creates = m.filter(
+      (x): x is Extract<Mutation, { op: "createElement" }> => x.op === "createElement",
+    )
+    expect(creates[creates.length - 1]?.elementType).toBe("input")
+    const sv = m.find((x) => x.op === "setValue") as Extract<Mutation, { op: "setValue" }> | undefined
+    expect(sv?.value).toBe("hi")
+    dispose()
+    await flush()
+  })
+
+  test("textarea tag maps to elementType textarea", async () => {
+    const rec = recording()
+    const { renderer: R, render, flush } = createSolidRenderer(rec.send)
+    const container = R.createElement("#root")
+    const dispose = render(() => {
+      const root = R.createElement("div")
+      const ta = R.createElement("textarea")
+      R.insertNode(root, ta)
+      return root
+    }, container)
+    await flush()
+    const m = rec.batches[0]!.mutations
+    const creates = m.filter(
+      (x): x is Extract<Mutation, { op: "createElement" }> => x.op === "createElement",
+    )
+    expect(creates[creates.length - 1]?.elementType).toBe("textarea")
+    dispose()
+    await flush()
+  })
+
+  test("onChange registers the change event listener", async () => {
+    const rec = recording()
+    const { renderer: R, render, flush } = createSolidRenderer(rec.send)
+    const container = R.createElement("#root")
+    const dispose = render(() => {
+      const root = R.createElement("div")
+      const input = R.createElement("input")
+      R.setProp(input, "onChange", () => {})
+      R.insertNode(root, input)
+      return root
+    }, container)
+    await flush()
+    const m = rec.batches[0]!.mutations
+    const ev = m.find((x) => x.op === "setEventListener") as
+      | Extract<Mutation, { op: "setEventListener" }>
+      | undefined
+    expect(ev?.eventType).toBe("change")
+    expect(ev?.enabled).toBe(true)
+    dispose()
+    await flush()
+  })
+
+  test("placeholder and minRows flow as single-key style maps", async () => {
+    const rec = recording()
+    const { renderer: R, render, flush } = createSolidRenderer(rec.send)
+    const container = R.createElement("#root")
+    const dispose = render(() => {
+      const root = R.createElement("div")
+      const ta = R.createElement("textarea")
+      R.setProp(ta, "placeholder", "Type here")
+      R.setProp(ta, "minRows", 2)
+      R.insertNode(root, ta)
+      return root
+    }, container)
+    await flush()
+    const styles = rec.batches[0]!.mutations.filter((x) => x.op === "setStyle") as Extract<
+      Mutation,
+      { op: "setStyle" }
+    >[]
+    expect(styles).toEqual([
+      { op: "setStyle", id: styles[0]!.id, style: { placeholder: "Type here" } },
+      { op: "setStyle", id: styles[1]!.id, style: { minRows: 2 } },
+    ])
+    dispose()
+    await flush()
+  })
+})

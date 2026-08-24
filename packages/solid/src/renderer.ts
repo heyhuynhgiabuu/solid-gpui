@@ -7,6 +7,7 @@ import {
 } from "solid-js"
 import {
   elementId,
+  type ElementType,
   type EventType,
   type SolidGpuiEvent,
   type Mutation,
@@ -36,6 +37,25 @@ const EVENT_NAMES: Record<string, EventType> = {
   onFocus: "focus",
   onBlur: "blur",
   onScroll: "scroll",
+  // v1 emits one "change" per edit for BOTH onInput and onChange (DOM
+  // distinguishes commit from per-keystroke; we do not yet).
+  onInput: "change",
+  onChange: "change",
+  onSubmit: "submit",
+}
+
+/**
+ * Props that are NOT events and NOT the style bag but still render natively
+ * on input/textarea. They flow as single-key style maps (the helper reads
+ * placeholder/minRows/maxRows directly from the retained style).
+ */
+const INPUT_STYLE_PROPS = new Set(["placeholder", "minRows", "maxRows"])
+
+/** Host tags the renderer maps to a specific elementType (everything else
+ *  is a div). */
+const TAG_ELEMENT_TYPES: Record<string, ElementType> = {
+  input: "input",
+  textarea: "textarea",
 }
 
 export interface SolidGpuiRenderer {
@@ -143,7 +163,7 @@ export function createSolidRenderer(send: Send): SolidGpuiRenderer {
       push({
         op: "createElement",
         id: elementId(node.id),
-        elementType: tag === "text" ? "text" : "div",
+        elementType: tag === "text" ? "text" : (TAG_ELEMENT_TYPES[tag] ?? "div"),
       })
       return node
     },
@@ -179,6 +199,16 @@ export function createSolidRenderer(send: Send): SolidGpuiRenderer {
           handlers.delete(`${node.id}:${event}`)
           push({ op: "setEventListener", id, eventType: event, enabled: false })
         }
+        return
+      }
+      if (name === "value" && (node.tag === "input" || node.tag === "textarea")) {
+        // Controlled value (JS→helper): overwrites helper-side edits on apply.
+        push({ op: "setValue", id, value: String(value ?? "") })
+        return
+      }
+      if (INPUT_STYLE_PROPS.has(name)) {
+        // placeholder/minRows/maxRows render natively on input/textarea.
+        push({ op: "setStyle", id, style: { [name]: value } as unknown as StyleMap })
         return
       }
       // Unknown props are ignored in v1 (no setCustomProp element yet).
