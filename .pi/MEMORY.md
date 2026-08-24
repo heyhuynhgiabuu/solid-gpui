@@ -84,6 +84,15 @@
   applies react-style automatic JSX which is SEMANTICALLY WRONG for solid
   (eager children evaluation). v0.1 ships makeH() hyperscript; JSX pipeline is a
   documented gap (needs vite plugin or custom bun plugin later).
+- Shadow-tree invariant learned the hard way (review critical): universal's
+  reconcileArrays MOVES call insertNode for nodes ALREADY in the parent —
+  retain-before-splice is mandatory or duplicates compound. Mirror helper
+  attach semantics on BOTH sides.
+- Send-failure policy: splice-then-await loses the batch on rejection; once
+  shadow/wire may have diverged, POISON (reject future flushes) instead of
+  requeue — re-sending a partially-applied batch double-applies.
+- rc.1 correction: @solidjs/universal dev.js and universal.js are byte-
+  identical; NEITHER exported render() runs cleanupNodes. Own your dispose.
 
 ## Slice 4 learnings (2026-08-24)
 
