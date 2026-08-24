@@ -203,8 +203,29 @@ status: active
       getStats over the wire; baseline p95 = 0.942ms vs 10ms budget (0986260)
 - [ ] VERIFY: all suites green; commit per sub-slice; independent review
 
-Review round 1: NOT mergeable — Major fixed in 9266b9d (unified seq
-namespace; command error replies now reject their caller; regression test
-added). Resubmitting for round 2.
+Review rounds: r1 Major (error routing) fixed 9266b9d; r2 caught broken tsc
+gate (stale map generic) fixed b64f979 with visible-marker verification;
+r3 verdict: **S7 mergeable**. Closed 2026-08-24.
 
 Cross-ref: PLAN.md#2026-08-24---phase-2-candidate-roadmap-prior-art-informed
+
+### 2026-08-24 - S8: scrolling (Phase 2)
+status: active
+Recon: upstream gpui HAS overflow scroll again — Styled::overflow_scroll /
+overflow_x_scroll / overflow_y_scroll (div.rs ~1474), ScrollHandle +
+track_scroll() for programmatic control, restrict_scroll_to_axis for their
+nested-scroll gotcha. AGENTS.md gotcha text is stale (fixed same day).
+
+- [ ] S8a Style mapping: overflow key accepts "scroll" | "scrollX" | "scrollY"
+      (closed set documented in protocol docs); unknown values ignored like
+      other unparsable styles
+- [ ] S8a Handle lifecycle: per-element ScrollHandle map on HostView, lazy
+      create at render, pruned when tree no longer holds the id
+- [ ] S8a Tests: window-mode test mounts tall content with overflow:scroll,
+      scrolls programmatically via handle path (no pixels asserted — assert
+      no error + ack), plus style-mapping unit test
+- [ ] S8b Commands: scrollTo {id,x,y} / getScrollOffset {id} -> Result
+      payload; TS parity + fixtures
+- [ ] VERIFY: suites green; commit per sub-slice; independent review
+
+Cross-ref: PLAN.md Phase 2 roadmap (S8 entry)

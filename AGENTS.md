@@ -118,8 +118,10 @@ variant fields need their own `#[serde(rename_all = "camelCase")]`.
   everything past stage one.
 - `rgb(hex)` in gpui drops the TOP byte of a u32. 8-digit colors must go
   through `rgba()`. (`crates/helper/src/host.rs::parse_color`)
-- gpui has NO `overflow_scroll` style anymore — scrolling is a dedicated
-  element. `overflow: "scroll"` clips for now.
+- UPDATE 2026-08-24: upstream gpui HAS `overflow_scroll()` again
+  (`Styled`, div.rs ~1474) plus `ScrollHandle`/`track_scroll()` — our
+  S8 maps `overflow` style keys onto those. The old "clips for now" note
+  applied to an older checkout.
 
 ## Coding standards (adapted from Zed's `.rules`)
 
