@@ -1,5 +1,6 @@
 //! HostView: the GPUI view that renders the retained tree each frame.
 
+use crate::frame_stats::FrameStats;
 use gpui::{
     AnyElement, Context, Div, InteractiveElement, IntoElement, ParentElement, Render, Rgba,
     SharedString, StatefulInteractiveElement, Styled, Window, div, px, rgb, rgba,
@@ -9,12 +10,18 @@ use std::io::Write;
 
 pub struct HostView {
     pub tree: RetainedTree,
+    /// Build-time samples for the debug overlay and the getStats command.
+    stats: FrameStats,
+    /// SOLID_GPUI_DEBUG_OVERLAY=1 paints frame stats into the window.
+    overlay: bool,
 }
 
 impl HostView {
     pub fn new() -> Self {
         HostView {
             tree: RetainedTree::new(),
+            stats: FrameStats::new(),
+            overlay: std::env::var("SOLID_GPUI_DEBUG_OVERLAY").is_ok_and(|v| v == "1"),
         }
     }
 
@@ -42,11 +49,54 @@ impl HostView {
 
 impl Render for HostView {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        match self.tree.root() {
+        let started = std::time::Instant::now();
+        let mut content = match self.tree.root() {
             Some(root) => build_element(&self.tree, root, cx),
             // No root yet: dark placeholder keeps the window alive pre-mount.
             None => div().size_full().bg(rgb(0x1e1e2e)).into_any_element(),
+        };
+        self.stats.push(started.elapsed());
+
+        if !self.overlay {
+            return content;
         }
+        // Overlay: bottom-left stat block painted with native styling — not a
+        // protocol element, so it never crosses the wire. Shows the retained-
+        // walk build cost (our architecture's number), not layout/paint.
+        let p95 = self
+            .stats
+            .percentile(0.95)
+            .map(|d| format!("{:.1}", d.as_secs_f64() * 1000.0))
+            .unwrap_or_else(|| "-".into());
+        let last = self
+            .stats
+            .last()
+            .map(|d| format!("{:.1}", d.as_secs_f64() * 1000.0))
+            .unwrap_or_else(|| "-".into());
+        let label = SharedString::from(format!(
+            "build {}ms | p95 {}ms | frames {}",
+            last,
+            p95,
+            self.stats.frames()
+        ));
+        content = div()
+            .size_full()
+            .child(content)
+            .child(
+                div()
+                    .absolute()
+                    .bottom_2()
+                    .left_2()
+                    .px_2()
+                    .py_1()
+                    .rounded_sm()
+                    .bg(rgb(0x11111b))
+                    .text_color(rgb(0xa6e3a1))
+                    .text_size(px(11.))
+                    .child(label),
+            )
+            .into_any_element();
+        content
     }
 }
 

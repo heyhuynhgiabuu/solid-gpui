@@ -57,7 +57,7 @@ idea-level inspiration from the prior-art bridge only; no the prior-art bridge c
    — verify: counter demo manual run + recorded session — risk: remount lifecycle
 
 ### 2026-08-24 - Phase 2+ candidate roadmap (prior-art-informed) — DRAFT, not frozen
-status: draft | input: public README of the unlicensed prior-art bridge (915★,
+status: FROZEN 2026-08-24 (user approved; order per recommendation) | input: public README of the unlicensed prior-art bridge (915★,
 grew ~19% during Phase 1) — ideas learned, zero code/deps touched (clean-room,
 ADR 001)
 

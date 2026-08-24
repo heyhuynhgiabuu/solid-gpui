@@ -183,3 +183,21 @@ NDJSON \n test live, dead branch removed; documented: serde error-path parity
 deferred to Slice 2; note: JS number lossy >2^53 (doc'd in style.ts).
 
 Cross-ref: PLAN.md#2026-08-24---solid--gpui-oss-repo-spec-frozen-2026-08-24-after-q1q3
+
+### 2026-08-24 - S7: perf & visual-test instrumentation (Phase 2 opener)
+status: active
+
+- [ ] S7a FrameStats (Rust): ring-buffer of build durations, p50/p90/p99/max,
+      frames count; pure module, unit tests FIRST (percentile math incl.
+      empty/single/large buffers)
+- [ ] S7a Wire into HostView::render (measure build_element wall time);
+      debugFrameOverlay flag paints stats text bottom-left via native gpui
+      styling (no StyleValue protocol change)
+- [ ] S7b Wire command family extension: {"type":"command","command":
+      "getStats"} -> Reply carrying stats JSON; TS decoder parity + fixture
+- [ ] S7b captureFrame {path} command: helper writes PNG of its own window
+- [ ] S7c bun perf harness: mount 200-row tree, drive N updates through
+      window-mode helper, assert p95 build-ms budget via getStats
+- [ ] VERIFY: all suites green; commit per sub-slice; independent review
+
+Cross-ref: PLAN.md#2026-08-24---phase-2-candidate-roadmap-prior-art-informed

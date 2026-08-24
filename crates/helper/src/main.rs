@@ -6,6 +6,7 @@
 //!   (real `applied` counts; apply errors are seq-correlated)
 //! - `--smoke <ms>`     open a window, self-quit (CI verification)
 
+mod frame_stats;
 mod host;
 
 use std::io::{BufRead, Write};
@@ -67,11 +68,7 @@ fn main() {
                 window_bounds: Some(WindowBounds::Windowed(bounds)),
                 ..Default::default()
             },
-            |_, cx| {
-                cx.new(|_| HostView {
-                    tree: solid_gpui_protocol::RetainedTree::new(),
-                })
-            },
+            |_, cx| cx.new(|_| HostView::new()),
         )
         .unwrap();
         cx.activate(true);
