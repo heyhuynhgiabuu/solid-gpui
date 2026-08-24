@@ -55,3 +55,56 @@ idea-level inspiration from the prior-art bridge only; no the prior-art bridge c
    — verify: unit test renders counter to protocol log — risk: RC API drift
 6. Event backchannel (click) + `bun --hot` demo
    — verify: counter demo manual run + recorded session — risk: remount lifecycle
+
+### 2026-08-24 - Phase 2+ candidate roadmap (prior-art-informed) — DRAFT, not frozen
+status: draft | input: public README of the unlicensed prior-art bridge (915★,
+grew ~19% during Phase 1) — ideas learned, zero code/deps touched (clean-room,
+ADR 001)
+
+What their surface proves works, in the order they shipped it: core bridge →
+hot-reload remount idempotency → click/hover events → native scrolling with
+programmatic API → text input with IME/caret → focus & tab order → virtual
+lists → markdown/code/diff native elements → Rust-driven animations → unstyled
+headless controls (Radix-style namespaces) — PLUS two investments made early
+that every later slice leaned on: a native frame-time debug overlay and a
+frozen-clock automation/screenshot API with p95 perf regression tests.
+
+Where our architecture differs (and why it changes the plan):
+- Out-of-process helper (ADR 002): no fork to maintain, no ThreadsafeFunction,
+  helper owns its event loop natively (immune to their 73%-CPU timer-tick bug).
+  Distribution is EASIER too: ship a prebuilt binary per OS/arch (esbuild-style
+  install script) instead of node-gyp addons.
+- NDJSON stdio vs napi FFI: fine at UI scale, but anything per-frame (motion)
+  must interpolate Rust-side with ONE op, never per-frame IPC.
+- Solid first: fine-grained signals emit fewer mutations than React fiber;
+  no abandoned-concurrent-work problem. DX gap: no JSX pipeline yet (h() only).
+- Cross-language fixture tests already exist — rare; keep strengthening them.
+
+Proposed slices (order = instrument first, then value):
+- S7 Perf & visual-test instrumentation: debugFrameOverlay (draw-time stats
+  painted Rust-side), perf regression harness asserting p95, frozen-clock
+  captureFrames (helper writes PNG to a path given by an op) → CI-stable
+  screenshots for every later slice.
+- S8 Scrolling: overflow-scroll containers (gpui physics free), per-axis,
+  programmatic scrollTo/scrollToItem/getScrollOffset ops; DOCUMENT nested-
+  scroll hitbox limitation up front (their #1 gotcha).
+- S9 Focus & keyboard: stable element id ↔ persistent FocusHandle map,
+  tabIndex semantics, onKeyDown/KeyUp/Focus/Blur event types, Tab navigation
+  resolved Rust-side (no IPC roundtrip), autoFocus + focusElement op.
+- S10 Text input: <input>/<textarea> on gpui platform input handler (native
+  caret/selection/IME/undo), controlled value sync both ways, onSubmit
+  Enter/Shift+Enter, min/maxRows autosize.
+- S11 Virtual list: retain-all/paint-visible, followTail chat mode,
+  estimatedItemHeight remeasure, optional windowed mounting for huge sets.
+- S12 Animations: single setAnimation op (target+transition), Rust-side
+  interpolation, numeric targets only (width/height/insets/opacity/radius).
+- S13 Rich text: markdown/code/diff ported from Comet (MIT, attribution) per
+  existing Phase 3 decision.
+- S14 Headless controls: select/combobox/tooltip primitive namespaces once
+  inputs+focus are solid.
+- Continuous: npm packaging w/ prebuilt-binary download script; JSX/babel
+  universal preset DX track; Linux/Windows validation as upstream gpui allows;
+  multi-window support.
+
+Explicitly NOT copied: pinned gpui fork + submodule (we track upstream);
+ThreadsafeFunction in-process bridge (ADR 002); per-frame JS frame loop.
