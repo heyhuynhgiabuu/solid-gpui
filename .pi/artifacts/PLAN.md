@@ -27,11 +27,11 @@ idea-level inspiration from the prior-art bridge only; no the prior-art bridge c
 
 ## Acceptance criteria (Phase 1 — walking skeleton)
 
-- [ ] A Solid 2 (2.0.0-rc.x) app renders `div`/`text` with basic flexbox styles in a native window
-- [ ] Click event flows from GPUI back to a Solid handler
-- [ ] State change → minimal mutation (no full-tree diff) reaches the native layer
-- [ ] Works with `bun --hot` (remount without losing the window) and plain `node`
-- [ ] Counter demo committed with run instructions; `bun run example/counter` verified
+- [x] A Solid 2 (2.0.0-rc.x) app renders `div`/`text` with basic flexbox styles in a native window
+- [x] Click event flows from GPUI back to a Solid handler
+- [x] State change → minimal mutation (no full-tree diff) reaches the native layer
+- [x] Works with `bun --hot` (remount without losing the window) and plain `node`
+- [x] Counter demo committed with run instructions; `bun run example/counter` verified
 - [ ] LICENSE file present; repo public-ready
 
 ## Resolved decisions (2026-08-24)

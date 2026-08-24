@@ -14,7 +14,11 @@ status: done (2026-08-24 — Q1–Q3 decided, spec frozen; community probe moved
 - [ ] Community probe (r/solidjs, Solid Discord) — user action, parallel to Phase 1
 
 ### 2026-08-24 - Slice 6: event backchannel (GPUI clicks → Solid handlers)
-status: active
+status: code-complete 2026-08-24; Phase 1 acceptance met per PLAN (repo
+public-ready item still open: Cargo.toml repository placeholder + CI).
+Live --hot remount verified once (update(), same window); if the earlier
+reload-kills-helper crash recurs, investigate bun --hot child-process
+semantics. Independent review pending for ddd8860..8f7572f.
 
 Seam under test: protocol `Event` wire type (fixture parity both sides) →
 helper window mode attaches gpui on_click per retained listeners and emits

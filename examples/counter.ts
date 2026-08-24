@@ -69,3 +69,5 @@ if (!g.__counterWired && g.__counterHandle) {
     void g.__counterHandle!.dispose().then(() => process.exit(0))
   })
 }
+
+// hot-probe 1787575883
