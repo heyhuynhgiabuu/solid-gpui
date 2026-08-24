@@ -244,20 +244,23 @@ KeyDownEvent/KeyUpEvent carry keystroke.key:String + Modifiers. Event wire is
 a single-variant enum (tag type:event) with optional x/y — extend with
 optional key:String + modifiers{ctrl,alt,shift,cmd}; focus/blur need neither.
 
-- [ ] S9a Focusable core: tabIndex style key (number; -1 = focusable-not-tab,
-      0/>=1 = tab stop) -> FocusHandle map (mirror ScrollHandles: lazy at
-      render, prune per frame); onFocus/onBlur listeners -> focus/blur wire
-      events; focusElement command {id} for programmatic focus (also the test
-      hook); Event enum gains key+modifiers optional fields
-- [ ] S9a Tests: Event wire extension + focusElement fixture parity (both
-      languages); window test: mount focusable, focusElement -> focus event
-      line emitted, then blur on refocus-other or explicit test
-- [ ] S9b Keyboard: onKeyDown/onKeyUp -> keyDown/keyUp events carrying
-      key + modifiers; TS parity; window test: synthetic key via gpui
-      (keystroke injection) or assert wiring via emit helper
-- [ ] S9c Tab navigation (Rust-side window.focus_next/prev on Tab) +
-      autoFocus (style marker, focus once on first render) + tabIndex>0
-      ordering; window test for Tab cycling + autoFocus
-- [ ] VERIFY: suites green; commit per sub-slice; independent review
+- [x] S9a Focusable core: tabIndex -> FocusHandle map (created via app focus
+      map so Tab sees it); focus/blur events via cx.on_focus_in/out (deduped —
+      per-frame re-registration emitted 3x duplicates); focusElement command;
+      Event::Input gains optional key+modifiers (95828b6)
+- [x] S9a Tests: event-keydown + focusElement fixtures both languages; window
+      test focusElement(2)->focus, focusElement(3)->blur(2)+focus(3)
+      (95828b6). Window tests serialized via global lock (parallel macOS
+      windows flaked)
+- [x] S9b Keyboard: keyDown/keyUp carry key+modifiers; handler registry passes
+      full event to JS (DOM-callback contract, tested); Rust modifier mapping
+      unit-tested byte-exact; wire covered by fixture (dee9e38)
+- [x] S9c Tab navigation (per-focusable-element Tab -> focus_next/prev, no
+      IPC; window.on_key_event panics in render — helper SIGABRT crash — so
+      moved to element path); autoFocus focused next frame via defer_in
+      (subscription-activation race); window test autoFocus->focus event
+      (dee9e38). Tab cycling itself needs real input (no key injection in
+      window tests)
+- [ ] VERIFY: suites green; commits 95828b6 + dee9e38; reviewer pending
 
 Cross-ref: PLAN.md Phase 2 roadmap (S9 entry)
