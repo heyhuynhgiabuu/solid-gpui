@@ -13,6 +13,23 @@ status: done (2026-08-24 — Q1–Q3 decided, spec frozen; community probe moved
 - [x] Freeze Phase 1 spec + slices in PLAN.md after Q1–Q3 (spec frozen 2026-08-24)
 - [ ] Community probe (r/solidjs, Solid Discord) — user action, parallel to Phase 1
 
+### 2026-08-24 - Slice 5: Solid renderer (@solid-gpui/solid)
+status: active
+
+Seam under test: `createSolidRenderer({ send })` — universal-renderer methods map to
+protocol mutations; `send` injectable (RecordingSend in unit tests, real helper
+connection in demo). JSX via automatic runtime through our jsx-runtime (no
+babel-preset-solid in bun).
+
+- [ ] Verify solid-js 2.0.0-rc.1 universal API surface (h / universal / jsx-runtime)
+- [ ] RED: unit test — render component tree → exact mutation sequence; signal
+      update → minimal diff mutations
+- [ ] GREEN: renderer + flush batching + jsx-runtime + event registry (passive)
+- [ ] Integration demo: real helper window renders Solid JSX (user visual)
+- [ ] VERIFY: all suites, tsc, fmt/clippy; commit; independent review
+
+Cross-ref: PLAN.md#2026-08-24---solid--gpui-oss-repo-spec-frozen-2026-08-24-after-q1q3
+
 ### 2026-08-24 - Slice 4: retained tree + real GPUI rendering
 status: active
 

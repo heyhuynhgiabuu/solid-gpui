@@ -3,15 +3,21 @@
   "private": true,
   "license": "Apache-2.0",
   "type": "module",
-  "workspaces": ["packages/*"],
+  "workspaces": [
+    "packages/*"
+  ],
   "scripts": {
     "test": "bun test",
-    "typecheck": "tsc --noEmit -p packages/protocol && tsc --noEmit -p packages/client",
+    "typecheck": "tsc --noEmit -p packages/protocol && tsc --noEmit -p packages/client && tsc --noEmit -p packages/solid",
     "smoke:node": "tsx scripts/node-smoke.ts",
-    "demo": "bun scripts/demo.ts"
+    "demo": "bun scripts/demo.ts",
+    "demo:solid": "bun --conditions=browser run scripts/solid-demo.ts"
   },
   "devDependencies": {
+    "@solidjs/universal": "^2.0.0-rc.1",
+    "@solidjs/web": "^2.0.0-rc.1",
     "bun-types": "^1.4.0",
+    "solid-js": "^2.0.0-rc.1",
     "tsx": "^4.23.12",
     "typescript": "^5.9.0"
   }
