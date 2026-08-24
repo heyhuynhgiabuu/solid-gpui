@@ -69,6 +69,26 @@
 - TS narrowing trap: `(EVENT_TYPES as string[]).includes(v)` does NOT narrow;
   write an explicit `v is EventType` predicate.
 
+## S9 focus/keyboard gotchas (all caught live during implementation)
+- gpui `Window::on_key_event` must be called during the PAINT phase, not
+  render() — calling it in render() panics ("this method can only be called
+  during paint") and a panicking GUI process aborts (SIGABRT crash report).
+  Handle global keys per-element instead (keys only reach the focused
+  element anyway).
+- `cx.on_focus_in/out` subscriptions ACTIVATE ONE FRAME LATE (gpui defers
+  activation). Focus issued before that (e.g. autoFocus at apply time) is
+  silently missed. Fix: defer the focus via cx.defer_in so it runs after the
+  subscription activation in the same defer queue.
+- Per-frame render re-registration accumulates: focus subscriptions must be
+  deduped by element id (observed 3x duplicate focus events). window.on_key_event
+  is the exception — it registers on the next-frame dispatch tree, so it does
+  NOT accumulate.
+- macOS window tests flake under the default parallel harness: several real
+  windows at once push first-frame latency past poll budgets. Serialize with
+  a process-global Mutex inside the test binary.
+- FocusHandle has NO Default impl: create via the app focus map (cx.focus_handle(),
+  Context derefs to App) so Tab navigation (window.focus_next/prev) sees it.
+
 ## gpui scroll sign convention (S8 review round 1 — reviewer caught a REAL bug)
 - gpui `ScrollHandle::set_offset` uses the OPPOSITE sign of CSS scrollTop:
   offset = distance from container top-left to first child top-left, growing
