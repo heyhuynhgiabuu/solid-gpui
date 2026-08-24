@@ -1,1 +1,21 @@
-[]
+[
+  {
+    "id": "mt7hixhz-76b4",
+    "agentType": "reviewer",
+    "description": "Review S11 virtual list slice",
+    "sessionName": "task-mt7hixhz-76b4",
+    "startedAt": 1787591002174,
+    "handle": {
+      "backend": "herdr",
+      "resourceId": "w3:pE4",
+      "socketPath": "/Users/huynhgiabuu/.config/herdr/herdr.sock",
+      "terminalId": "term_659cdf66e10f433",
+      "agentName": "reviewer-mt7hixhz",
+      "foregroundProcessGroupId": 73839
+    },
+    "piDir": "/Users/huynhgiabuu/dev/projects/solid-gpui/.pi",
+    "dir": "/Users/huynhgiabuu/dev/projects/solid-gpui/.pi/artifacts/tasks",
+    "cwd": "/Users/huynhgiabuu/dev/projects/solid-gpui",
+    "backend": "herdr"
+  }
+]
