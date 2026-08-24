@@ -312,5 +312,29 @@
     "reportedStatus": "success",
     "resultValid": true,
     "completedAt": 1787581788136
+  },
+  {
+    "id": "mt7ckhjk-86a3",
+    "agentType": "reviewer",
+    "description": "Review S8 scrolling slice",
+    "sessionName": "task-mt7ckhjk-86a3",
+    "startedAt": 1787582676492,
+    "paneId": "w3:pDZ",
+    "handle": {
+      "backend": "herdr",
+      "resourceId": "w3:pDZ",
+      "socketPath": "/Users/huynhgiabuu/.config/herdr/herdr.sock",
+      "terminalId": "term_659cc0631e2cf2e",
+      "agentName": "reviewer-mt7ckhjk",
+      "foregroundProcessGroupId": 47725
+    },
+    "piDir": "/Users/huynhgiabuu/dev/projects/solid-gpui/.pi",
+    "dir": "/Users/huynhgiabuu/dev/projects/solid-gpui/.pi/artifacts/tasks",
+    "cwd": "/Users/huynhgiabuu/dev/projects/solid-gpui",
+    "status": "done",
+    "background": true,
+    "reportedStatus": "success",
+    "resultValid": true,
+    "completedAt": 1787583399234
   }
 ]

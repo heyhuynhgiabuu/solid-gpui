@@ -208,25 +208,43 @@ fn window_mode_scrolls_via_commands() {
         r#"{"type":"ack","seq":55,"applied":9}"#
     );
 
-    // scrollTo sets the retained handle's offset...
-    writeln!(
-        stdin,
-        "{}",
-        r#"{"type":"scrollTo","seq":61,"id":1,"x":0.0,"y":500.0}"#
-    )
-    .unwrap();
+    // Give the window a frame to lay out (max_offset populates during
+    // prepaint, which getScrollOffset's clamp reads).
+    std::thread::sleep(std::time::Duration::from_millis(100));
+
+    // scrollTo sets the retained handle's offset (positive = down)...
+    let line = r#"{"type":"scrollTo","seq":61,"id":1,"x":0.0,"y":500.0}"#;
+    writeln!(stdin, "{line}").unwrap();
     stdin.flush().unwrap();
     assert_eq!(
         lines.next().unwrap().unwrap(),
         r#"{"type":"result","seq":61,"value":{"applied":true}}"#
     );
 
-    // ...and getScrollOffset reads it back exactly.
-    writeln!(stdin, "{}", r#"{"type":"getScrollOffset","seq":62,"id":1}"#).unwrap();
+    // ...and getScrollOffset reads the actual visible position back exactly.
+    let line = r#"{"type":"getScrollOffset","seq":62,"id":1}"#;
+    writeln!(stdin, "{line}").unwrap();
     stdin.flush().unwrap();
     assert_eq!(
         lines.next().unwrap().unwrap(),
         r#"{"type":"result","seq":62,"value":{"offsetX":0.0,"offsetY":500.0}}"#
+    );
+
+    // Over-scroll clamps to the real content height (2000 - 200 viewport):
+    // getScrollOffset reports what is actually shown, not the raw request.
+    let line = r#"{"type":"scrollTo","seq":63,"id":1,"x":0.0,"y":100000.0}"#;
+    writeln!(stdin, "{line}").unwrap();
+    stdin.flush().unwrap();
+    assert_eq!(
+        lines.next().unwrap().unwrap(),
+        r#"{"type":"result","seq":63,"value":{"applied":true}}"#
+    );
+    let line = r#"{"type":"getScrollOffset","seq":64,"id":1}"#;
+    writeln!(stdin, "{line}").unwrap();
+    stdin.flush().unwrap();
+    assert_eq!(
+        lines.next().unwrap().unwrap(),
+        r#"{"type":"result","seq":64,"value":{"offsetX":0.0,"offsetY":1800.0}}"#
     );
 
     // EOF quits the app cleanly.

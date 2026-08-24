@@ -80,20 +80,24 @@ impl HostView {
     /// the map is otherwise populated lazily during render. Idempotent with
     /// the render-time get-or-create.
     pub fn ensure_scroll_handle(&self, id: ElementId) {
-        if let Some(node) = self.tree.get(id) {
-            if node
-                .style
-                .get("overflow")
-                .and_then(parse_overflow)
-                .is_some()
-            {
-                self.scroll_handles.borrow_mut().entry(id).or_default();
-            }
+        let scrollable = self
+            .tree
+            .get(id)
+            .is_some_and(|n| n.style.get("overflow").and_then(parse_overflow).is_some());
+        if scrollable {
+            self.scroll_handles.borrow_mut().entry(id).or_default();
         }
     }
 
     /// S8b scrollTo: move a scrollable element's retained offset. Fails when
     /// the id never rendered with an `overflow` scroll style (no handle).
+    ///
+    /// Wire convention: x/y are non-negative absolute positions (0 = top /
+    /// left), positive = scrolled down/right. gpui's internal convention is
+    /// inverted — `set_offset` takes the distance from the container's top
+    /// left to the first child's top left, which grows more NEGATIVE as you
+    /// scroll down (and layout clamps to [-max, 0]). Negate on the way in,
+    /// negate on the way out, and the wire stays CSS-scrollTop-like.
     pub fn scroll_to(&self, id: ElementId, x: f64, y: f64) -> Result<(), String> {
         let handles = self.scroll_handles.borrow();
         let Some(handle) = handles.get(&id) else {
@@ -102,16 +106,23 @@ impl HostView {
                 id.0
             ));
         };
-        handle.set_offset(Point::new(px(x as f32), px(y as f32)));
+        handle.set_offset(Point::new(px(-(x as f32)), px(-(y as f32))));
         Ok(())
     }
 
-    /// S8b getScrollOffset: read a scrollable element's current offset.
+    /// S8b getScrollOffset: read a scrollable element's CURRENT visible
+    /// position (clamped to the real content size), in wire convention
+    /// (non-negative, positive = scrolled down/right). Clamping against
+    /// `max_offset` matters: a scrollTo past the content would otherwise
+    /// report a position the layout refuses to show.
     pub fn scroll_offset(&self, id: ElementId) -> Option<(f64, f64)> {
         let handles = self.scroll_handles.borrow();
         let handle = handles.get(&id)?;
         let off = handle.offset();
-        Some((off.x.to_f64(), off.y.to_f64()))
+        let max = handle.max_offset();
+        let x = (-off.x).clamp(px(0.), max.x.max(px(0.)));
+        let y = (-off.y).clamp(px(0.), max.y.max(px(0.)));
+        Some((x.to_f64(), y.to_f64()))
     }
 
     /// Push a click event to the JS side as one NDJSON line. The process-
