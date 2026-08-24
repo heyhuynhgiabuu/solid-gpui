@@ -2,10 +2,10 @@
 
 use crate::frame_stats::FrameStats;
 use gpui::{
-    AnyElement, App, Bounds, Context, Div, Element, FocusHandle, InputHandler, InteractiveElement,
-    IntoElement, LayoutId, ParentElement, Pixels, Point, Render, Rgba, ScrollHandle, SharedString,
-    StatefulInteractiveElement, Style, Styled, UTF16Selection, WeakEntity, Window, div, px, rgb,
-    rgba, size,
+    AnyElement, App, Bounds, Context, Div, Element, FocusHandle, FollowMode, InputHandler,
+    InteractiveElement, IntoElement, LayoutId, ListAlignment, ListState, ParentElement, Pixels,
+    Point, Render, Rgba, ScrollHandle, SharedString, StatefulInteractiveElement, Style, Styled,
+    UTF16Selection, WeakEntity, Window, div, list, px, rgb, rgba, size,
 };
 use solid_gpui_protocol::EventType;
 use solid_gpui_protocol::StyleMap;
@@ -188,6 +188,18 @@ pub struct HostView {
     /// Writes one event line to stdout; handed to the InputHandler so a
     /// user edit can cross the wire without a HostView borrow.
     sink: Rc<dyn Fn(&Event)>,
+    /// Virtualized list state per list element (gpui ListState is Rc<RefCell>
+    /// internally and Clone). Created at apply time so followTail alignment is
+    /// known before the first paint; reconciled to the retained children count
+    /// every render.
+    list_states: HashMap<ElementId, ListState>,
+    /// Per-list count of items actually painted last frame — virtualization
+    /// proof for listInfo (10k retained items must paint far fewer).
+    list_render_counts: HashMap<ElementId, Rc<std::cell::Cell<usize>>>,
+    /// Alignment each list state was created with (see RenderCtx).
+    list_alignment: HashMap<ElementId, ListAlignment>,
+    /// Lists that already had FollowMode::Tail armed (see RenderCtx).
+    list_follow_armed: HashSet<ElementId>,
 }
 
 impl HostView {
@@ -203,6 +215,10 @@ impl HostView {
             autofocus_pending: None,
             input_states: Rc::new(RefCell::new(HashMap::new())),
             sink: Rc::new(write_event_line),
+            list_states: HashMap::new(),
+            list_render_counts: HashMap::new(),
+            list_alignment: HashMap::new(),
+            list_follow_armed: HashSet::new(),
         }
     }
 
@@ -340,6 +356,59 @@ impl HostView {
         self.emit_event(id, EventType::Submit, None, None, None, None, None);
     }
 
+    /// Eagerly materialize a virtual list's state when a list element or its
+    /// list styles apply — followTail alignment must be known before the
+    /// first paint (render-population is lazy, same pattern as scroll/focus
+    /// handles). Idempotent with the render-time get-or-create.
+    pub fn ensure_list_state(&mut self, id: ElementId) {
+        let Some(node) = self.tree.get(id) else {
+            return;
+        };
+        if node.element_type != ElementType::List {
+            return;
+        }
+        let follow_tail = node.style.contains_key("followTail");
+        let alignment = if follow_tail {
+            ListAlignment::Bottom
+        } else {
+            ListAlignment::Top
+        };
+        if self.list_alignment.get(&id) != Some(&alignment) {
+            // ListState bakes alignment at construction: recreate when the
+            // followTail flag toggles (only meaningful before first paint).
+            self.list_states
+                .insert(id, ListState::new(0, alignment, px(500.)));
+            self.list_alignment.insert(id, alignment);
+            self.list_follow_armed.remove(&id);
+        }
+        if follow_tail
+            && self.list_follow_armed.insert(id)
+            && let Some(state) = self.list_states.get(&id)
+        {
+            state.set_follow_mode(FollowMode::Tail);
+        }
+    }
+
+    /// S11 listInfo: item count, items painted last frame (virtualization
+    /// proof), and whether the list is scrolled to its end (followTail chat
+    /// position). Fails when the id never rendered as a list.
+    pub fn list_info(&self, id: ElementId) -> Result<serde_json::Value, String> {
+        let Some(state) = self.list_states.get(&id) else {
+            return Err(format!("no list element for id {}", id.0));
+        };
+        let painted = self
+            .list_render_counts
+            .get(&id)
+            .map(|c| c.get())
+            .unwrap_or(0);
+        let at_end = state.is_scrolled_to_end();
+        Ok(serde_json::json!({
+            "itemCount": state.item_count(),
+            "paintedCount": painted,
+            "atEnd": at_end,
+        }))
+    }
+
     /// S9: programmatic focus for the focusElement command. Fails when the
     /// id was never rendered focusable (no FocusHandle).
     pub fn focus_element(
@@ -456,6 +525,15 @@ struct RenderCtx<'a> {
     subscribed: &'a mut HashSet<ElementId>,
     sink: &'a Rc<dyn Fn(&Event)>,
     host: &'a WeakEntity<HostView>,
+    list_states: &'a mut HashMap<ElementId, ListState>,
+    list_render_counts: &'a mut HashMap<ElementId, Rc<std::cell::Cell<usize>>>,
+    /// Alignment each list state was created with (ListState bakes alignment
+    /// at construction; recreate when followTail toggles).
+    list_alignment: &'a mut HashMap<ElementId, ListAlignment>,
+    /// Lists that already had FollowMode::Tail armed. set_follow_mode resets
+    /// the scroll position to the end every call, so it must run ONCE — a
+    /// per-render call would fight the user's manual scroll-up.
+    list_follow_armed: &'a mut HashSet<ElementId>,
 }
 
 /// The per-frame gpui InputHandler registered for a focused input/textarea.
@@ -674,6 +752,11 @@ impl Render for HostView {
             .borrow_mut()
             .retain(|id, _| self.tree.get(*id).is_some());
         let host = cx.entity().downgrade();
+        // Reset the virtualization counters: build_element's list items
+        // increment them during layout, after this render call returns.
+        for counter in self.list_render_counts.values() {
+            counter.set(0);
+        }
         let mut ctx = RenderCtx {
             scroll_handles: &self.scroll_handles,
             focus_handles: &self.focus_handles,
@@ -682,6 +765,10 @@ impl Render for HostView {
             subscribed: &mut self.focus_subscribed,
             sink: &self.sink,
             host: &host,
+            list_states: &mut self.list_states,
+            list_render_counts: &mut self.list_render_counts,
+            list_alignment: &mut self.list_alignment,
+            list_follow_armed: &mut self.list_follow_armed,
         };
         let mut content = match self.tree.root() {
             Some(root) => build_element(&self.tree, root, window, cx, &mut ctx),
@@ -767,6 +854,9 @@ fn build_element(
         ElementType::Input | ElementType::Textarea
     ) {
         return build_input_element(tree, id, window, cx, ctx);
+    }
+    if node.element_type == ElementType::List {
+        return build_list_element(tree, id, window, cx, ctx);
     }
     let mut el = div();
     for (key, value) in &node.style {
@@ -1022,6 +1112,116 @@ fn build_input_element(
         }
     });
     el = el.on_key_down(enter);
+    el.into_any_element()
+}
+
+/// Build a virtual list element: gpui's List over the retained children.
+/// The retained tree holds EVERY item (retain-all); the List paints only the
+/// visible subset (paint-visible) — its State measures lazily and renders
+/// items on demand. followTail → Bottom alignment + FollowMode::Tail (chat
+/// auto-scroll; stops on manual scroll up, re-engages at the bottom).
+/// itemHeight seeds every unmeasured item so the scrollbar is correct from
+/// the first frame (real heights replace the hint as items render).
+///
+/// render_item re-enters the view via Entity::update to build items with
+/// full interactive wiring (clicks/focus work inside lists).
+fn build_list_element(
+    tree: &RetainedTree,
+    id: ElementId,
+    window: &mut Window,
+    cx: &mut Context<HostView>,
+    ctx: &mut RenderCtx,
+) -> AnyElement {
+    let node = tree.get(id).expect("checked by caller");
+    let item_height = style_num(&node.style, "itemHeight").map(|n| px(n as f32));
+    let entity = cx.entity();
+    let host_weak = entity.downgrade();
+    let counter = ctx
+        .list_render_counts
+        .entry(id)
+        .or_insert_with(|| Rc::new(std::cell::Cell::new(0)))
+        .clone();
+
+    // Reconcile alignment (recreate on toggle — see ensure_list_state),
+    // then the state to the retained children count (append/remove splice;
+    // insertBefore mid-list splices the whole range — v1 keeps item identity
+    // by index, documented simplification).
+    let follow_tail = node.style.contains_key("followTail");
+    let alignment = if follow_tail {
+        ListAlignment::Bottom
+    } else {
+        ListAlignment::Top
+    };
+    if ctx.list_alignment.get(&id) != Some(&alignment) {
+        ctx.list_states
+            .insert(id, ListState::new(0, alignment, px(500.)));
+        ctx.list_alignment.insert(id, alignment);
+        ctx.list_follow_armed.remove(&id);
+    }
+    let state = ctx
+        .list_states
+        .entry(id)
+        .or_insert_with(|| ListState::new(0, alignment, px(500.)))
+        .clone();
+    let old_count = state.item_count();
+    let new_count = node.children.len();
+    if old_count != new_count {
+        state.splice(0..old_count, new_count);
+    }
+    let state = match item_height {
+        Some(h) => state.with_uniform_item_height(h),
+        None => state,
+    };
+    if follow_tail && ctx.list_follow_armed.insert(id) {
+        state.set_follow_mode(FollowMode::Tail);
+    }
+
+    let list_id = id;
+    let state_el = state.clone();
+    let render_item = move |ix: usize, window: &mut Window, cx: &mut App| {
+        counter.set(counter.get() + 1);
+        entity.update(cx, |view, vcx| {
+            let child = view
+                .tree
+                .get(list_id)
+                .and_then(|n| n.children.get(ix).copied());
+            let Some(cid) = child else {
+                return div().into_any_element();
+            };
+            let host = host_weak.clone();
+            let mut ctx = RenderCtx {
+                scroll_handles: &view.scroll_handles,
+                focus_handles: &view.focus_handles,
+                input_states: &view.input_states,
+                subscriptions: &mut view.focus_subscriptions,
+                subscribed: &mut view.focus_subscribed,
+                sink: &view.sink,
+                host: &host,
+                list_states: &mut view.list_states,
+                list_render_counts: &mut view.list_render_counts,
+                list_alignment: &mut view.list_alignment,
+                list_follow_armed: &mut view.list_follow_armed,
+            };
+            build_element(&view.tree, cid, window, vcx, &mut ctx)
+        })
+    };
+    // Block children take their measured content height (the List would
+    // measure all items and never virtualize); a flex ROW stretches the
+    // List's cross axis (height) to the container's definite height.
+    // gpui divs default to BLOCK: a block child takes its measured content
+    // height, so the List would measure all items and never virtualize. A
+    // flex ROW stretches the List's cross axis (height) to the container's
+    // definite height, so the List only measures the visible subset.
+    let mut el = div()
+        .w_full()
+        .h(px(window.bounds().size.height.into()))
+        .flex()
+        .child(list(state_el, render_item));
+    for (key, value) in &node.style {
+        el = apply_style(el, key, value);
+    }
+    let el = el.id(id.0 as usize);
+    let el = apply_interactive(el, tree, id, window, cx, ctx, None, false);
     el.into_any_element()
 }
 

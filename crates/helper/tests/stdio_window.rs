@@ -495,3 +495,127 @@ fn window_mode_input_change_events_and_controlled_sync() {
     let status = child.wait().expect("wait");
     assert_eq!(status.code(), Some(0), "EOF must exit 0");
 }
+
+#[test]
+fn window_mode_virtual_list_follows_tail_and_virtualizes() {
+    if skip() {
+        return;
+    }
+    let _lock = WINDOW_TEST_LOCK.lock().unwrap();
+    let bin = env!("CARGO_BIN_EXE_solid-gpui-helper");
+    let mut child = Command::new(bin)
+        .arg("--stdio-window")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .spawn()
+        .expect("helper spawns");
+
+    let mut stdin = child.stdin.take().expect("stdin piped");
+    let reader = BufReader::new(child.stdout.take().expect("stdout piped"));
+    let mut lines = reader.lines();
+
+    /// One item = a div appended to the list (identity by index, v1).
+    fn item_mutations(first: u32, count: u32) -> String {
+        // Items carry an explicit height: gpui's List measures the REAL item
+        // height (0-height items would render forever while the visible
+        // region never fills — the walk keeps going past the end).
+        let mut out = String::new();
+        for i in first..first + count {
+            out.push_str(&format!(
+                r#"{{"op":"createElement","id":{i},"elementType":"div"}},{{"op":"appendChild","parentId":1,"childId":{i}}},{{"op":"setStyle","id":{i},"style":{{"height":24}}}},"#
+            ));
+        }
+        out
+    }
+
+    // A followTail list: itemHeight 24 (uniform hint), 500 items. The whole
+    // retained tree holds every item; gpui's List paints only the visible
+    // subset (window is 360px tall → ~15 visible at 24px).
+    let batch = format!(
+        concat!(
+            r#"{{"v":1,"seq":100,"mutations":[{{"op":"createElement","id":1,"elementType":"list"}},"#,
+            r#"{{"op":"setRoot","id":1}},"#,
+            r#"{{"op":"setStyle","id":1,"style":{{"followTail":"true","itemHeight":24}}}},"#,
+            "{}",
+            r#"]}}"#,
+        ),
+        item_mutations(2, 500).trim_end_matches(',')
+    );
+    writeln!(stdin, "{batch}").unwrap();
+    stdin.flush().unwrap();
+    assert_eq!(
+        lines.next().unwrap().unwrap(),
+        r#"{"type":"ack","seq":100,"applied":1503}"#
+    );
+    // First paint + followTail initial scroll.
+    std::thread::sleep(std::time::Duration::from_millis(400));
+
+    fn list_info(
+        stdin: &mut std::process::ChildStdin,
+        lines: &mut std::io::Lines<BufReader<std::process::ChildStdout>>,
+        seq: u32,
+    ) -> serde_json::Value {
+        writeln!(stdin, r#"{{"type":"listInfo","seq":{seq},"id":1}}"#).unwrap();
+        stdin.flush().unwrap();
+        let reply = lines.next().unwrap().unwrap();
+        let parsed: serde_json::Value =
+            serde_json::from_str(&reply).expect("listInfo reply parses");
+        assert_eq!(parsed["type"], "result", "{reply}");
+        assert_eq!(parsed["seq"], seq, "{reply}");
+        parsed["value"].clone()
+    }
+
+    // Auto-followed to the end (chat), virtualized: 500 retained items, far
+    // fewer painted.
+    let info = list_info(&mut stdin, &mut lines, 101);
+    assert_eq!(info["itemCount"], 500, "{info}");
+    assert_eq!(info["atEnd"], true, "{info}");
+    let painted = info["paintedCount"].as_u64().unwrap();
+    assert!(
+        painted > 0 && painted < 200,
+        "virtualized paint expected, got {painted}"
+    );
+
+    // Append 100 items: followTail re-engages, still at the end.
+    let batch = format!(
+        r#"{{"v":1,"seq":102,"mutations":[{}]}}"#,
+        item_mutations(502, 100).trim_end_matches(',')
+    );
+    writeln!(stdin, "{batch}").unwrap();
+    stdin.flush().unwrap();
+    assert_eq!(
+        lines.next().unwrap().unwrap(),
+        r#"{"type":"ack","seq":102,"applied":300}"#
+    );
+    std::thread::sleep(std::time::Duration::from_millis(300));
+    let info = list_info(&mut stdin, &mut lines, 103);
+    assert_eq!(info["itemCount"], 600, "{info}");
+    assert_eq!(info["atEnd"], true, "{info}");
+
+    // Remove 100 items: count reconciles.
+    let mut removes = String::new();
+    for i in 502..602 {
+        removes.push_str(&format!(
+            r#"{{"op":"removeChild","parentId":1,"childId":{i}}},"#
+        ));
+    }
+    let batch = format!(
+        r#"{{"v":1,"seq":104,"mutations":[{}]}}"#,
+        removes.trim_end_matches(',')
+    );
+    writeln!(stdin, "{batch}").unwrap();
+    stdin.flush().unwrap();
+    assert_eq!(
+        lines.next().unwrap().unwrap(),
+        r#"{"type":"ack","seq":104,"applied":100}"#
+    );
+    std::thread::sleep(std::time::Duration::from_millis(300));
+    let info = list_info(&mut stdin, &mut lines, 105);
+    assert_eq!(info["itemCount"], 500, "{info}");
+    assert_eq!(info["atEnd"], true, "{info}");
+
+    // EOF quits the app cleanly.
+    drop(stdin);
+    let status = child.wait().expect("wait");
+    assert_eq!(status.code(), Some(0), "EOF must exit 0");
+}

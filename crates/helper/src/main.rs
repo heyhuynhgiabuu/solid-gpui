@@ -96,6 +96,7 @@ fn command_ident(command: &solid_gpui_protocol::Command) -> (u32, &'static str) 
         solid_gpui_protocol::Command::GetScrollOffset { seq, .. } => (*seq, "getScrollOffset"),
         solid_gpui_protocol::Command::FocusElement { seq, .. } => (*seq, "focusElement"),
         solid_gpui_protocol::Command::SimulateInput { seq, .. } => (*seq, "simulateInput"),
+        solid_gpui_protocol::Command::ListInfo { seq, .. } => (*seq, "listInfo"),
     }
 }
 
@@ -390,6 +391,20 @@ fn run_stdio_window() {
                                 code: ReplyCode::Unsupported,
                                 message: format!("window closed: {e}"),
                             }),
+                        solid_gpui_protocol::Command::ListInfo { seq, id } => window
+                            .update(cx, |view, _window, _cx| match view.list_info(id) {
+                                Ok(value) => Reply::Result { seq, value },
+                                Err(message) => Reply::Error {
+                                    seq: Some(seq),
+                                    code: ReplyCode::ApplyFailed,
+                                    message,
+                                },
+                            })
+                            .unwrap_or_else(|e| Reply::Error {
+                                seq: Some(seq),
+                                code: ReplyCode::Unsupported,
+                                message: format!("window closed: {e}"),
+                            }),
                     },
                     Job::Batch(batch) => {
                         let seq = batch.seq;
@@ -425,6 +440,23 @@ fn run_stdio_window() {
                                         } = m
                                         {
                                             view.ensure_focus_handle(*id, cx);
+                                        }
+                                        // Virtual lists: materialize state at
+                                        // apply time so followTail alignment
+                                        // and uniform height hints exist before
+                                        // the first paint.
+                                        if let solid_gpui_protocol::Mutation::CreateElement {
+                                            id,
+                                            element_type: solid_gpui_protocol::ElementType::List,
+                                        } = m
+                                        {
+                                            view.ensure_list_state(*id);
+                                        }
+                                        if let solid_gpui_protocol::Mutation::SetStyle {
+                                            id, ..
+                                        } = m
+                                        {
+                                            view.ensure_list_state(*id);
                                         }
                                         // setValue (JS→helper controlled sync):
                                         // mirror into the live input state so
