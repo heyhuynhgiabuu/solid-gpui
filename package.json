@@ -11,7 +11,8 @@
     "typecheck": "tsc --noEmit -p packages/protocol && tsc --noEmit -p packages/client && tsc --noEmit -p packages/solid",
     "smoke:node": "tsx scripts/node-smoke.ts",
     "demo": "bun scripts/demo.ts",
-    "demo:solid": "bun --conditions=browser run scripts/solid-demo.ts"
+    "example/counter": "bun --conditions=browser run examples/counter.ts",
+    "example/counter:hot": "bun --conditions=browser --hot run examples/counter.ts"
   },
   "devDependencies": {
     "@solidjs/universal": "^2.0.0-rc.1",

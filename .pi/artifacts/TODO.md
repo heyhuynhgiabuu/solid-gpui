@@ -27,8 +27,8 @@ Demo: counter button increments for real; bun --hot remount pattern.
 - [x] RED: client event-routing test (fake helper emitting an event line)
 - [x] GREEN: client demultiplex (decodeReply ↔ decodeEvent) + onEvent callback
       wired into @solid-gpui/solid render() registry
-- [ ] Demo: user clicks increment the count in the GPUI window (USER visual
-      confirmation pending — run `bun run demo:solid`, click the button)
+- [x] Demo: user clicks increment the count in the GPUI window (USER confirmed
+      2026-08-24 after fix ddd8860: public render() + auto-flush)
 - [x] VERIFY: bun 41/41 (--conditions=browser) · tsc x3 · cargo 38 passed ·
       clippy clean · node smoke OK; commits 8ddf0e5 + deadlock fix 8154aed;
       independent review round 1 found stdout-lock blocker (fixed), round 2

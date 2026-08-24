@@ -18,7 +18,7 @@ mount and then silently never again. Always pass the browser condition:
 
 ```sh
 bun --conditions=browser test
-bun --conditions=browser run scripts/solid-demo.ts
+bun --conditions=browser run examples/counter.ts
 # Node: node --conditions=browser ... (or NODE_OPTIONS=--conditions=browser)
 ```
 
@@ -33,7 +33,8 @@ Prerequisites: Bun ≥1.4, Rust stable, full Xcode with the Metal toolchain
 git clone <this repo> && cd solid-gpui
 bun install
 cargo build -p solid-gpui-helper          # first build compiles gpui shaders
-bun run demo:solid                        # counter in a real GPUI window
+bun run example/counter                  # counter in a real GPUI window;
+                                         # with --hot, edits remount in-place
 bun test                                  # runs with --conditions=browser
 cargo test                                # protocol + helper suites
 ```
