@@ -142,5 +142,13 @@ export function encodeCommand(command: SolidGpuiCommand): string {
       id: command.id,
     })
   }
+  if (command.type === "simulateInput") {
+    return JSON.stringify({
+      type: "simulateInput",
+      seq: command.seq,
+      id: command.id,
+      text: command.text,
+    })
+  }
   return JSON.stringify({ type: "getStats", seq: command.seq })
 }

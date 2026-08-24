@@ -75,6 +75,12 @@ describe("decodeCommand", () => {
     if (!r.ok) expect(r.error.kind).toBe("invalidShape")
   })
 
+  test("encodeCommand emits simulateInput correctly (not getStats)", () => {
+    // Regression: encodeCommand used to fall through to the getStats branch.
+    const json = encodeCommand({ type: "simulateInput", seq: 44, id: 7, text: "ab" })
+    expect(json).toBe('{"type":"simulateInput","seq":44,"id":7,"text":"ab"}')
+  })
+
   test("simulateInput decodes id + text", () => {
     const r = decodeCommand(
       JSON.stringify({ type: "simulateInput", seq: 44, id: 7, text: "ab" }),

@@ -422,7 +422,7 @@ fn appending_children_to_text_nodes_fails() {
             child_id: 2.into(),
         })
         .unwrap_err();
-    assert!(err.to_string().contains("text"), "got: {err}");
+    assert!(err.to_string().contains("no child slots"), "got: {err}");
 }
 
 #[test]
@@ -484,6 +484,53 @@ fn mutations_on_missing_elements_fail() {
 }
 
 // The `{:?}` of ElementId is used in several error-message assertions above.
+
+#[test]
+fn children_of_input_and_textarea_are_rejected() {
+    // The renderer drops input/textarea children (dedicated element), so
+    // validation must reject them — the ack's applied count must not lie
+    // (AGENTS invariant 1).
+    let mut tree = RetainedTree::new();
+    apply_all(
+        &mut tree,
+        &[
+            Mutation::CreateElement {
+                id: 1.into(),
+                element_type: ElementType::Input,
+            },
+            Mutation::CreateElement {
+                id: 2.into(),
+                element_type: ElementType::Textarea,
+            },
+            Mutation::CreateElement {
+                id: 3.into(),
+                element_type: ElementType::Text,
+            },
+            Mutation::CreateElement {
+                id: 4.into(),
+                element_type: ElementType::Div,
+            },
+        ],
+    )
+    .unwrap();
+    for parent in [1u32, 2] {
+        let err = tree
+            .apply(&Mutation::AppendChild {
+                parent_id: parent.into(),
+                child_id: 4.into(),
+            })
+            .unwrap_err();
+        assert!(err.to_string().contains("no child slots"), "got: {err}");
+    }
+    // Text keeps rejecting too (pre-existing contract).
+    let err = tree
+        .apply(&Mutation::AppendChild {
+            parent_id: 3.into(),
+            child_id: 4.into(),
+        })
+        .unwrap_err();
+    assert!(err.to_string().contains("no child slots"), "got: {err}");
+}
 
 #[test]
 fn set_value_on_input_and_textarea_stores_the_value() {

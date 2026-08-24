@@ -7,8 +7,9 @@
 //!   an ancestor of the new parent (an ancestor walk makes cycles
 //!   impossible in both arms). Appending an element to itself is an error.
 //!   Tree depth is capped at `MAX_DEPTH` to keep render recursion bounded.
-//! - Children cannot be attached to text-type elements (they render as plain
-//!   strings; validation and rendering agree).
+//! - Children cannot be attached to text-type elements (plain strings) nor
+//!   to input/textarea (dedicated element with no child slots); validation
+//!   and rendering agree.
 //! - `removeChild` detaches but keeps the element (and its subtree) alive for
 //!   re-append; `destroyElement` permanently removes the subtree and returns
 //!   the destroyed ids (callers clean up event listeners with them). If the
@@ -219,9 +220,17 @@ impl RetainedTree {
                 message: format!("parent {parent_id:?} does not exist"),
             });
         }
-        if self.elements.get(&parent_id).unwrap().element_type == ElementType::Text {
+        // Validation and rendering agree: text renders as a plain string and
+        // input/textarea render as a dedicated element with no child slots, so
+        // the renderer would silently drop any children — reject them.
+        if matches!(
+            self.elements.get(&parent_id).unwrap().element_type,
+            ElementType::Text | ElementType::Input | ElementType::Textarea
+        ) {
             return Err(ApplyError::InvalidMutation {
-                message: format!("cannot attach children to text element {parent_id:?}"),
+                message: format!(
+                    "cannot attach children to element {parent_id:?} (no child slots)"
+                ),
             });
         }
         let Some(child) = self.elements.get(&child_id) else {
