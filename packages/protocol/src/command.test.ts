@@ -4,6 +4,7 @@ import captureFrameFixture from "../fixtures/command-capture-frame.json"
 import scrollToFixture from "../fixtures/command-scroll-to.json"
 import getScrollOffsetFixture from "../fixtures/command-get-scroll-offset.json"
 import focusElementFixture from "../fixtures/command-focus-element.json"
+import simulateInputFixture from "../fixtures/command-simulate-input.json"
 import { decodeCommand, encodeCommand } from "./command"
 
 const ok = (json: string) => {
@@ -73,6 +74,19 @@ describe("decodeCommand", () => {
     const r = decodeCommand(JSON.stringify({ type: "scrollTo", seq: 9, x: 0, y: 500 }))
     expect(r.ok).toBe(false)
     if (!r.ok) expect(r.error.kind).toBe("invalidShape")
+  })
+
+  test("simulateInput fixture parses and re-encodes exactly (parity)", () => {
+    // The fixture is emitted by Rust command_to_json; both suites must agree.
+    const parsed = decodeCommand(JSON.stringify(simulateInputFixture))
+    expect(parsed).toEqual({
+      ok: true,
+      value: { type: "simulateInput", seq: 44, id: 7, text: "ab" },
+    })
+    const enc = encodeCommand(
+      (parsed as { value: Parameters<typeof encodeCommand>[0] }).value,
+    )
+    expect(enc).toBe(JSON.stringify(simulateInputFixture))
   })
 
   test("encodeCommand emits simulateInput correctly (not getStats)", () => {

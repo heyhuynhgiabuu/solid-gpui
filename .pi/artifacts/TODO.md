@@ -302,6 +302,10 @@ crosses the wire on change (controlled value sync both ways).
       edits→change event→JS signal→setValue; no loop because Solid only
       re-sends setValue when the value prop actually changed. Demo input
       proves the round-trip live (d70cd8e)
-- [ ] VERIFY: suites green; commits b20eed5+1556825+d70cd8e; reviewer pending
+- [x] VERIFY S10: r1 found 2 Majors (input/textarea children accepted while
+      renderer drops them; encodeCommand mis-encoded simulateInput as
+      getStats) — both fixed in 0d3d77e; r2: mergeable, 1 new Minor (TS
+      suite didn't parse the simulateInput fixture) — added parity test
+      (d8df9f5). Closed 2026-08-24.
 
 Cross-ref: PLAN.md Phase 2 roadmap (S10 entry)
