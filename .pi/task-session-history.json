@@ -95,5 +95,29 @@
     "reportedStatus": "success",
     "resultValid": true,
     "completedAt": 1787556882541
+  },
+  {
+    "id": "mt6xrf5t-3592",
+    "agentType": "reviewer",
+    "description": "Review Slice 4 rendering",
+    "sessionName": "task-mt6xrf5t-3592",
+    "startedAt": 1787557807893,
+    "paneId": "w3:pD8",
+    "handle": {
+      "backend": "herdr",
+      "resourceId": "w3:pD8",
+      "socketPath": "/Users/huynhgiabuu/.config/herdr/herdr.sock",
+      "terminalId": "term_659c63bc91b1a17",
+      "agentName": "reviewer-mt6xrf5t",
+      "foregroundProcessGroupId": 81326
+    },
+    "piDir": "/Users/huynhgiabuu/dev/projects/solid-gpui/.pi",
+    "dir": "/Users/huynhgiabuu/dev/projects/solid-gpui/.pi/artifacts/tasks",
+    "cwd": "/Users/huynhgiabuu/dev/projects/solid-gpui",
+    "status": "done",
+    "background": true,
+    "reportedStatus": "success",
+    "resultValid": true,
+    "completedAt": 1787558382899
   }
 ]

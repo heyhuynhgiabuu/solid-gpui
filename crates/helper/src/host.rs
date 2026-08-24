@@ -1,8 +1,8 @@
 //! HostView: the GPUI view that renders the retained tree each frame.
 
 use gpui::{
-    AnyElement, Context, Div, IntoElement, ParentElement, Render, SharedString, Styled, Window,
-    div, px, rgb,
+    AnyElement, Context, Div, IntoElement, ParentElement, Render, Rgba, SharedString, Styled,
+    Window, div, px, rgb, rgba,
 };
 use solid_gpui_protocol::{ElementId, ElementType, RetainedTree, StyleValue};
 
@@ -143,13 +143,13 @@ fn apply_style(mut el: Div, key: &str, value: &StyleValue) -> Div {
             }
         }
         "backgroundColor" => {
-            if let Some(c) = value.as_str().and_then(parse_hex) {
-                el = el.bg(rgb(c));
+            if let Some(c) = parse_color(value) {
+                el = el.bg(c);
             }
         }
         "color" => {
-            if let Some(c) = value.as_str().and_then(parse_hex) {
-                el = el.text_color(rgb(c));
+            if let Some(c) = parse_color(value) {
+                el = el.text_color(c);
             }
         }
         _ => {}
@@ -164,11 +164,53 @@ fn parse_px(s: &str) -> Option<f64> {
     t.parse::<f64>().ok()
 }
 
-/// "#rrggbb" or "#rrggbbaa" → u32.
-fn parse_hex(s: &str) -> Option<u32> {
-    let h = s.strip_prefix('#')?;
+fn parse_color(value: &StyleValue) -> Option<Rgba> {
+    let h = value.as_str()?.strip_prefix('#')?;
     match h.len() {
-        6 | 8 => u32::from_str_radix(h, 16).ok(),
+        6 => u32::from_str_radix(h, 16).ok().map(rgb),
+        8 => u32::from_str_radix(h, 16).ok().map(rgba),
         _ => None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use gpui::Rgba;
+
+    #[test]
+    fn six_digit_hex_is_opaque_rgb() {
+        let c = parse_color(&StyleValue::Text("#1e1e2e".into())).unwrap();
+        assert_eq!(
+            c,
+            Rgba {
+                r: 0x1e as f32 / 255.0,
+                g: 0x1e as f32 / 255.0,
+                b: 0x2e as f32 / 255.0,
+                a: 1.0,
+            }
+        );
+    }
+
+    #[test]
+    fn eight_digit_hex_honors_alpha_via_rgba() {
+        // Regression: rgb() would drop the top byte (#rrggbb→ misrender).
+        let c = parse_color(&StyleValue::Text("#ff000080".into())).unwrap();
+        assert_eq!(
+            c,
+            Rgba {
+                r: 1.0,
+                g: 0.0,
+                b: 0.0,
+                a: 0x80 as f32 / 255.0,
+            }
+        );
+    }
+
+    #[test]
+    fn bad_colors_are_none() {
+        assert!(parse_color(&StyleValue::Text("red".into())).is_none());
+        assert!(parse_color(&StyleValue::Text("#12345".into())).is_none());
+        assert!(parse_color(&StyleValue::Number(5.into())).is_none());
     }
 }

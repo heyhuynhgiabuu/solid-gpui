@@ -22,15 +22,17 @@ applied counts real, apply errors become seq-correlated error replies) →
 style-subset mapping → gpui elements → e2e (GUI-gated) + demo script.
 
 Part 4a (this commit):
-- [ ] RED: retained-tree unit tests (apply fixture, error semantics, cycles)
-- [ ] GREEN: `retained` module in protocol crate; cargo tests green
-- [ ] VERIFY: full test suite + clippy/fmt; commit
+- [x] RED: retained-tree unit tests (apply fixture, error semantics, cycles)
+- [x] GREEN: `retained` module in protocol crate; cargo tests green (12/12)
+- [x] VERIFY: full test suite + clippy/fmt; commit 35900a6
 
-Part 4b (next):
-- [ ] Helper `--stdio-window`: stdin thread + channels + cx.spawn apply loop
-- [ ] Style subset mapping → gpui elements; repaint via cx.notify()
-- [ ] e2e GUI-gated (bun: fixture ack applied=12; correlated ReplyError test)
-- [ ] Demo script; user visual check; independent review
+Part 4b:
+- [x] Helper `--stdio-window`: stdin thread + channels + cx.spawn apply loop (72d7059)
+- [x] Style subset mapping → gpui elements; repaint via cx.notify()
+- [x] e2e GUI-gated (bun: fixture ack applied=12; correlated ReplyError test)
+      (rust: stdio_window 1/1; bun client 7/7 window e2e included)
+- [x] Demo script; user visual check — **user saw the fixture render 2026-08-24**
+- [ ] Independent review verdict (mt6xrf5t-3592 running) → fix findings → close slice
 
 Semantics decided (documented in retained.rs): child must be parentless on
 append/insert (cycle-proof), removeChild keeps element alive for re-append,

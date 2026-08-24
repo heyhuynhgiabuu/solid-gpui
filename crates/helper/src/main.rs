@@ -230,7 +230,7 @@ fn run_stdio_window() {
                         let seq = batch.seq;
                         let mut applied: u32 = 0;
                         let mut err: Option<String> = None;
-                        let _ = window.update(cx, |view, _window, cx| {
+                        let update_result = window.update(cx, |view, _window, cx| {
                             for m in &batch.mutations {
                                 match view.tree.apply(m) {
                                     Ok(()) => applied += 1,
@@ -242,15 +242,25 @@ fn run_stdio_window() {
                             }
                             cx.notify();
                         });
-                        match err {
-                            None => Reply::Ack { seq, applied },
-                            Some(message) => Reply::Error {
+                        if let Err(e) = update_result {
+                            // Window closed mid-stream: report instead of
+                            // acking an empty batch (process is exiting anyway).
+                            Reply::Error {
                                 seq: Some(seq),
                                 code: ReplyCode::ApplyFailed,
-                                message: format!(
-                                    "apply failed after {applied} mutations: {message}"
-                                ),
-                            },
+                                message: format!("window closed: {e}"),
+                            }
+                        } else {
+                            match err {
+                                None => Reply::Ack { seq, applied },
+                                Some(message) => Reply::Error {
+                                    seq: Some(seq),
+                                    code: ReplyCode::ApplyFailed,
+                                    message: format!(
+                                        "apply failed after {applied} mutations: {message}"
+                                    ),
+                                },
+                            }
                         }
                     }
                 };

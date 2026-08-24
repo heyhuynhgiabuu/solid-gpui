@@ -11,8 +11,8 @@ import {
 
 /** Ack for one applied batch.
  *
- * `applied` counts decoded mutations until the retained tree exists (Slice 4);
- * the Rust side documents the same placeholder semantics.
+ * `applied` counts mutations that passed retained-tree validation in window
+ * mode; transport mode (`--stdio`) reports the decoded count (no tree).
  */
 export interface Ack {
   readonly seq: number

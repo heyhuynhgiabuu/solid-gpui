@@ -50,8 +50,14 @@ fn window_mode_applies_batches_and_correlates_errors() {
         err.contains(r#""type":"error""#) && err.contains(r#""seq":7"#),
         "correlated error expected, got {err}"
     );
-    assert!(err.contains("applyFailed"), "code applyFailed expected: {err}");
-    assert!(err.contains("parent"), "message should name the cause: {err}");
+    assert!(
+        err.contains("applyFailed"),
+        "code applyFailed expected: {err}"
+    );
+    assert!(
+        err.contains("parent"),
+        "message should name the cause: {err}"
+    );
 
     // 3. EOF quits the app cleanly.
     drop(stdin);

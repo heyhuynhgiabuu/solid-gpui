@@ -3,12 +3,16 @@
 //! Pure data with validation — no gpui, no IO. The helper's GPUI view reads
 //! this tree each frame; the JS side never sees it. Semantics (Slice 4):
 //!
-//! - `appendChild`/`insertBefore` require the child to be parentless (this
-//!   makes cycles structurally impossible; a child is re-parented only by
-//!   `removeChild` first). Appending an element to itself is an error.
+//! - `appendChild`/`insertBefore` require the child to be parentless AND not
+//!   an ancestor of the new parent (an ancestor walk makes cycles
+//!   impossible in both arms). Appending an element to itself is an error.
+//!   Tree depth is capped at `MAX_DEPTH` to keep render recursion bounded.
+//! - Children cannot be attached to text-type elements (they render as plain
+//!   strings; validation and rendering agree).
 //! - `removeChild` detaches but keeps the element (and its subtree) alive for
 //!   re-append; `destroyElement` permanently removes the subtree and returns
-//!   the destroyed ids (callers clean up event listeners with them).
+//!   the destroyed ids (callers clean up event listeners with them). If the
+//!   destroyed subtree contains the current root, the root is cleared.
 //! - `setRoot` requires an existing element and may replace a previous root
 //!   (the `bun --hot` remount pattern swaps roots on a live window).
 //! - `setText` is only valid on text-type elements.
@@ -18,6 +22,8 @@
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 use crate::{ApplyError, ElementId, ElementType, EventType, Mutation, StyleMap};
+
+pub const MAX_DEPTH: usize = 256;
 
 /// One retained host element.
 #[derive(Debug, Clone, PartialEq)]
@@ -168,11 +174,13 @@ impl RetainedTree {
         let mut stack = vec![id];
         while let Some(cur) = stack.pop() {
             if let Some(node) = self.elements.remove(&cur) {
+                if self.root == Some(cur) {
+                    self.root = None;
+                }
                 destroyed.push(cur);
                 stack.extend(node.children.iter().copied());
             }
         }
-        destroyed.sort_by_key(|_| 0); // stable: keep push order (parent first)
         Ok(destroyed)
     }
 
@@ -190,6 +198,11 @@ impl RetainedTree {
         if !self.elements.contains_key(&parent_id) {
             return Err(ApplyError::InvalidMutation {
                 message: format!("parent {parent_id:?} does not exist"),
+            });
+        }
+        if self.elements.get(&parent_id).unwrap().element_type == ElementType::Text {
+            return Err(ApplyError::InvalidMutation {
+                message: format!("cannot attach children to text element {parent_id:?}"),
             });
         }
         let Some(child) = self.elements.get(&child_id) else {
@@ -215,6 +228,32 @@ impl RetainedTree {
             return Err(ApplyError::InvalidMutation {
                 message: format!("element {child_id:?} cannot be appended to itself"),
             });
+        }
+        // Ancestor check: appending an ancestor (e.g. the parentless root)
+        // under its own descendant would create a cycle. The walk is also the
+        // depth measure — bounded by MAX_DEPTH to keep render recursion safe.
+        let mut depth = 0usize;
+        let mut cur = parent_id;
+        loop {
+            if cur == child_id {
+                return Err(ApplyError::InvalidMutation {
+                    message: format!(
+                        "child {child_id:?} is an ancestor of parent {parent_id:?}; that would create a cycle"
+                    ),
+                });
+            }
+            depth += 1;
+            if depth >= MAX_DEPTH {
+                // Child would sit at depth > MAX_DEPTH; render recursion stays
+                // bounded. (Also a backstop: a cycle walks ancestors forever.)
+                return Err(ApplyError::InvalidMutation {
+                    message: format!("tree depth would exceed {MAX_DEPTH}"),
+                });
+            }
+            match self.elements.get(&cur).and_then(|n| n.parent) {
+                Some(p) => cur = p,
+                None => break,
+            }
         }
         let pos = match before_id {
             None => None,

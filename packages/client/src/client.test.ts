@@ -89,7 +89,7 @@ describe("spawn failure supervision", () => {
 
 describe("window mode (real rendering)", () => {
   test("fixture applies through the retained tree; apply errors are correlated", async () => {
-    if (skip()) return
+    if (skip() || process.env.SOLID_GPUI_SKIP_GUI_TESTS !== undefined) return
     const helper = spawnHelper({ binary, mode: "window" })
     const ack = await helper.sendBatch(await fixtureBatch())
     expect(ack).toEqual({ seq: 42, applied: 12 })
