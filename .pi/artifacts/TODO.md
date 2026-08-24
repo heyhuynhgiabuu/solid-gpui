@@ -14,7 +14,7 @@ status: done (2026-08-24 — Q1–Q3 decided, spec frozen; community probe moved
 - [ ] Community probe (r/solidjs, Solid Discord) — user action, parallel to Phase 1
 
 ### 2026-08-24 - Slice 3: stdio NDJSON IPC (JS client ↔ helper)
-status: active
+status: done (2026-08-24, commits bf02123 + review fixes 89337fe)
 
 Seam under test: real child process over stdio — helper `--stdio` mode
 (NDJSON in → ack/error NDJSON out, no gpui/GUI), TS `@solid-gpui/client`
@@ -28,14 +28,17 @@ Transport decision: stdio v1 (UDS deferred until measured) — announced to user
 - [x] GREEN: `decodeReply` in protocol pkg; `@solid-gpui/client` implementation
 - [x] Node compatibility smoke — NODE SMOKE OK under Node 24 (tsx + root tsconfig
       paths; bun workspaces emit no node_modules links; import.meta.dir avoided)
-- [ ] VERIFY: all tests (bun ×2 pkgs, cargo ×2 crates), typecheck, clippy, fmt;
+- [x] VERIFY: all tests (bun ×2 pkgs, cargo ×2 crates), typecheck, clippy, fmt;
       commit; independent review before closing
 
-Run report (2026-08-24): RED observed all four stages (rust stdio test fail on
-missing mode; TS module-not-found ×2). GREEN: bun protocol 20/20, bun client 3/3
-(real child), cargo 6 suites ok (stdio integration 1/1), tsc ×2 clean, clippy clean,
-NODE SMOKE OK. Commit bf02123. Reviewer mt6wo1j7-380b running; slice stays active
-until verdict; fixes (if any) before closing.
+Run report (2026-08-24): RED observed all four stages. GREEN: bun protocol 20/20,
+bun client 6/6 (real child), cargo 16 tests (incl. stdio integration), tsc ×2,
+clippy clean, NODE SMOKE OK. Reviewer mt6wo1j7-380b verdict findings-should-fix:
+Major 1 (spawn-failure crash/hang) + minors 2-7 + notes — ALL fixed in 89337fe with
+regression tests under both runtimes; note-C missing tests partially covered
+(in-flight kill, dup seq, spawn failure); ReplyError-branch e2e deferred to Slice 4
+(helper cannot emit correlated errors yet, by design). Reviewer fact-check also
+corrected two of my beliefs (see MEMORY).
 
 Cross-ref: PLAN.md#2026-08-24---solid--gpui-oss-repo-spec-frozen-2026-08-24-after-q1q3
 

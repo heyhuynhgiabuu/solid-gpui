@@ -49,6 +49,23 @@
 - Consumer guidance from review: style-key values must stay string|number; __proto__-style
   keys are inert today, but widening value types would require Map/defineProperty copies.
 
+## Slice 3 learnings (2026-08-24)
+
+- Bun 1.4.0 spawn() with ENOENT behaves like Node: async 'error' event, no sync throw
+  (my earlier belief + part of reviewer's report were outdated). Supervision must listen
+  to BOTH 'error' (spawn failure, 'close' never fires) and 'close' (not 'exit' — stdio
+  drains first, so a final flushed ack is processed before pending rejection).
+- CORRECTION (reviewer-verified): bun workspaces DO create nested node_modules symlinks
+  (packages/client/node_modules/@solid-gpui/protocol). Root tsconfig paths are only for
+  scripts/ + tsx bare-import resolution; packages' tsc resolves via the symlink.
+- Publish-time concern noted: exports→.ts needs a loader for plain-Node consumers.
+- Rust stdin lines(): invalid UTF-8 yields Err — answer decodeFailed then break, never
+  silent exit-0 (indistinguishable from EOF).
+- Compact JSON fixtures for wire tests via to_json(from_json(...)), never whitespace
+  stripping (corrupts UTF-8 string contents).
+- in-flight promise hygiene: duplicate-seq guard + write-then-set ordering (a throwing
+  sync write must not leak a pending entry).
+
 ## Slice 2 learnings (2026-08-24)
 
 - gpui on zed main (Aug 2026): entry is `gpui_platform::application().run(|cx: &mut App|…)`
