@@ -2,15 +2,18 @@
 
 use crate::frame_stats::FrameStats;
 use gpui::{
-    AnyElement, Context, Div, FocusHandle, InteractiveElement, IntoElement, ParentElement, Point,
-    Render, Rgba, ScrollHandle, SharedString, StatefulInteractiveElement, Styled, Window, div, px,
-    rgb, rgba,
+    AnyElement, App, Bounds, Context, Div, Element, FocusHandle, InputHandler, InteractiveElement,
+    IntoElement, LayoutId, ParentElement, Pixels, Point, Render, Rgba, ScrollHandle, SharedString,
+    StatefulInteractiveElement, Style, Styled, UTF16Selection, WeakEntity, Window, div, px, rgb,
+    rgba, size,
 };
 use solid_gpui_protocol::EventType;
+use solid_gpui_protocol::StyleMap;
 use solid_gpui_protocol::{ElementId, ElementType, Event, RetainedTree, StyleValue};
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 use std::io::Write;
+use std::ops::Range;
 use std::rc::Rc;
 
 /// Live scroll handles for scrollable nodes, keyed by element id. Lazy-created
@@ -24,6 +27,11 @@ type ScrollHandles = Rc<RefCell<HashMap<ElementId, ScrollHandle>>>;
 /// pruned per frame once the tree drops the id. Rc / RefCell because
 /// build_element reaches them through a &Context, not a &mut HostView.
 type FocusHandles = Rc<RefCell<HashMap<ElementId, FocusHandle>>>;
+
+/// Live editable state per input/textarea element. Keyed by element id,
+/// shared with the per-frame platform InputHandler. Same lifecycle contract
+/// as the other handle maps: lazy at render, pruned per frame.
+type InputStates = Rc<RefCell<HashMap<ElementId, Rc<RefCell<InputState>>>>>;
 
 /// Which axes scroll for the `overflow` style key. Closed set — single source
 /// of truth so the renderer and the protocol docs agree (AGENTS invariant 1).
@@ -45,6 +53,116 @@ fn parse_overflow(value: &StyleValue) -> Option<ScrollAxis> {
     }
 }
 
+/// Live editable state of one input/textarea element. The retained node's
+/// `value` is the controlled mirror pushed by JS; this is what the platform
+/// IME edits between setValue pushes (native caret/undo live here).
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct InputState {
+    pub value: String,
+    /// Caret position in UTF-16 code units (NSTextInputClient's unit).
+    pub caret: usize,
+    /// IME composing (marked) range in UTF-16 code units, if active.
+    pub marked: Option<Range<usize>>,
+}
+
+impl InputState {
+    pub fn with_value(value: String) -> Self {
+        let caret = utf16_len(&value);
+        InputState {
+            value,
+            caret,
+            marked: None,
+        }
+    }
+}
+
+/// UTF-16 code-unit length of a string (the platform text client's unit).
+pub fn utf16_len(s: &str) -> usize {
+    s.encode_utf16().count()
+}
+
+/// Byte offset for a UTF-16 code-unit offset, clamped to the end.
+fn utf16_byte_index(s: &str, utf16: usize) -> usize {
+    let mut units = 0usize;
+    for (byte, c) in s.char_indices() {
+        if units >= utf16 {
+            return byte;
+        }
+        units += c.len_utf16();
+    }
+    s.len()
+}
+
+/// Replace `[start, end)` given in UTF-16 code units with `replacement`.
+/// Pure — unit-tested against astral characters (emoji = 2 units).
+fn edit_utf16(s: &str, range: Range<usize>, replacement: &str) -> String {
+    let len = utf16_len(s);
+    let start = utf16_byte_index(s, range.start.min(len));
+    let end = utf16_byte_index(s, range.end.min(len));
+    if start > end {
+        return s.to_string();
+    }
+    let mut out = String::with_capacity(s.len() + replacement.len());
+    out.push_str(&s[..start]);
+    out.push_str(replacement);
+    out.push_str(&s[end..]);
+    out
+}
+
+/// UTF-16 substring for `text_for_range`.
+fn utf16_substring(s: &str, range: Range<usize>) -> String {
+    let units: Vec<u16> = s
+        .encode_utf16()
+        .skip(range.start)
+        .take(range.end.saturating_sub(range.start))
+        .collect();
+    String::from_utf16(&units).unwrap_or_default()
+}
+
+/// Write one event line to stdout under the process-global lock (the stdin
+/// thread uses the same lock, scoped per write — deadlock invariant).
+fn write_event_line(event: &Event) {
+    let line = solid_gpui_protocol::event_to_json(event);
+    let mut out = std::io::stdout().lock();
+    let _ = writeln!(out, "{line}");
+    let _ = out.flush();
+}
+
+/// Apply a UTF-16 edit to an input's shared state and emit a `change` event
+/// carrying the new value (the helper→JS direction of controlled sync).
+/// Shared by the platform InputHandler, the Enter-newline path, and the
+/// simulateInput command so every edit crosses the wire identically.
+/// Returns the new value; the caller is responsible for repainting.
+fn edit_input(
+    state: &Rc<RefCell<InputState>>,
+    id: ElementId,
+    range: Option<Range<usize>>,
+    text: &str,
+    sink: &Rc<dyn Fn(&Event)>,
+) -> String {
+    let new_value = {
+        let mut s = state.borrow_mut();
+        let len = utf16_len(&s.value);
+        let sel = range.unwrap_or(s.caret..s.caret);
+        let start = sel.start.min(len).min(sel.end.min(len));
+        let end = sel.end.min(len).max(start);
+        s.value = edit_utf16(&s.value, start..end, text);
+        s.caret = start + utf16_len(text);
+        s.marked = None;
+        s.value.clone()
+    };
+    sink(&Event::Input {
+        id,
+        event_type: EventType::Change,
+        x: None,
+        y: None,
+        key: None,
+        modifiers: None,
+        value: Some(new_value.clone()),
+    });
+    new_value
+}
+
 pub struct HostView {
     pub tree: RetainedTree,
     /// Build-time samples for the debug overlay and the getStats command.
@@ -63,6 +181,13 @@ pub struct HostView {
     /// the focus subscription (activated one frame later by gpui) is live
     /// when the focus happens — otherwise the focus event is silently missed.
     autofocus_pending: Option<ElementId>,
+    /// Live editable state per input/textarea element. Shared with the per-
+    /// frame platform InputHandler so edits persist across frames (the
+    /// handler itself is rebuilt every frame by the IME anchor).
+    input_states: InputStates,
+    /// Writes one event line to stdout; handed to the InputHandler so a
+    /// user edit can cross the wire without a HostView borrow.
+    sink: Rc<dyn Fn(&Event)>,
 }
 
 impl HostView {
@@ -76,6 +201,8 @@ impl HostView {
             focus_subscriptions: Vec::new(),
             focus_subscribed: HashSet::new(),
             autofocus_pending: None,
+            input_states: Rc::new(RefCell::new(HashMap::new())),
+            sink: Rc::new(write_event_line),
         }
     }
 
@@ -175,6 +302,44 @@ impl HostView {
         self.autofocus_pending.get_or_insert(id);
     }
 
+    /// Set an input's value from the wire (setValue — the JS→helper direction
+    /// of controlled sync). Overwrites internal edits and moves the caret to
+    /// the end, exactly like a controlled React input re-render.
+    pub fn set_input_value(&self, id: ElementId, value: &str) {
+        let mut map = self.input_states.borrow_mut();
+        let entry = map
+            .entry(id)
+            .or_insert_with(|| Rc::new(RefCell::new(InputState::default())));
+        let mut s = entry.borrow_mut();
+        s.value = value.to_string();
+        s.caret = utf16_len(value);
+        s.marked = None;
+    }
+
+    /// simulateInput command + Enter-newline: apply a text edit at the caret
+    /// through the same path as the platform IME (edit_input), emitting a
+    /// change event. Fails when the id never rendered as input/textarea.
+    pub fn simulate_input(&self, id: ElementId, text: &str) -> Result<(), String> {
+        let Some(state) = self.input_states.borrow().get(&id).cloned() else {
+            return Err(format!("no input/textarea for id {}", id.0));
+        };
+        edit_input(&state, id, None, text, &self.sink);
+        Ok(())
+    }
+
+    /// Insert text at the caret (textarea Enter-newline path from a keydown
+    /// listener; no selection support in v1).
+    fn insert_text(&self, id: ElementId, text: &str) {
+        if let Some(state) = self.input_states.borrow().get(&id).cloned() {
+            edit_input(&state, id, None, text, &self.sink);
+        }
+    }
+
+    /// Push a submit event (input Enter / textarea Shift+Enter).
+    fn emit_submit(&self, id: ElementId) {
+        self.emit_event(id, EventType::Submit, None, None, None, None, None);
+    }
+
     /// S9: programmatic focus for the focusElement command. Fails when the
     /// id was never rendered focusable (no FocusHandle).
     pub fn focus_element(
@@ -196,6 +361,7 @@ impl HostView {
 
     /// Push one event line to the JS side. The process-global stdout lock
     /// serializes this with the stdin thread's writes (deadlock invariant).
+    #[allow(clippy::too_many_arguments)]
     fn emit_event(
         &self,
         id: ElementId,
@@ -204,18 +370,17 @@ impl HostView {
         y: Option<f64>,
         key: Option<String>,
         modifiers: Option<solid_gpui_protocol::Modifiers>,
+        value: Option<String>,
     ) {
-        let line = solid_gpui_protocol::event_to_json(&Event::Input {
+        write_event_line(&Event::Input {
             id,
             event_type,
             x,
             y,
             key,
             modifiers,
+            value,
         });
-        let mut out = std::io::stdout().lock();
-        let _ = writeln!(out, "{line}");
-        let _ = out.flush();
     }
 
     /// Push a click event to the JS side as one NDJSON line.
@@ -227,7 +392,7 @@ impl HostView {
             ),
             _ => (None, None),
         };
-        self.emit_event(id, EventType::Click, x, y, None, None);
+        self.emit_event(id, EventType::Click, x, y, None, None, None);
     }
 
     /// Push a focus/blur event to the JS side.
@@ -237,7 +402,7 @@ impl HostView {
         } else {
             EventType::Blur
         };
-        self.emit_event(id, event_type, None, None, None, None);
+        self.emit_event(id, event_type, None, None, None, None, None);
     }
 
     /// Push a keyDown event to the JS side (keystroke key + modifiers).
@@ -276,6 +441,217 @@ fn key_event(id: ElementId, event_type: EventType, keystroke: &gpui::Keystroke) 
             shift: keystroke.modifiers.shift,
             cmd: keystroke.modifiers.platform,
         }),
+        value: None,
+    }
+}
+
+/// Shared render-time context threaded through build_element: the handle
+/// maps (scroll/focus/input), focus subscription bookkeeping, the event sink
+/// and the owning view handle (for repaint requests after IME edits).
+struct RenderCtx<'a> {
+    scroll_handles: &'a ScrollHandles,
+    focus_handles: &'a FocusHandles,
+    input_states: &'a InputStates,
+    subscriptions: &'a mut Vec<gpui::Subscription>,
+    subscribed: &'a mut HashSet<ElementId>,
+    sink: &'a Rc<dyn Fn(&Event)>,
+    host: &'a WeakEntity<HostView>,
+}
+
+/// The per-frame gpui InputHandler registered for a focused input/textarea.
+/// Rebuilt every frame by the IME anchor's paint; holds clones of the shared
+/// state + sink + view handle so edits persist across frames and cross the
+/// wire without a HostView borrow.
+#[derive(Clone)]
+struct InputHandlerState {
+    id: ElementId,
+    state: Rc<RefCell<InputState>>,
+    sink: Rc<dyn Fn(&Event)>,
+    host: WeakEntity<HostView>,
+}
+
+impl InputHandlerState {
+    /// Request a repaint so the caret/text update even when JS never echoes
+    /// the change back (uncontrolled inputs).
+    fn repaint(&self, cx: &mut App) {
+        if self.host.upgrade().is_some() {
+            cx.notify(self.host.entity_id());
+        }
+    }
+}
+
+impl InputHandler for InputHandlerState {
+    fn selected_text_range(
+        &mut self,
+        _ignore_disabled_input: bool,
+        _window: &mut Window,
+        _cx: &mut App,
+    ) -> Option<UTF16Selection> {
+        let s = self.state.borrow();
+        Some(UTF16Selection {
+            range: s.caret..s.caret,
+            reversed: false,
+        })
+    }
+
+    fn marked_text_range(&mut self, _window: &mut Window, _cx: &mut App) -> Option<Range<usize>> {
+        self.state.borrow().marked.clone()
+    }
+
+    fn text_for_range(
+        &mut self,
+        range_utf16: Range<usize>,
+        _adjusted: &mut Option<Range<usize>>,
+        _window: &mut Window,
+        _cx: &mut App,
+    ) -> Option<String> {
+        let s = self.state.borrow();
+        Some(utf16_substring(&s.value, range_utf16))
+    }
+
+    fn replace_text_in_range(
+        &mut self,
+        replacement_range: Option<Range<usize>>,
+        text: &str,
+        _window: &mut Window,
+        cx: &mut App,
+    ) {
+        edit_input(&self.state, self.id, replacement_range, text, &self.sink);
+        self.repaint(cx);
+    }
+
+    fn replace_and_mark_text_in_range(
+        &mut self,
+        range_utf16: Option<Range<usize>>,
+        new_text: &str,
+        new_selected_range: Option<Range<usize>>,
+        _window: &mut Window,
+        cx: &mut App,
+    ) {
+        let new_value = {
+            let mut s = self.state.borrow_mut();
+            let len = utf16_len(&s.value);
+            let sel = range_utf16.unwrap_or(s.caret..s.caret);
+            let start = sel.start.min(len).min(sel.end.min(len));
+            let end = sel.end.min(len).max(start);
+            s.value = edit_utf16(&s.value, start..end, new_text);
+            let composed_end = start + utf16_len(new_text);
+            s.caret = new_selected_range.map(|ns| ns.end).unwrap_or(composed_end);
+            s.marked = Some(start..composed_end);
+            s.value.clone()
+        };
+        (self.sink)(&Event::Input {
+            id: self.id,
+            event_type: EventType::Change,
+            x: None,
+            y: None,
+            key: None,
+            modifiers: None,
+            value: Some(new_value),
+        });
+        self.repaint(cx);
+    }
+
+    fn unmark_text(&mut self, _window: &mut Window, _cx: &mut App) {
+        self.state.borrow_mut().marked = None;
+    }
+
+    fn bounds_for_range(
+        &mut self,
+        _range_utf16: Range<usize>,
+        _window: &mut Window,
+        _cx: &mut App,
+    ) -> Option<Bounds<Pixels>> {
+        // No native IME candidate-window positioning in v1; composing text
+        // renders inline. None keeps the platform candidate window hidden.
+        None
+    }
+
+    fn character_index_for_point(
+        &mut self,
+        _point: Point<Pixels>,
+        _window: &mut Window,
+        _cx: &mut App,
+    ) -> Option<usize> {
+        None
+    }
+}
+
+/// Invisible zero-size element whose paint registers the platform input
+/// handler (`window.handle_input`) for a focused input/textarea. Sits inside
+/// the input's div so the div keeps all focus/tab/click/key machinery; only
+/// IME routing needs the paint phase (render is not paint).
+#[derive(Clone)]
+struct ImeAnchor {
+    focus_handle: FocusHandle,
+    handler: InputHandlerState,
+}
+
+impl Element for ImeAnchor {
+    type RequestLayoutState = ();
+    type PrepaintState = ();
+
+    fn id(&self) -> Option<gpui::ElementId> {
+        None
+    }
+
+    fn source_location(&self) -> Option<&'static std::panic::Location<'static>> {
+        None
+    }
+
+    fn request_layout(
+        &mut self,
+        _: Option<&gpui::GlobalElementId>,
+        _: Option<&gpui::InspectorElementId>,
+        window: &mut Window,
+        cx: &mut App,
+    ) -> (LayoutId, Self::RequestLayoutState) {
+        let style = Style {
+            size: size(px(0.).into(), px(0.).into()),
+            ..Default::default()
+        };
+        (window.request_layout(style, [], cx), ())
+    }
+
+    fn prepaint(
+        &mut self,
+        _: Option<&gpui::GlobalElementId>,
+        _: Option<&gpui::InspectorElementId>,
+        _: Bounds<Pixels>,
+        _: &mut Self::RequestLayoutState,
+        window: &mut Window,
+        cx: &mut App,
+    ) -> Self::PrepaintState {
+        window.set_focus_handle(&self.focus_handle, cx);
+    }
+
+    fn paint(
+        &mut self,
+        _: Option<&gpui::GlobalElementId>,
+        _: Option<&gpui::InspectorElementId>,
+        _: Bounds<Pixels>,
+        _: &mut Self::RequestLayoutState,
+        _: &mut Self::PrepaintState,
+        window: &mut Window,
+        cx: &mut App,
+    ) {
+        window.handle_input(&self.focus_handle, self.handler.clone(), cx);
+    }
+}
+
+impl IntoElement for ImeAnchor {
+    type Element = Self;
+
+    fn into_element(self) -> Self::Element {
+        self
+    }
+}
+
+/// Numeric style value for a key, if present (fontSize, minRows, ...).
+fn style_num(style: &StyleMap, key: &str) -> Option<f64> {
+    match style.get(key) {
+        Some(StyleValue::Number(n)) => n.as_f64(),
+        _ => None,
     }
 }
 
@@ -293,17 +669,22 @@ impl Render for HostView {
         focus
             .borrow_mut()
             .retain(|id, _| self.tree.get(*id).is_some());
+        let inputs = self.input_states.clone();
+        inputs
+            .borrow_mut()
+            .retain(|id, _| self.tree.get(*id).is_some());
+        let host = cx.entity().downgrade();
+        let mut ctx = RenderCtx {
+            scroll_handles: &self.scroll_handles,
+            focus_handles: &self.focus_handles,
+            input_states: &self.input_states,
+            subscriptions: &mut self.focus_subscriptions,
+            subscribed: &mut self.focus_subscribed,
+            sink: &self.sink,
+            host: &host,
+        };
         let mut content = match self.tree.root() {
-            Some(root) => build_element(
-                &self.tree,
-                root,
-                window,
-                cx,
-                &self.scroll_handles,
-                &self.focus_handles,
-                &mut self.focus_subscriptions,
-                &mut self.focus_subscribed,
-            ),
+            Some(root) => build_element(&self.tree, root, window, cx, &mut ctx),
             // No root yet: dark placeholder keeps the window alive pre-mount.
             None => div().size_full().bg(rgb(0x1e1e2e)).into_any_element(),
         };
@@ -366,22 +747,14 @@ impl Render for HostView {
 
 /// Map one retained node to a GPUI element. Unknown style keys/values are
 /// ignored (forward compatibility — see protocol StyleMap docs). Text nodes
-/// render as plain GPUI text children.
-///
-/// Interactive wiring (scroll, click, focus, keys) all needs the stateful
-/// element (.id()); element ids are unique per tree so one .id() serves every
-/// role. `window` is needed for focus subscriptions, `subscriptions` keeps
-/// those alive for the view's lifetime.
-#[allow(clippy::too_many_arguments)]
+/// render as plain GPUI text children; input/textarea get the dedicated
+/// builder (text + caret + IME anchor).
 fn build_element(
     tree: &RetainedTree,
     id: ElementId,
     window: &mut Window,
     cx: &mut Context<HostView>,
-    scroll_handles: &ScrollHandles,
-    focus_handles: &FocusHandles,
-    subscriptions: &mut Vec<gpui::Subscription>,
-    subscribed: &mut HashSet<ElementId>,
+    ctx: &mut RenderCtx,
 ) -> AnyElement {
     let Some(node) = tree.get(id) else {
         return div().into_any_element();
@@ -389,21 +762,18 @@ fn build_element(
     if node.element_type == ElementType::Text {
         return SharedString::from(node.text.clone().unwrap_or_default()).into_any_element();
     }
+    if matches!(
+        node.element_type,
+        ElementType::Input | ElementType::Textarea
+    ) {
+        return build_input_element(tree, id, window, cx, ctx);
+    }
     let mut el = div();
     for (key, value) in &node.style {
         el = apply_style(el, key, value);
     }
     for child in &node.children {
-        el = el.child(build_element(
-            tree,
-            *child,
-            window,
-            cx,
-            scroll_handles,
-            focus_handles,
-            subscriptions,
-            subscribed,
-        ));
+        el = el.child(build_element(tree, *child, window, cx, ctx));
     }
 
     let axis = node.style.get("overflow").and_then(parse_overflow);
@@ -423,10 +793,43 @@ fn build_element(
         return el.into_any_element();
     }
 
-    // .id() requires `Into<ElementId>`: usize maps to ElementId::Integer.
-    let mut el = el.id(id.0 as usize);
+    let el = el.id(id.0 as usize);
+    let el = apply_interactive(el, tree, id, window, cx, ctx, tab_index, false);
+    el.into_any_element()
+}
+
+/// Wire interactive behavior (scroll handles, focus subscriptions, Tab
+/// navigation, user key handlers, click) onto a stateful element. Shared by
+/// generic elements and inputs; `force_focus` makes inputs focusable (natural
+/// tab stops) even without an explicit tabIndex.
+#[allow(clippy::too_many_arguments)]
+fn apply_interactive(
+    mut el: gpui::Stateful<Div>,
+    tree: &RetainedTree,
+    id: ElementId,
+    window: &mut Window,
+    cx: &mut Context<HostView>,
+    ctx: &mut RenderCtx,
+    tab_index: Option<isize>,
+    force_focus: bool,
+) -> gpui::Stateful<Div> {
+    let node = tree.get(id).unwrap();
+    let axis = node.style.get("overflow").and_then(parse_overflow);
+    let has_click = node.listeners.contains(&EventType::Click);
+    let has_focus =
+        node.listeners.contains(&EventType::Focus) || node.listeners.contains(&EventType::Blur);
+    let has_key =
+        node.listeners.contains(&EventType::KeyDown) || node.listeners.contains(&EventType::KeyUp);
+    let has_autofocus = node.style.contains_key("autoFocus");
+    let wants_focus = force_focus || tab_index.is_some() || has_focus || has_key || has_autofocus;
+
     if let Some(axis) = axis {
-        let handle = scroll_handles.borrow_mut().entry(id).or_default().clone();
+        let handle = ctx
+            .scroll_handles
+            .borrow_mut()
+            .entry(id)
+            .or_default()
+            .clone();
         el = el.track_scroll(&handle);
         el = match axis {
             ScrollAxis::X => el.overflow_x_scroll(),
@@ -439,17 +842,23 @@ fn build_element(
         // render so style changes to tabIndex re-apply on the same handle.
         // No Default impl: create through the app's focus map (Context derefs
         // to App), which also tracks the handle for window.focus_next/prev.
-        let handle = focus_handles
+        let handle = ctx
+            .focus_handles
             .borrow_mut()
             .entry(id)
             .or_insert_with(|| cx.focus_handle())
             .clone();
-        let configured = match tab_index {
-            None | Some(-1) => handle.clone().tab_stop(false),
-            Some(n) => handle.clone().tab_stop(true).tab_index(n),
+        // Inputs: default natural-order tab stop; explicit tabIndex overrides.
+        let configured = if force_focus && tab_index.is_none() {
+            handle.clone().tab_stop(true)
+        } else {
+            match tab_index {
+                None | Some(-1) => handle.clone().tab_stop(false),
+                Some(n) => handle.clone().tab_stop(true).tab_index(n),
+            }
         };
         el = el.focusable().track_focus(&configured);
-        if has_focus && subscribed.insert(id) {
+        if has_focus && ctx.subscribed.insert(id) {
             // Focus/blur subscriptions must outlive this render call, and
             // register exactly once per element (render runs every frame).
             // Note: activation is deferred one frame by gpui, so focus events
@@ -462,8 +871,8 @@ fn build_element(
             let sub_out = cx.on_focus_out(&handle, window, move |view, _event, _window, _cx| {
                 view.emit_focus(id, false);
             });
-            subscriptions.push(sub_in);
-            subscriptions.push(sub_out);
+            ctx.subscriptions.push(sub_in);
+            ctx.subscriptions.push(sub_out);
         }
         // Tab navigates focus Rust-side (no IPC roundtrip per key). Handled
         // on every focusable element because gpui only delivers keys to the
@@ -495,6 +904,124 @@ fn build_element(
         });
         el = el.on_click(listener);
     }
+    el
+}
+
+/// Build one input/textarea element: a styled div (generic styles + full
+/// interactive wiring) containing the value/placeholder text, an in-flow
+/// caret, and the IME anchor that routes native text input to the shared
+/// InputState. Enter semantics differ: input Enter → submit, textarea Enter →
+/// newline (Shift+Enter → submit). Textarea autosizes rows to the value,
+/// clamped to minRows/maxRows.
+#[allow(clippy::too_many_arguments)]
+fn build_input_element(
+    tree: &RetainedTree,
+    id: ElementId,
+    window: &mut Window,
+    cx: &mut Context<HostView>,
+    ctx: &mut RenderCtx,
+) -> AnyElement {
+    let node = tree.get(id).expect("checked by caller");
+    let multiline = node.element_type == ElementType::Textarea;
+
+    // Shared editable state (get-or-create mirroring the wire value).
+    let state = ctx
+        .input_states
+        .borrow_mut()
+        .entry(id)
+        .or_insert_with(|| {
+            Rc::new(RefCell::new(InputState::with_value(
+                node.value.clone().unwrap_or_default(),
+            )))
+        })
+        .clone();
+    let value = state.borrow().value.clone();
+    let focused = ctx
+        .focus_handles
+        .borrow()
+        .get(&id)
+        .is_some_and(|h| h.is_focused(window));
+    let font_size = style_num(&node.style, "fontSize").unwrap_or(16.0) as f32;
+
+    let placeholder = node
+        .style
+        .get("placeholder")
+        .and_then(StyleValue::as_str)
+        .unwrap_or_default()
+        .to_string();
+    let display = if value.is_empty() {
+        placeholder
+    } else {
+        value.clone()
+    };
+
+    let mut el = div();
+    for (key, value) in &node.style {
+        el = apply_style(el, key, value);
+    }
+    // Textarea autosize: rows = line count clamped to [minRows, maxRows],
+    // height = rows * line height + vertical padding. v1 measures the logical
+    // line count, not wrapped lines (no reflow-aware measurement).
+    if multiline {
+        let min_rows = style_num(&node.style, "minRows").unwrap_or(1.0).max(1.0) as usize;
+        let max_rows = style_num(&node.style, "maxRows")
+            .map(|n| n.max(1.0) as usize)
+            .unwrap_or(8);
+        let lines = value.lines().count().max(1);
+        let rows = lines.clamp(min_rows, max_rows);
+        let line_height = font_size * 1.4;
+        let vpad = style_num(&node.style, "padding").unwrap_or(4.0) as f32 * 2.0;
+        el = el.h(px(rows as f32 * line_height + vpad));
+    }
+    el = el.flex().items_center();
+    if multiline {
+        el = el.flex_col().items_start();
+    }
+
+    // Value (or placeholder) text + in-flow caret (v1: caret at the end of
+    // the current value; no selection/caret-at-point rendering).
+    el = el.child(SharedString::from(display));
+    if focused && !multiline {
+        el = el.child(div().w(px(1.5)).h(px(font_size * 1.2)).bg(rgb(0xeeeeee)));
+    }
+    // The IME anchor routes native text input (IME composing, caret, undo)
+    // into the shared state. Only one input can be focused, so at most one
+    // anchor registers a handler per frame.
+    if let Some(handle) = ctx.focus_handles.borrow().get(&id).cloned() {
+        el = el.child(ImeAnchor {
+            focus_handle: handle,
+            handler: InputHandlerState {
+                id,
+                state,
+                sink: ctx.sink.clone(),
+                host: ctx.host.clone(),
+            },
+        });
+    }
+
+    let tab_index: Option<isize> = match node.style.get("tabIndex") {
+        Some(StyleValue::Number(n)) => n.as_f64().map(|f| f as isize),
+        _ => None,
+    };
+    let el = el.id(id.0 as usize);
+    let mut el = apply_interactive(el, tree, id, window, cx, ctx, tab_index, true);
+    // Enter semantics (Rust-side, no IPC roundtrip): single-line submits,
+    // multiline inserts a newline unless Shift is held.
+    let enter = cx.listener(move |view, event: &gpui::KeyDownEvent, _window, _cx| {
+        if event.keystroke.key != "enter" {
+            return;
+        }
+        if multiline {
+            if event.keystroke.modifiers.shift {
+                view.emit_submit(id);
+            } else {
+                view.insert_text(id, "\n");
+            }
+        } else {
+            view.emit_submit(id);
+        }
+    });
+    el = el.on_key_down(enter);
     el.into_any_element()
 }
 
@@ -716,5 +1243,88 @@ mod tests {
         assert_eq!(parse_overflow(&StyleValue::Text("auto".into())), None);
         assert_eq!(parse_overflow(&StyleValue::Text("hidden".into())), None);
         assert_eq!(parse_overflow(&StyleValue::Number(1.into())), None);
+    }
+
+    #[test]
+    fn utf16_len_counts_surrogate_pairs_as_two_units() {
+        // Astral characters (emoji) are two UTF-16 code units — the platform
+        // text client's unit. A caret "after" an emoji must land at +2.
+        assert_eq!(utf16_len(""), 0);
+        assert_eq!(utf16_len("ab"), 2);
+        assert_eq!(utf16_len("🎉"), 2);
+        assert_eq!(utf16_len("a🎉b"), 4);
+    }
+
+    #[test]
+    fn edit_utf16_replaces_at_caret_past_emoji() {
+        // "a🎉b", caret at UTF-16 3 (after the emoji) → insert "X" before "b".
+        assert_eq!(edit_utf16("a🎉b", 3..3, "X"), "a🎉Xb");
+    }
+
+    #[test]
+    fn edit_utf16_replaces_a_selection_in_code_units() {
+        // Replace the whole emoji (units 1..3) with "!".
+        assert_eq!(edit_utf16("a🎉b", 1..3, "!"), "a!b");
+    }
+
+    #[test]
+    fn edit_utf16_clamps_out_of_range_offsets() {
+        assert_eq!(edit_utf16("ab", 5..9, "z"), "abz");
+    }
+
+    #[test]
+    fn utf16_substring_returns_code_unit_slice() {
+        assert_eq!(utf16_substring("a🎉b", 0..1), "a");
+        assert_eq!(utf16_substring("a🎉b", 1..3), "🎉");
+        assert_eq!(utf16_substring("a🎉b", 3..4), "b");
+    }
+
+    #[test]
+    fn edit_input_emits_change_with_new_value_and_moves_caret() {
+        let state = Rc::new(RefCell::new(InputState::with_value("hi".into())));
+        let events = Rc::new(RefCell::new(Vec::new()));
+        let sink: Rc<dyn Fn(&Event)> = {
+            let events = events.clone();
+            Rc::new(move |e| events.borrow_mut().push(e.clone()))
+        };
+        let id = ElementId(7);
+        let new_value = edit_input(&state, id, None, "🎉", &sink);
+        assert_eq!(new_value, "hi🎉");
+        let s = state.borrow();
+        assert_eq!(s.value, "hi🎉");
+        assert_eq!(s.caret, utf16_len("hi🎉"));
+        let ev = events.borrow();
+        assert_eq!(ev.len(), 1);
+        match &ev[0] {
+            Event::Input {
+                event_type, value, ..
+            } => {
+                assert_eq!(*event_type, EventType::Change);
+                assert_eq!(value.as_deref(), Some("hi🎉"));
+            }
+        }
+    }
+
+    #[test]
+    fn controlled_set_value_overwrites_edits_and_resets_caret() {
+        // setValue (JS→helper) must replace internal IME edits and move the
+        // caret to the end — the controlled-input contract.
+        let state = Rc::new(RefCell::new(InputState::with_value("old".into())));
+        {
+            let mut s = state.borrow_mut();
+            s.value = "user typed".into();
+            s.caret = 5;
+            s.marked = Some(1..3);
+        }
+        {
+            let mut s = state.borrow_mut();
+            s.value = "controlled".into();
+            s.caret = utf16_len("controlled");
+            s.marked = None;
+        }
+        let s = state.borrow();
+        assert_eq!(s.value, "controlled");
+        assert_eq!(s.caret, utf16_len("controlled"));
+        assert!(s.marked.is_none());
     }
 }

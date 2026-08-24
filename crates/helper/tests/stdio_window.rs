@@ -414,3 +414,84 @@ fn window_mode_autofocus_fires_without_focus_element() {
     let status = child.wait().expect("wait");
     assert_eq!(status.code(), Some(0), "EOF must exit 0");
 }
+
+#[test]
+fn window_mode_input_change_events_and_controlled_sync() {
+    if skip() {
+        return;
+    }
+    let _lock = WINDOW_TEST_LOCK.lock().unwrap();
+    let bin = env!("CARGO_BIN_EXE_solid-gpui-helper");
+    let mut child = Command::new(bin)
+        .arg("--stdio-window")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .spawn()
+        .expect("helper spawns");
+
+    let mut stdin = child.stdin.take().expect("stdin piped");
+    let reader = BufReader::new(child.stdout.take().expect("stdout piped"));
+    let mut lines = reader.lines();
+
+    // Root with an empty input and a prefilled textarea, both with change
+    // listeners. setValue (JS→helper controlled value) initializes the state.
+    let batch = concat!(
+        r#"{"v":1,"seq":90,"mutations":["#,
+        r#"{"op":"createElement","id":1,"elementType":"div"},"#,
+        r#"{"op":"setRoot","id":1},"#,
+        r#"{"op":"createElement","id":2,"elementType":"input"},"#,
+        r#"{"op":"appendChild","parentId":1,"childId":2},"#,
+        r#"{"op":"setValue","id":2,"value":""},"#,
+        r#"{"op":"setEventListener","id":2,"eventType":"change","enabled":true},"#,
+        r#"{"op":"createElement","id":3,"elementType":"textarea"},"#,
+        r#"{"op":"appendChild","parentId":1,"childId":3},"#,
+        r#"{"op":"setValue","id":3,"value":"hi"},"#,
+        r#"{"op":"setEventListener","id":3,"eventType":"change","enabled":true}]}"#,
+    );
+    writeln!(stdin, "{batch}").unwrap();
+    stdin.flush().unwrap();
+    assert_eq!(
+        lines.next().unwrap().unwrap(),
+        r#"{"type":"ack","seq":90,"applied":10}"#
+    );
+    // First render + focus-subscription activation frame.
+    std::thread::sleep(std::time::Duration::from_millis(200));
+
+    // simulateInput types at the caret through the SAME path as the platform
+    // IME (edit_input): the change event (helper→JS) precedes the result reply
+    // because the sink writes inside window.update.
+    let line = r#"{"type":"simulateInput","seq":91,"id":2,"text":"ab"}"#;
+    writeln!(stdin, "{line}").unwrap();
+    stdin.flush().unwrap();
+    assert_eq!(
+        lines.next().unwrap().unwrap(),
+        r#"{"type":"event","id":2,"eventType":"change","value":"ab"}"#
+    );
+    assert_eq!(
+        lines.next().unwrap().unwrap(),
+        r#"{"type":"result","seq":91,"value":{"applied":true}}"#
+    );
+
+    // Controlled sync back: JS echoes "XY" via setValue, overwriting the
+    // internal "ab" and resetting the caret to the end.
+    let batch = r#"{"v":1,"seq":92,"mutations":[{"op":"setValue","id":2,"value":"XY"}]}"#;
+    writeln!(stdin, "{batch}").unwrap();
+    stdin.flush().unwrap();
+    assert_eq!(
+        lines.next().unwrap().unwrap(),
+        r#"{"type":"ack","seq":92,"applied":1}"#
+    );
+    // A further edit appends at the new caret: "XYc".
+    let line = r#"{"type":"simulateInput","seq":93,"id":2,"text":"c"}"#;
+    writeln!(stdin, "{line}").unwrap();
+    stdin.flush().unwrap();
+    assert_eq!(
+        lines.next().unwrap().unwrap(),
+        r#"{"type":"event","id":2,"eventType":"change","value":"XYc"}"#
+    );
+
+    // EOF quits the app cleanly.
+    drop(stdin);
+    let status = child.wait().expect("wait");
+    assert_eq!(status.code(), Some(0), "EOF must exit 0");
+}

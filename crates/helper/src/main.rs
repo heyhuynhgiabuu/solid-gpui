@@ -95,6 +95,7 @@ fn command_ident(command: &solid_gpui_protocol::Command) -> (u32, &'static str) 
         solid_gpui_protocol::Command::ScrollTo { seq, .. } => (*seq, "scrollTo"),
         solid_gpui_protocol::Command::GetScrollOffset { seq, .. } => (*seq, "getScrollOffset"),
         solid_gpui_protocol::Command::FocusElement { seq, .. } => (*seq, "focusElement"),
+        solid_gpui_protocol::Command::SimulateInput { seq, .. } => (*seq, "simulateInput"),
     }
 }
 
@@ -365,6 +366,30 @@ fn run_stdio_window() {
                                 code: ReplyCode::Unsupported,
                                 message: format!("window closed: {e}"),
                             }),
+                        solid_gpui_protocol::Command::SimulateInput { seq, id, text } => window
+                            .update(cx, |view, _window, cx| {
+                                match view.simulate_input(id, &text) {
+                                    Ok(()) => {
+                                        // Repaint so the caret/edits paint even
+                                        // when JS never echoes the change.
+                                        cx.notify();
+                                        Reply::Result {
+                                            seq,
+                                            value: serde_json::json!({ "applied": true }),
+                                        }
+                                    }
+                                    Err(message) => Reply::Error {
+                                        seq: Some(seq),
+                                        code: ReplyCode::ApplyFailed,
+                                        message,
+                                    },
+                                }
+                            })
+                            .unwrap_or_else(|e| Reply::Error {
+                                seq: Some(seq),
+                                code: ReplyCode::Unsupported,
+                                message: format!("window closed: {e}"),
+                            }),
                     },
                     Job::Batch(batch) => {
                         let seq = batch.seq;
@@ -400,6 +425,16 @@ fn run_stdio_window() {
                                         } = m
                                         {
                                             view.ensure_focus_handle(*id, cx);
+                                        }
+                                        // setValue (JS→helper controlled sync):
+                                        // mirror into the live input state so
+                                        // render/IME see the pushed value.
+                                        if let solid_gpui_protocol::Mutation::SetValue {
+                                            id,
+                                            value,
+                                        } = m
+                                        {
+                                            view.set_input_value(*id, value);
                                         }
                                     }
                                     Err(e) => {
