@@ -199,8 +199,8 @@ status: active
       with seq correlation; fixtures parsed by BOTH languages (d1b3520)
 - [x] S7b captureFrame {path} command: helper grabs own window by pid via
       xcap and writes PNG; verified end-to-end in stdio_window test
-- [ ] S7c bun perf harness: mount 200-row tree, drive N updates through
-      window-mode helper, assert p95 build-ms budget via getStats
+- [x] S7c bun perf harness: 200-row tree via render(), 30 paced updates,
+      getStats over the wire; baseline p95 = 0.942ms vs 10ms budget (0986260)
 - [ ] VERIFY: all suites green; commit per sub-slice; independent review
 
 Cross-ref: PLAN.md#2026-08-24---phase-2-candidate-roadmap-prior-art-informed
