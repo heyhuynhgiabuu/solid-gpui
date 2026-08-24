@@ -282,18 +282,26 @@ to it. Needs a TextInput element (elementType "input"/"textarea") that the
 focused input's InputHandler drives; value lives in the retained node and
 crosses the wire on change (controlled value sync both ways).
 
-- [ ] S10a Protocol: elementType "input" (and "textarea"); InputValue op or
-      reuse setText; onSubmit -> eventType submit with key variants
-- [ ] S10a Helper: TextInput view state per focused input (value UTF-16
-      mapping!), input element rendering (caret/placeholder), HostView (or a
-      child view) implements InputHandler, focus wiring to the input handle
-- [ ] S10a Tests: fixture parity; window test: focus input, simulate IME
-      replace via helper path -> value mutation crosses wire back to JS
-- [ ] S10b Textarea: multiline, min/maxRows autosize, Enter (submit vs
-      newline), Shift+Enter; onSubmit event
-- [ ] S10c Controlled value sync: JS value prop -> setValue op -> helper
-      state; helper edit -> change event -> JS updates state (both ways,
-      no loops)
-- [ ] VERIFY: suites green; commit per sub-slice; independent review
+- [x] S10a Protocol: elementType input/textarea (closed set both languages);
+      setValue op (JS→helper controlled value; retained tree rejects it on
+      non-inputs); EventType change+submit; Event.value (helper→JS change);
+      simulateInput command (IME-path test seam + a11y hook) (b20eed5)
+- [x] S10a Helper: InputState (value+caret+marked, UTF-16 code units) shared
+      via Rc<RefCell>; ImeAnchor element registers gpui InputHandler in paint
+      (window.handle_input is paint-only) so native IME/caret/undo edit the
+      wire-driven state; change event + repaint per edit; inputs natural tab
+      stops; Enter→submit (1556825)
+- [x] S10a Tests: event-change + command-simulate-input fixtures both
+      languages; UTF-16 unit tests (emoji=2 units); window test simulateInput
+      → change {value} before result; window suite 7/7 × 5 runs (1556825)
+- [x] S10b Textarea: multiline (flex-col, newline text), minRows/maxRows
+      autosize (v1 = logical lines, no wrap-aware measure), Enter → newline,
+      Shift+Enter → submit; input Enter → submit (1556825 + d70cd8e)
+- [x] S10c Controlled sync: JS value→setValue overwrites helper state
+      (caret to end — the controlled-input contract, unit+window tested);
+      edits→change event→JS signal→setValue; no loop because Solid only
+      re-sends setValue when the value prop actually changed. Demo input
+      proves the round-trip live (d70cd8e)
+- [ ] VERIFY: suites green; commits b20eed5+1556825+d70cd8e; reviewer pending
 
 Cross-ref: PLAN.md Phase 2 roadmap (S10 entry)

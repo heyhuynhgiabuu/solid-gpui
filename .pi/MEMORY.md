@@ -213,3 +213,26 @@
 - Parity contract pattern: Rust `#[ignore]`d generator test writes the snapshot fixture;
   Rust locks its own emission byte-exact; bun decodes the same snapshot. Rust→TS drift
   now caught by committed tests on both sides.
+
+## S10 text-input gotchas (caught live during implementation)
+- gpui `window.handle_input(focus_handle, impl InputHandler, cx)` is PAINT-
+  PHASE ONLY (debug_assert_paint) — cannot register from render(). Pattern:
+  a tiny custom Element (ImeAnchor) inside the input's div whose paint() calls
+  handle_input. The handler is rebuilt EVERY frame (input_handlers cleared per
+  frame); hold the real state in Rc<RefCell<InputState>> captured by the clone.
+  InputHandler is 'static but NOT Send-required (Rc state is fine — proven by
+  gpui's own key_dispatch test element).
+- The platform text client speaks UTF-16 code units (NSTextInputClient): every
+  InputHandler method takes/returns UTF-16 ranges; astral chars (emoji) = 2
+  units. Convert with encode_utf16()/String::from_utf16 — never byte offsets.
+- `App::update(Entity)` is PRIVATE in this gpui. To repaint a view from a raw
+  `&mut App` (the InputHandler's cx), use `App::notify(entity_id)` + `Entity/WeakEntity::entity_id()`.
+- Controlled sync is loop-free because Solid only re-emits setValue when the
+  value prop differs (prev !== value in setProperty). setValue overwrites
+  internal edits + resets caret to end — the React controlled-input contract.
+- Event line ordering from a command: the change event writes INSIDE
+  window.update (main thread), the result reply after it (stdin thread) — the
+  change event line deterministically precedes the result line. Window tests
+  rely on this.
+- Backspace/delete/cut arrive as replace_text_in_range (or default paste) via
+  the IME client — no per-key handling needed for basic editing.
