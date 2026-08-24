@@ -177,6 +177,9 @@ pub enum ReplyCode {
     /// The batch line failed decoding. `seq` is `None` because a malformed
     /// line cannot be trusted to carry a usable sequence number.
     DecodeFailed,
+    /// The batch decoded but a mutation failed to apply (validation).
+    /// `seq` is `Some(..)`: the reply correlates to the caller.
+    ApplyFailed,
 }
 
 /// Helper→JS direction of the wire: one NDJSON reply per received batch line.

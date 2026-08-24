@@ -1,9 +1,11 @@
 import type { ProtocolError, Result } from "./batch"
 
-/** Machine-readable cause of an error reply. Mirrors Rust `ReplyCode`. */
-export type ReplyCode = "decodeFailed"
+/** Machine-readable cause of an error reply. Mirrors Rust `ReplyCode`.
+ * decodeFailed: seq is null (line untrustworthy). applyFailed: seq is set
+ * (correlates to the caller). */
+export type ReplyCode = "decodeFailed" | "applyFailed"
 
-const REPLY_CODES: readonly ReplyCode[] = ["decodeFailed"]
+const REPLY_CODES: readonly ReplyCode[] = ["decodeFailed", "applyFailed"]
 
 /** Helper→JS wire message: exactly one reply per received batch line. */
 export type Reply =

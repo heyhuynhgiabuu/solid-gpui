@@ -4791,6 +4791,7 @@ dependencies = [
 name = "solid-gpui-helper"
 version = "0.1.0"
 dependencies = [
+ "futures",
  "gpui",
  "gpui_platform",
  "solid-gpui-protocol",

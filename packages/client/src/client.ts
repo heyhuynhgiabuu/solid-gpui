@@ -55,7 +55,9 @@ export interface ExitInfo {
 export interface HelperOptions {
   /** Path to the helper binary. Default: repo target/debug build (dev mode). */
   readonly binary?: string
-  /** Extra args appended after `--stdio`. */
+  /** `"transport"` (default): `--stdio`, no GUI. `"window"`: `--stdio-window`. */
+  readonly mode?: "transport" | "window"
+  /** Extra args appended after the mode flag. */
   readonly args?: readonly string[]
   /** Error replies we cannot correlate to a pending seq. */
   readonly onUnmatchedReply?: (reply: ErrorReply) => void
@@ -201,7 +203,7 @@ export function spawnHelper(opts: HelperOptions = {}): HelperConnection {
   const binary = opts.binary ?? defaultBinary()
   let child: ChildProcess
   try {
-    child = spawn(binary, ["--stdio", ...(opts.args ?? [])], {
+    child = spawn(binary, [opts.mode === "window" ? "--stdio-window" : "--stdio", ...(opts.args ?? [])], {
       stdio: ["pipe", "pipe", "inherit"],
     })
   } catch (err) {

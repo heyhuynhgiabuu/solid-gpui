@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test"
 import { existsSync } from "node:fs"
 import { resolve } from "node:path"
 import fixture from "../../protocol/fixtures/batch-01.json"
-import { spawnHelper, HelperExitedError } from "./index"
+import { spawnHelper, HelperExitedError, ReplyError } from "./index"
 import { decodeBatch } from "@solid-gpui/protocol"
 
 const binary = resolve(import.meta.dir, "../../../target/debug/solid-gpui-helper")
@@ -87,6 +87,28 @@ describe("spawn failure supervision", () => {
   })
 })
 
+describe("window mode (real rendering)", () => {
+  test("fixture applies through the retained tree; apply errors are correlated", async () => {
+    if (skip()) return
+    const helper = spawnHelper({ binary, mode: "window" })
+    const ack = await helper.sendBatch(await fixtureBatch())
+    expect(ack).toEqual({ seq: 42, applied: 12 })
+
+    // Decodes fine, but parent 99 does not exist → ReplyError with the seq.
+    await expect(
+      helper.sendBatch({
+        v: 1,
+        seq: 7,
+        mutations: [
+          { op: "appendChild", parentId: 99 as never, childId: 1 as never },
+        ],
+      }),
+    ).rejects.toBeInstanceOf(ReplyError)
+
+    await helper.close()
+    expect((await helper.exited).code).toBe(0)
+  })
+})
 describe("duplicate seq guard", () => {
   test("second sendBatch with an in-flight seq rejects, first still settles", async () => {
     if (skip()) return
