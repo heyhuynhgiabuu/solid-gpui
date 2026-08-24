@@ -356,6 +356,22 @@ impl HostView {
         self.emit_event(id, EventType::Submit, None, None, None, None, None);
     }
 
+    /// A content-changing mutation landed on `id` (setText/setStyle/setValue):
+    /// if it sits inside a virtual list item, mark that item for remeasure so
+    /// cached heights don't go stale (off-screen items keep their measured
+    /// size in the List's summary until re-rendered; gpui re-anchors the
+    /// scroll when the remeasured item is at the scroll top). Visible items
+    /// re-measure every frame anyway — this is belt-and-suspenders for the
+    /// off-screen cache.
+    pub fn remeasure_content(&self, id: ElementId) {
+        let Some((list_id, item_ix)) = list_item_containing(&self.tree, id) else {
+            return;
+        };
+        if let Some(state) = self.list_states.get(&list_id) {
+            state.remeasure_items(item_ix..item_ix + 1);
+        }
+    }
+
     /// Eagerly materialize a virtual list's state when a list element or its
     /// list styles apply — followTail alignment must be known before the
     /// first paint (render-population is lazy, same pattern as scroll/focus
@@ -722,6 +738,27 @@ impl IntoElement for ImeAnchor {
 
     fn into_element(self) -> Self::Element {
         self
+    }
+}
+
+/// If `id` is (inside) a list item, return the list element and the item
+/// index. Walks up the parent chain; a list's DIRECT children are items, so
+/// a changed node inside an item maps to that item (content changes must
+/// remeasure the item, not the whole list). Pure — unit-tested.
+fn list_item_containing(tree: &RetainedTree, id: ElementId) -> Option<(ElementId, usize)> {
+    let mut cur = id;
+    loop {
+        let node = tree.get(cur)?;
+        let parent = node.parent?;
+        let parent_node = tree.get(parent)?;
+        if parent_node.element_type == ElementType::List {
+            return parent_node
+                .children
+                .iter()
+                .position(|c| *c == cur)
+                .map(|ix| (parent, ix));
+        }
+        cur = parent;
     }
 }
 
@@ -1503,6 +1540,37 @@ mod tests {
                 assert_eq!(value.as_deref(), Some("hi🎉"));
             }
         }
+    }
+
+    #[test]
+    fn list_item_containing_maps_descendants_to_item_index() {
+        // list(1) -> items 2,3; item 2 -> deep child 4.
+        use solid_gpui_protocol::Mutation;
+        let mut tree = RetainedTree::new();
+        for (id, et) in [
+            (1u32, ElementType::List),
+            (2, ElementType::Div),
+            (3, ElementType::Div),
+            (4, ElementType::Div),
+        ] {
+            tree.apply(&Mutation::CreateElement {
+                id: id.into(),
+                element_type: et,
+            })
+            .unwrap();
+        }
+        for (p, c) in [(1u32, 2u32), (1, 3), (2, 4)] {
+            tree.apply(&Mutation::AppendChild {
+                parent_id: p.into(),
+                child_id: c.into(),
+            })
+            .unwrap();
+        }
+        assert_eq!(list_item_containing(&tree, 2.into()), Some((1.into(), 0)));
+        assert_eq!(list_item_containing(&tree, 4.into()), Some((1.into(), 0)));
+        assert_eq!(list_item_containing(&tree, 3.into()), Some((1.into(), 1)));
+        assert_eq!(list_item_containing(&tree, 1.into()), None); // the list itself
+        assert_eq!(list_item_containing(&tree, 99.into()), None); // missing
     }
 
     #[test]

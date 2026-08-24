@@ -614,6 +614,26 @@ fn window_mode_virtual_list_follows_tail_and_virtualizes() {
     assert_eq!(info["itemCount"], 500, "{info}");
     assert_eq!(info["atEnd"], true, "{info}");
 
+    // S11b: a content change inside an item (setStyle height 24 -> 60) marks
+    // it for remeasure; the list survives, counts stay, follow re-engages.
+    let batch =
+        r#"{"v":1,"seq":106,"mutations":[{"op":"setStyle","id":502,"style":{"height":60}}]}"#;
+    writeln!(stdin, "{batch}").unwrap();
+    stdin.flush().unwrap();
+    assert_eq!(
+        lines.next().unwrap().unwrap(),
+        r#"{"type":"ack","seq":106,"applied":1}"#
+    );
+    std::thread::sleep(std::time::Duration::from_millis(300));
+    let info = list_info(&mut stdin, &mut lines, 107);
+    assert_eq!(info["itemCount"], 500, "{info}");
+    assert_eq!(info["atEnd"], true, "{info}");
+    let painted = info["paintedCount"].as_u64().unwrap();
+    assert!(
+        painted > 0 && painted < 200,
+        "virtualized paint expected, got {painted}"
+    );
+
     // EOF quits the app cleanly.
     drop(stdin);
     let status = child.wait().expect("wait");

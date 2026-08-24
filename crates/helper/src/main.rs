@@ -468,6 +468,23 @@ fn run_stdio_window() {
                                         {
                                             view.set_input_value(*id, value);
                                         }
+                                        // Content changes inside a virtual
+                                        // list item invalidate its cached
+                                        // height: remeasure that item.
+                                        if let Some(content_id) = match m {
+                                            solid_gpui_protocol::Mutation::SetText {
+                                                id, ..
+                                            }
+                                            | solid_gpui_protocol::Mutation::SetStyle {
+                                                id, ..
+                                            }
+                                            | solid_gpui_protocol::Mutation::SetValue {
+                                                id, ..
+                                            } => Some(*id),
+                                            _ => None,
+                                        } {
+                                            view.remeasure_content(content_id);
+                                        }
                                     }
                                     Err(e) => {
                                         err = Some(e.to_string());
