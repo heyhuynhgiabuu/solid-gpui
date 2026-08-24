@@ -309,3 +309,32 @@ crosses the wire on change (controlled value sync both ways).
       (d8df9f5). Closed 2026-08-24.
 
 Cross-ref: PLAN.md Phase 2 roadmap (S10 entry)
+
+### 2026-08-24 - S11: virtual list (Phase 2)
+status: active
+Recon: gpui has UniformList (crates/gpui/src/elements/uniform_list.rs) — a
+high-performance virtualized list WITH built-in follow-tail
+(FollowState::Tail: auto-scroll when scrolled to bottom; stops following on
+manual scroll up) and track_scroll integration. Item height is uniform
+(pixel-estimated). This is the native building block for chat/tail lists.
+
+Design sketch:
+- [ ] S11a Protocol: elementType "list"; style keys itemHeight (px estimate),
+      followTail ("tail" — chat mode; absent = normal). List element type
+      validated like input/textarea (children allowed, only list items).
+- [ ] S11a Helper: retained List node → gpui UniformList over its children
+      (retain-all in the tree, paint-visible via UniformList). itemHeight
+      default 24px; followTail → FollowState::Tail. Reuse ScrollHandles
+      (scrollTo/getScrollOffset on the list). Selection/click on items still
+      works (per-item interactive wiring unchanged).
+- [ ] S11a Tests: window test — mount N items (e.g. 10k), scrollTo bottom,
+      assert visible paint count via getStats or captureFrame; followTail:
+      append items while at bottom → auto-follows (assert via scrollOffset
+      staying at bottom). Fixture parity for the new element type.
+- [ ] S11b estimatedItemHeight remeasure: v1 fixed estimate; remeasure pass
+      measures real item heights and reports via getStats/listInfo command
+      (chat apps need growing rows). Optional windowed mounting for huge sets
+      (destroy off-screen siblings) only if UniformList alone is insufficient.
+- [ ] VERIFY: suites green; commit per sub-slice; independent review
+
+Cross-ref: PLAN.md Phase 2 roadmap (S11 entry)
