@@ -228,7 +228,9 @@ nested-scroll gotcha. AGENTS.md gotcha text is stale (fixed same day).
       fixtures parsed by both suites; apply-time handle materialization fixes
       the pre-first-paint race; behavioral proof scrollTo(0,500) ->
       getScrollOffset {offsetX:0.0,offsetY:500.0} (6c28687)
-- [ ] VERIFY: suites green; commit per sub-slice; independent review
-      (S8a 60a9b8a, S8b 6c28687; reviewer pending)
+- [x] VERIFY S8: suites green; commits 60a9b8a + 6c28687 + f088fb2; two
+      review rounds — r1 found sign inversion (real scroll bug, clamped to
+      0), masked test, clippy; all fixed in f088fb2 with old-code-fail
+      regression proof; r2 verdict: **S8 mergeable**. Closed 2026-08-24.
 
 Cross-ref: PLAN.md Phase 2 roadmap (S8 entry)
