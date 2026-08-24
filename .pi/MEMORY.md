@@ -69,6 +69,15 @@
 - TS narrowing trap: `(EVENT_TYPES as string[]).includes(v)` does NOT narrow;
   write an explicit `v is EventType` predicate.
 
+## Verification discipline (learned the hard way, S7 review round 2)
+
+- NEVER pipe a gate's output to /dev/null and trust `&& echo MARKER` from
+  memory of past runs — the marker line must appear in captured output you
+  actually read before claiming success. A reviewer caught "tsc OK" claimed
+  while typecheck was failing silently (stale map generic).
+- Bun tests passing does NOT imply tsc passes: bun strips types at runtime.
+  The two gates fail on different file sets; run both visibly.
+
 ## Phase 1 closeout (2026-08-24)
 
 - Public repo: https://github.com/heyhuynhgiabuu/solid-gpui — CI green first
