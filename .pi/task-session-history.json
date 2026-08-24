@@ -138,7 +138,35 @@
     "piDir": "/Users/huynhgiabuu/dev/projects/solid-gpui/.pi",
     "dir": "/Users/huynhgiabuu/dev/projects/solid-gpui/.pi/artifacts/tasks",
     "cwd": "/Users/huynhgiabuu/dev/projects/solid-gpui",
-    "status": "running",
-    "background": true
+    "status": "done",
+    "background": true,
+    "reportedStatus": "unknown",
+    "resultValid": false,
+    "completedAt": 1787560183425
+  },
+  {
+    "id": "mt6z73l2-35e4",
+    "agentType": "reviewer",
+    "description": "Finish Slice 5 review",
+    "sessionName": "01a032dd-09de-76e5-89f0-1f59be0c1eba",
+    "startedAt": 1787560218701,
+    "paneId": "w3:pDA",
+    "handle": {
+      "backend": "herdr",
+      "resourceId": "w3:pDA",
+      "socketPath": "/Users/huynhgiabuu/.config/herdr/herdr.sock",
+      "terminalId": "term_659c6cb7f88ef19",
+      "agentName": "reviewer-mt6z73l2",
+      "foregroundProcessGroupId": 87558
+    },
+    "piDir": "/Users/huynhgiabuu/dev/projects/solid-gpui/.pi",
+    "dir": "/Users/huynhgiabuu/dev/projects/solid-gpui/.pi/artifacts/tasks",
+    "cwd": "/Users/huynhgiabuu/dev/projects/solid-gpui",
+    "conversationId": "01a032dd-09de-76e5-89f0-1f59be0c1eba",
+    "status": "done",
+    "background": true,
+    "reportedStatus": "success",
+    "resultValid": true,
+    "completedAt": 1787560743606
   }
 ]

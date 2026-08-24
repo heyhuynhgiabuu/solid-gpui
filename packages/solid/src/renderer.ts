@@ -1,5 +1,10 @@
 import { createRenderer, type Renderer } from "@solidjs/universal"
-import { flush as flushSolid } from "solid-js"
+import {
+  flush as flushSolid,
+  createSignal as sigCreate,
+  createEffect as sigEffect,
+  createRoot as sigRoot,
+} from "solid-js"
 import {
   elementId,
   type EventType,
@@ -35,12 +40,16 @@ const EVENT_NAMES: Record<string, EventType> = {
 export interface SolidGpuiRenderer {
   renderer: Renderer<HostNode>
   /** Mount under a container; returns a disposer that also destroys the
-   *  mounted root (universal's dev-build render does not clean up). */
+   *  mounted root (the exported universal render does not clean up). */
   render(code: () => HostNode, container: HostNode): () => void
   /** Flush queued mutations as one batch through `send`. No-op when idle. */
   flush(): Promise<void>
   /** Handler registry for future event backchannel (passive in v1). */
   handler(id: number, event: EventType): (() => void) | undefined
+  /** Shadow-tree queries + removal (universal's Renderer type hides these). */
+  removeNode(parent: HostNode, node: HostNode): void
+  firstChild(node: HostNode): HostNode | undefined
+  nextSibling(node: HostNode): HostNode | undefined
 }
 
 /**
@@ -49,12 +58,45 @@ export interface SolidGpuiRenderer {
  * function in tests, the real helper connection in production.
  */
 export function createSolidRenderer(send: Send): SolidGpuiRenderer {
+  // Reactivity liveness probe: under the solid-js SSR stubs (node condition,
+  // see README), effects never re-run and updates silently no-op. Warn once
+  // so users discover the --conditions=browser requirement immediately.
+  let probed = false
+  const probe = (): void => {
+    if (probed) return
+    probed = true
+    try {
+      let ran = 0
+      sigRoot((dispose) => {
+        const [s, set] = sigCreate(0)
+        sigEffect(() => {
+          void s()
+          ran++
+        })
+        set(1)
+        dispose()
+      })
+      flushSolid()
+      if (ran < 2 && typeof console !== "undefined") {
+        console.warn(
+          "[solid-gpui] Solid effects are not re-running in this runtime. " +
+            "solid-js resolves to its non-reactive SSR build under the default 'node' condition — " +
+            "run with --conditions=browser (see README).",
+        )
+      }
+    } catch {
+      // Probe must never break the host.
+    }
+  }
+  probe()
   let nextId = 0
   let seq = 0
   const queue: Mutation[] = []
   const shadow = new Map<number, { parent: HostNode | null; children: HostNode[] }>()
   const handlers = new Map<string, () => void>()
   let topNode: HostNode | null = null
+  let poisoned: string | null = null
+  let disposedAll: (() => void) | null = null
 
   const alloc = (kind: HostNode["kind"], tag: string): HostNode => {
     const id = ++nextId
@@ -65,6 +107,25 @@ export function createSolidRenderer(send: Send): SolidGpuiRenderer {
 
   const push = (m: Mutation): void => {
     queue.push(m)
+  }
+
+  const removeNodeImpl = (parent: HostNode, node: HostNode): void => {
+    if (parent.kind !== "container") {
+      push({
+        op: "removeChild",
+        parentId: elementId(parent.id),
+        childId: elementId(node.id),
+      })
+      const entry = shadow.get(parent.id)
+      if (entry) {
+        // Defensive: remove ALL occurrences (a corrupted history must not
+        // compound; the wire op is single — the helper validates it).
+        for (let i = entry.children.indexOf(node); i >= 0; i = entry.children.indexOf(node)) {
+          entry.children.splice(i, 1)
+        }
+      }
+    }
+    shadow.get(node.id)!.parent = null
   }
 
   const renderer = createRenderer<HostNode>({
@@ -124,11 +185,24 @@ export function createSolidRenderer(send: Send): SolidGpuiRenderer {
 
     insertNode(parent: HostNode, node: HostNode, anchor?: HostNode) {
       if (parent.kind === "container") {
-        // Mounting under the container = becoming the root.
+        const entry = shadow.get(parent.id)!
+        // Remount without dispose: free the previous root on the wire —
+        // setRoot alone would leave the old subtree allocated forever.
+        if (topNode && topNode !== node && shadow.has(topNode.id)) {
+          for (const id of collectSubtreeIds(topNode)) shadow.delete(id)
+          push({ op: "destroyElement", id: elementId(topNode.id) })
+        }
         topNode = node
+        entry.children = [node]
         push({ op: "setRoot", id: elementId(node.id) })
       } else {
         const entry = shadow.get(parent.id)!
+        // Mirror the helper's attach semantics (retain-then-insert):
+        // reconcileArrays moves call insertNode for nodes already in the
+        // parent; without removing the prior occurrence the shadow tree
+        // grows duplicates and later removals emit invalid ops.
+        const prior = entry.children.indexOf(node)
+        if (prior >= 0) entry.children.splice(prior, 1)
         const anchorIndex = anchor ? entry.children.indexOf(anchor) : -1
         if (anchor && anchorIndex >= 0) {
           push({
@@ -150,21 +224,7 @@ export function createSolidRenderer(send: Send): SolidGpuiRenderer {
       shadow.get(node.id)!.parent = parent
     },
 
-    removeNode(parent: HostNode, node: HostNode) {
-      if (parent.kind !== "container") {
-        push({
-          op: "removeChild",
-          parentId: elementId(parent.id),
-          childId: elementId(node.id),
-        })
-        const entry = shadow.get(parent.id)
-        if (entry) {
-          const i = entry.children.indexOf(node)
-          if (i >= 0) entry.children.splice(i, 1)
-        }
-      }
-      shadow.get(node.id)!.parent = null
-    },
+    removeNode: removeNodeImpl,
 
     cleanupNodes(_parent: HostNode, nodes: HostNode[]) {
       for (const n of nodes) {
@@ -200,6 +260,10 @@ export function createSolidRenderer(send: Send): SolidGpuiRenderer {
   }
 
   function renderWithDispose(code: () => HostNode, container: HostNode): () => void {
+    // The comment below replaced an earlier wrong one: in rc.1 the dev and
+    // prod builds of @solidjs/universal are byte-identical, and NEITHER
+    // exported render() runs cleanupNodes (only the internal base renderer
+    // does). The self-destroy + shadow guard below is required everywhere.
     const baseDispose = renderer.render(code, container)
     let disposed = false
     return () => {
@@ -219,13 +283,33 @@ export function createSolidRenderer(send: Send): SolidGpuiRenderer {
   }
 
   async function flush(): Promise<void> {
-    // Solid 2 defers render/effects through its own queue (universal render
-    // drains it with a tail flush); drain it first so mutations queued by
-    // this tick's effects land in the batch below.
-    flushSolid()
-    if (queue.length === 0) return
-    const batch: MutationBatch = { v: 1, seq: ++seq, mutations: queue.splice(0) }
-    await send(batch)
+    // Solid 2 defers effects through its own scheduler (microtasks). Component
+    // results resolve in STAGES (a stage may schedule the next), so a single
+    // drain is not enough: loop drain → pump → collect until a full round
+    // yields no mutations, sending each accumulated batch.
+    for (let round = 0; round < 100; round++) {
+      flushSolid()
+      await Promise.resolve()
+      if (queue.length === 0) {
+        // One extra pump: a just-scheduled stage may only land now.
+        flushSolid()
+        await Promise.resolve()
+        if (queue.length === 0) return
+      }
+      if (poisoned) throw new Error(`renderer poisoned by a failed batch: ${poisoned}`)
+      const batch: MutationBatch = { v: 1, seq: ++seq, mutations: queue.splice(0) }
+      try {
+        await send(batch)
+      } catch (err) {
+        // Policy (v0.1): a failed batch means shadow and wire MAY have
+        // diverged (partial apply on the helper). Poison the renderer:
+        // only dispose() remains meaningful. No requeue — re-sending a
+        // partially-applied batch would double-apply leading mutations.
+        poisoned = err instanceof Error ? err.message : String(err)
+        throw err
+      }
+    }
+    throw new Error("flush(): solid did not settle within 100 rounds")
   }
 
   return {
@@ -233,5 +317,13 @@ export function createSolidRenderer(send: Send): SolidGpuiRenderer {
     render: renderWithDispose,
     flush,
     handler: (id, event) => handlers.get(`${id}:${event}`),
+    removeNode: removeNodeImpl,
+    firstChild: (node) => shadow.get(node.id)?.children[0] ?? undefined,
+    nextSibling: (node) => {
+      const entry = shadow.get(node.id)
+      if (!entry?.parent) return undefined
+      const siblings = shadow.get(entry.parent.id)?.children ?? []
+      return siblings[siblings.indexOf(node) + 1] ?? undefined
+    },
   }
 }

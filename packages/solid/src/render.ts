@@ -24,16 +24,17 @@ export async function render(
   opts: RenderOptions = {},
 ): Promise<RenderHandle> {
   const connection = opts.connection ?? spawnHelper({ mode: "window" })
-  const { renderer, render, flush, handler } = createSolidRenderer(async (batch) => {
-    // Route through the client's per-seq correlation; ReplyError propagates.
-    return connection.sendBatch(batch)
-  })
+  const { renderer, render, flush, handler, removeNode, firstChild, nextSibling } =
+    createSolidRenderer(async (batch) => {
+      // Route through the client's per-seq correlation; ReplyError propagates.
+      return connection.sendBatch(batch)
+    })
   const container = renderer.createElement("#root")
   const dispose = render(code, container)
   await flush()
   return {
     connection,
-    renderer: { renderer, render, flush, handler },
+    renderer: { renderer, render, flush, handler, removeNode, firstChild, nextSibling },
     container,
     dispose: async () => {
       dispose()

@@ -4,8 +4,7 @@
   "license": "Apache-2.0",
   "type": "module",
   "exports": {
-    ".": "./src/index.ts",
-    "./jsx-runtime": "./src/jsx-runtime.ts"
+    ".": "./src/index.ts"
   },
   "dependencies": {
     "@solid-gpui/client": "workspace:*",

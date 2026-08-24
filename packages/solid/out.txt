@@ -1,0 +1,21 @@
+[0m[1mbun test [0m[2mv1.4.0 (34cbb9a40)[0m
+[0m
+src/regressions.test.ts:
+[0m[1m50 |[0m     [0m[35mconst[0m moveOps = rec.batches[0m[3m[1m.at[0m(-[0m[33m1[0m)!.mutations[0m[3m[1m.map[0m((m) => m.op)
+[0m[1m51 |[0m     expect(moveOps[0m[3m[1m.every[0m((op) => op === [0m[32m"insertBefore"[0m))[0m[3m[1m.toBe[0m([0m[33mtrue[0m)
+[0m[1m52 |[0m 
+[0m[1m53 |[0m     [0m[2m// Clear: one removeChild per node, each exactly once (the old shadow[0m
+[0m[1m54 |[0m     [0m[2m// duplicated entries here, emitting invalid duplicate removeChild ops).[0m
+[0m[1m55 |[0m     [0m[35mfor[0m ([0m[35mconst[0m n of nodes) R[0m[3m[1m.removeNode[0m(parent, n)
+                                  [31m[1m^[0m
+[0m[31mTypeError[0m[2m:[0m [1mR.removeNode is not a function. (In 'R.removeNode(parent, n)', 'R.removeNode' is undefined)[0m
+[0m      [2mat [0m[0m[2m<anonymous>[0m[2m ([0m[0m[36m[2m/Users/huynhgiabuu/dev/projects/solid-gpui/packages/solid/[0m[36msrc/regressions.test.ts[0m[2m:[0m[33m55[0m[2m:[33m30[0m[2m)[0m
+[0m[31m✗[0m [0mkeyed/reordered list moves (review critical regression)[2m >[0m[1m reorder then clear emits each removeChild exactly once[0m [0m[2m[0.90ms[0m[2m][0m
+[0m[32m✓[0m [0msend-failure policy (review major)[2m >[0m[1m failed send poisons the renderer; later flushes reject, dispose still works[0m [0m[2m[1.19ms[0m[2m][0m
+[0m[32m✓[0m [0mremount without dispose (review minor)[2m >[0m[1m second mount destroys the previous root before setRoot[0m [0m[2m[0.21ms[0m[2m][0m
+[0m[32m✓[0m [0mcontainer children tracking (review minor)[2m >[0m[1m firstChild/nextSibling on the container return the mounted root[0m [0m[2m[0.13ms[0m[2m][0m
+
+[0m[32m 3 pass[0m
+[0m[31m 1 fail[0m
+ 8 expect() calls
+Ran 4 tests across 1 file. [0m[2m[[1m12.00ms[0m[2m][0m

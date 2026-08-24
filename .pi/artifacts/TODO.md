@@ -32,8 +32,10 @@ babel-preset-solid in bun).
       + makeH hyperscript (JSX needs babel/vite — documented limitation)
 - [x] Integration demo: real helper window renders Solid tree — **user saw the
       counter window** (Count: 0→3 fine-grained ticks, button color toggle)
-- [ ] VERIFY: commit 250e7e2 done; independent review running (mt6ywxoq-2f8f)
-      → fix findings → close slice
+- [x] VERIFY: commit 250e7e2 done; independent review complete (mt6ywxoq-2f8f)
+      → verdict findings-should-fix: 1 critical (shadow dup entries on keyed
+      move), 3 majors (send-failure loss, conditions trap live in root test,
+      jsx-runtime export broken) + minors/notes → fix findings → close slice
 
 Cross-ref: PLAN.md#2026-08-24---solid--gpui-oss-repo-spec-frozen-2026-08-24-after-q1q3
 
