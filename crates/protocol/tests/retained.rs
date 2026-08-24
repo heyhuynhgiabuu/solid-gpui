@@ -484,3 +484,71 @@ fn mutations_on_missing_elements_fail() {
 }
 
 // The `{:?}` of ElementId is used in several error-message assertions above.
+
+#[test]
+fn set_value_on_input_and_textarea_stores_the_value() {
+    let mut tree = RetainedTree::new();
+    apply_all(
+        &mut tree,
+        &[
+            Mutation::CreateElement {
+                id: 1.into(),
+                element_type: ElementType::Input,
+            },
+            Mutation::CreateElement {
+                id: 2.into(),
+                element_type: ElementType::Textarea,
+            },
+        ],
+    )
+    .unwrap();
+    tree.apply(&Mutation::SetValue {
+        id: 1.into(),
+        value: "hello 🎉".into(),
+    })
+    .unwrap();
+    tree.apply(&Mutation::SetValue {
+        id: 2.into(),
+        value: "line1\nline2".into(),
+    })
+    .unwrap();
+    assert_eq!(
+        tree.get(1.into()).unwrap().value.as_deref(),
+        Some("hello 🎉")
+    );
+    assert_eq!(
+        tree.get(2.into()).unwrap().value.as_deref(),
+        Some("line1\nline2")
+    );
+}
+
+#[test]
+fn set_value_on_non_input_element_is_rejected() {
+    let mut tree = RetainedTree::new();
+    apply_all(
+        &mut tree,
+        &[
+            Mutation::CreateElement {
+                id: 1.into(),
+                element_type: ElementType::Div,
+            },
+            Mutation::CreateElement {
+                id: 2.into(),
+                element_type: ElementType::Text,
+            },
+        ],
+    )
+    .unwrap();
+    for id in [1u32, 2] {
+        let err = tree
+            .apply(&Mutation::SetValue {
+                id: id.into(),
+                value: "x".into(),
+            })
+            .unwrap_err();
+        assert!(
+            err.to_string().contains("input/textarea"),
+            "id {id} got: {err}"
+        );
+    }
+}

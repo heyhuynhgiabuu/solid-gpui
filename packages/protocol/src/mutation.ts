@@ -2,7 +2,7 @@ import type { ElementId } from "./ids"
 import type { StyleMap } from "./style"
 
 /** Host element kinds understood by the helper in protocol v1. */
-export type ElementType = "div" | "text"
+export type ElementType = "div" | "text" | "input" | "textarea"
 
 /**
  * Closed set: the helper must know an event to wire it, so unknown event
@@ -19,6 +19,8 @@ export type EventType =
   | "focus"
   | "blur"
   | "scroll"
+  | "change"
+  | "submit"
 
 export const EVENT_TYPES: readonly EventType[] = [
   "click",
@@ -31,9 +33,11 @@ export const EVENT_TYPES: readonly EventType[] = [
   "focus",
   "blur",
   "scroll",
+  "change",
+  "submit",
 ]
 
-export const ELEMENT_TYPES: readonly ElementType[] = ["div", "text"]
+export const ELEMENT_TYPES: readonly ElementType[] = ["div", "text", "input", "textarea"]
 
 export type Mutation =
   | { readonly op: "createElement"; readonly id: ElementId; readonly elementType: ElementType }
@@ -43,6 +47,7 @@ export type Mutation =
   | { readonly op: "insertBefore"; readonly parentId: ElementId; readonly childId: ElementId; readonly beforeId: ElementId }
   | { readonly op: "setStyle"; readonly id: ElementId; readonly style: StyleMap }
   | { readonly op: "setText"; readonly id: ElementId; readonly text: string }
+  | { readonly op: "setValue"; readonly id: ElementId; readonly value: string }
   | { readonly op: "setEventListener"; readonly id: ElementId; readonly eventType: EventType; readonly enabled: boolean }
   | { readonly op: "setRoot"; readonly id: ElementId }
 
@@ -54,6 +59,7 @@ export const MUTATION_OPS = [
   "insertBefore",
   "setStyle",
   "setText",
+  "setValue",
   "setEventListener",
   "setRoot",
 ] as const

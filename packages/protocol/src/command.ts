@@ -11,6 +11,7 @@ export type SolidGpuiCommand =
   | { readonly type: "scrollTo"; readonly seq: number; readonly id: number; readonly x: number; readonly y: number }
   | { readonly type: "getScrollOffset"; readonly seq: number; readonly id: number }
   | { readonly type: "focusElement"; readonly seq: number; readonly id: number }
+  | { readonly type: "simulateInput"; readonly seq: number; readonly id: number; readonly text: string }
 
 const isInt = (v: unknown): v is number => typeof v === "number" && Number.isInteger(v)
 
@@ -37,7 +38,14 @@ export function decodeCommand(json: string): Result<SolidGpuiCommand, ProtocolEr
   if (!isDict(parsed)) return { ok: false, error: shape("$", "expected an object") }
 
   const type = parsed.type
-  const KNOWN = ["getStats", "captureFrame", "scrollTo", "getScrollOffset", "focusElement"]
+  const KNOWN = [
+    "getStats",
+    "captureFrame",
+    "scrollTo",
+    "getScrollOffset",
+    "focusElement",
+    "simulateInput",
+  ]
   if (!KNOWN.includes(type as string)) {
     return {
       ok: false,
@@ -53,6 +61,17 @@ export function decodeCommand(json: string): Result<SolidGpuiCommand, ProtocolEr
       return { ok: false, error: shape("path", "expected a non-empty string") }
     }
     return { ok: true, value: { type, seq: parsed.seq, path: parsed.path } }
+  }
+  if (type === "simulateInput") {
+    const id = parsed.id
+    if (!isInt(id) || id < 1 || id > 0xffff_ffff) {
+      return { ok: false, error: shape("id", "expected an integer in 1..=4294967295") }
+    }
+    const text = parsed.text
+    if (typeof text !== "string") {
+      return { ok: false, error: shape("text", "expected a string") }
+    }
+    return { ok: true, value: { type, seq: parsed.seq, id, text } }
   }
   if (type === "scrollTo" || type === "getScrollOffset") {
     // Locals first: typeof/isInt guards narrow plain bindings, not

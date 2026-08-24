@@ -142,6 +142,15 @@ function decodeMutation(m: Dict, p: string): Result<Mutation, ProtocolError> {
       }
       return { ok: true, value: { op, id: idR.value, text } }
     }
+    case "setValue": {
+      const idR = id()
+      if (!idR.ok) return idR
+      const value = m.value
+      if (typeof value !== "string") {
+        return { ok: false, error: shape(`${p}.value`, "expected a string") }
+      }
+      return { ok: true, value: { op, id: idR.value, value } }
+    }
     case "setEventListener": {
       const idR = id()
       if (!idR.ok) return idR

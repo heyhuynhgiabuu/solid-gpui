@@ -75,6 +75,19 @@ describe("decodeCommand", () => {
     if (!r.ok) expect(r.error.kind).toBe("invalidShape")
   })
 
+  test("simulateInput decodes id + text", () => {
+    const r = decodeCommand(
+      JSON.stringify({ type: "simulateInput", seq: 44, id: 7, text: "ab" }),
+    )
+    expect(r).toEqual({ ok: true, value: { type: "simulateInput", seq: 44, id: 7, text: "ab" } })
+  })
+
+  test("simulateInput rejects non-string text", () => {
+    const r = decodeCommand(JSON.stringify({ type: "simulateInput", seq: 44, id: 7, text: 3 }))
+    expect(r.ok).toBe(false)
+    if (!r.ok) expect(r.error.kind).toBe("invalidShape")
+  })
+
   test("unknown command name is invalidShape (closed set)", () => {
     const r = decodeCommand(JSON.stringify({ type: "teleport", seq: 1 }))
     expect(r.ok).toBe(false)

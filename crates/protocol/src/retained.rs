@@ -31,6 +31,9 @@ pub struct Node {
     pub element_type: ElementType,
     pub style: StyleMap,
     pub text: Option<String>,
+    /// Input/textarea document value (setValue). Present only on
+    /// input/textarea elements; validation and rendering agree.
+    pub value: Option<String>,
     pub children: Vec<ElementId>,
     pub parent: Option<ElementId>,
     pub listeners: BTreeSet<EventType>,
@@ -42,6 +45,7 @@ impl Node {
             element_type,
             style: BTreeMap::new(),
             text: None,
+            value: None,
             children: Vec::new(),
             parent: None,
             listeners: BTreeSet::new(),
@@ -126,6 +130,21 @@ impl RetainedTree {
                     });
                 }
                 node.text = Some(text.clone());
+                Ok(())
+            }
+            Mutation::SetValue { id, value } => {
+                let node = self.mut_node(*id, "setValue")?;
+                if !matches!(
+                    node.element_type,
+                    ElementType::Input | ElementType::Textarea
+                ) {
+                    return Err(ApplyError::InvalidMutation {
+                        message: format!(
+                            "setValue: element {id:?} is not an input/textarea element"
+                        ),
+                    });
+                }
+                node.value = Some(value.clone());
                 Ok(())
             }
             Mutation::SetEventListener {

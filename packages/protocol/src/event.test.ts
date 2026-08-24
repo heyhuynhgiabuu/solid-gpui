@@ -46,6 +46,26 @@ describe("decodeEvent", () => {
     })
   })
 
+  test("change event carries the new value", () => {
+    expect(
+      ok(JSON.stringify({ type: "event", id: 7, eventType: "change", value: "ab" })),
+    ).toEqual({ type: "event", id: 7, eventType: "change", value: "ab" })
+  })
+
+  test("submit event decodes", () => {
+    expect(ok(JSON.stringify({ type: "event", id: 7, eventType: "submit" }))).toEqual({
+      type: "event",
+      id: 7,
+      eventType: "submit",
+    })
+  })
+
+  test("non-string value is invalidShape", () => {
+    const r = decodeEvent(JSON.stringify({ type: "event", id: 7, eventType: "change", value: 42 }))
+    expect(r.ok).toBe(false)
+    if (!r.ok) expect(r.error.kind).toBe("invalidShape")
+  })
+
   test("unknown eventType is invalidShape", () => {
     const r = decodeEvent(JSON.stringify({ type: "event", id: 1, eventType: "hover" }))
     expect(r.ok).toBe(false)

@@ -126,6 +126,7 @@ fn event_fixture_parses_and_emits_exactly() {
             y: Some(40.0),
             key: None,
             modifiers: None,
+            value: None,
         }
     );
     assert_eq!(event_to_json(&event), raw);
@@ -140,6 +141,7 @@ fn click_event_without_position_omits_nulls_on_wire() {
         y: None,
         key: None,
         modifiers: None,
+        value: None,
     });
     assert!(
         !json.contains("null"),
@@ -154,6 +156,7 @@ fn click_event_without_position_omits_nulls_on_wire() {
             y: None,
             key: None,
             modifiers: None,
+            value: None,
         }
     );
 }
@@ -173,7 +176,9 @@ fn key_down_event_fixture_parses_and_emits_exactly() {
             y,
             key,
             modifiers,
+            value,
         } => {
+            assert!(value.is_none());
             assert_eq!(*id, ElementId(5));
             assert_eq!(*event_type, EventType::KeyDown);
             assert!(x.is_none() && y.is_none());
@@ -375,4 +380,44 @@ fn rejects_non_integer_id() {
         matches!(err, ProtocolError::InvalidShape { .. }),
         "got: {err}"
     );
+}
+
+#[test]
+fn change_event_fixture_carries_value_both_ways() {
+    let raw = fs::read_to_string(fixture_path("event-change-01.json"))
+        .expect("fixture readable")
+        .trim()
+        .to_string();
+    let event = event_from_json(&raw).expect("event parses");
+    assert_eq!(
+        event,
+        Event::Input {
+            id: 7.into(),
+            event_type: EventType::Change,
+            x: None,
+            y: None,
+            key: None,
+            modifiers: None,
+            value: Some("ab".into()),
+        }
+    );
+    assert_eq!(event_to_json(&event), raw);
+}
+
+#[test]
+fn simulate_input_command_fixture_parses_and_emits_exactly() {
+    let raw = fs::read_to_string(fixture_path("command-simulate-input.json"))
+        .expect("fixture readable")
+        .trim()
+        .to_string();
+    let cmd = command_from_json(&raw).expect("command parses");
+    assert_eq!(
+        cmd,
+        Command::SimulateInput {
+            seq: 44,
+            id: ElementId(7),
+            text: "ab".into()
+        }
+    );
+    assert_eq!(command_to_json(&cmd), raw);
 }

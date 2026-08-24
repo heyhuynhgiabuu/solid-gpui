@@ -39,5 +39,10 @@ export type StyleKey =
   | "cursor"
   | "fontSize"
   | "fontWeight"
+  | "tabIndex"
+  | "autoFocus"
+  | "placeholder"
+  | "minRows"
+  | "maxRows"
 
 export type StyleMap = { readonly [K in StyleKey]?: StyleValue }

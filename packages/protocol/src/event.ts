@@ -21,6 +21,8 @@ export type SolidGpuiEvent = {
   readonly y?: number
   readonly key?: string
   readonly modifiers?: KeyModifiers
+  /** New document value for change events (input/textarea edits). */
+  readonly value?: string
 }
 
 const isInt = (v: unknown): v is number => typeof v === "number" && Number.isInteger(v)
@@ -67,6 +69,7 @@ export function decodeEvent(json: string): Result<SolidGpuiEvent, ProtocolError>
     y?: number
     key?: string
     modifiers?: KeyModifiers
+    value?: string
   } = { type: "event", id: parsed.id, eventType }
 
   for (const axis of ["x", "y"] as const) {
@@ -82,6 +85,12 @@ export function decodeEvent(json: string): Result<SolidGpuiEvent, ProtocolError>
       return { ok: false, error: shape("key", "expected a string or null") }
     }
     out.key = parsed.key
+  }
+  if (parsed.value !== undefined && parsed.value !== null) {
+    if (typeof parsed.value !== "string") {
+      return { ok: false, error: shape("value", "expected a string or null") }
+    }
+    out.value = parsed.value
   }
   const mods = parsed.modifiers as Record<string, unknown> | undefined | null
   if (mods !== undefined && mods !== null) {

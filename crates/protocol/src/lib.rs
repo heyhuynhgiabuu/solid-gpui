@@ -25,9 +25,11 @@ pub const EVENT_TYPES: &[&str] = &[
     "focus",
     "blur",
     "scroll",
+    "change",
+    "submit",
 ];
 
-pub const ELEMENT_TYPES: &[&str] = &["div", "text"];
+pub const ELEMENT_TYPES: &[&str] = &["div", "text", "input", "textarea"];
 
 /// Numeric id of a host element. 0 is reserved and never valid.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -45,6 +47,8 @@ impl From<u32> for ElementId {
 pub enum ElementType {
     Div,
     Text,
+    Input,
+    Textarea,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
@@ -60,6 +64,8 @@ pub enum EventType {
     Focus,
     Blur,
     Scroll,
+    Change,
+    Submit,
 }
 
 /// A style value is a JSON number (kept exact via `serde_json::Number`) or a
@@ -118,6 +124,13 @@ pub enum Mutation {
     SetText {
         id: ElementId,
         text: String,
+    },
+    #[serde(rename_all = "camelCase")]
+    SetValue {
+        id: ElementId,
+        /// Input/textarea document value. Only valid on input/textarea
+        /// element types (validation and rendering agree).
+        value: String,
     },
     #[serde(rename_all = "camelCase")]
     SetEventListener {
@@ -223,6 +236,16 @@ pub enum Command {
         seq: u32,
         id: ElementId,
     },
+
+    /// Apply a text edit to a focused input/textarea through the same code
+    /// path as the platform IME, emitting a change event. Test seam for the
+    /// helper→JS change path (no real keystrokes in headless tests) and an
+    /// automation/a11y hook (type a value programmatically).
+    SimulateInput {
+        seq: u32,
+        id: ElementId,
+        text: String,
+    },
 }
 
 /// Serialize a command to one JSON line. Infallible for this type shape.
@@ -245,11 +268,12 @@ pub fn command_from_json(s: &str) -> Result<Command, ProtocolError> {
             | Some("scrollTo")
             | Some("getScrollOffset")
             | Some("focusElement")
+            | Some("simulateInput")
     ) {
         return Err(ProtocolError::InvalidShape {
             path: "type".into(),
             message: format!(
-                "unknown command {:?}; expected getStats|captureFrame|scrollTo|getScrollOffset|focusElement",
+                "unknown command {:?}; expected getStats|captureFrame|scrollTo|getScrollOffset|focusElement|simulateInput",
                 type_str.unwrap_or("<missing>")
             ),
         });
@@ -331,6 +355,9 @@ pub enum Event {
         key: Option<String>,
         #[serde(skip_serializing_if = "Option::is_none")]
         modifiers: Option<Modifiers>,
+        /// New document value for change events (input/textarea edits).
+        #[serde(skip_serializing_if = "Option::is_none")]
+        value: Option<String>,
     },
 }
 
@@ -404,6 +431,7 @@ const KNOWN_OPS: &[&str] = &[
     "insertBefore",
     "setStyle",
     "setText",
+    "setValue",
     "setEventListener",
     "setRoot",
 ];
@@ -507,6 +535,7 @@ fn from_value(v: serde_json::Value) -> Result<MutationBatch, ProtocolError> {
             | Mutation::DestroyElement { id }
             | Mutation::SetStyle { id, .. }
             | Mutation::SetText { id, .. }
+            | Mutation::SetValue { id, .. }
             | Mutation::SetEventListener { id, .. }
             | Mutation::SetRoot { id } => (id.0 == 0).then_some("id"),
             Mutation::AppendChild {

@@ -109,6 +109,26 @@ describe("decodeBatch rejects malformed input", () => {
     }
   })
 
+  test("input/textarea element types decode (closed set widened)", () => {
+    const batch = {
+      v: 1,
+      seq: 1,
+      mutations: [
+        { op: "createElement", id: 1, elementType: "input" },
+        { op: "createElement", id: 2, elementType: "textarea" },
+        { op: "setValue", id: 1, value: "hello" },
+      ],
+    }
+    const r = decodeBatch(JSON.stringify(batch))
+    expect(r.ok).toBe(true)
+    if (r.ok) {
+      const [a, b, c] = r.value.mutations
+      expect(a && "elementType" in a && a.elementType).toBe("input")
+      expect(b && "elementType" in b && b.elementType).toBe("textarea")
+      expect(c && "op" in c && c.op).toBe("setValue")
+    }
+  })
+
   test("unknown element type", () => {
     const r = decodeBatch(
       JSON.stringify({
