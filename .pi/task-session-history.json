@@ -1,0 +1,51 @@
+[
+  {
+    "id": "mt6udsof-f64a",
+    "agentType": "reviewer",
+    "description": "Review Slice 1 protocol",
+    "sessionName": "task-mt6udsof-f64a",
+    "startedAt": 1787552132936,
+    "paneId": "w3:pD3",
+    "handle": {
+      "backend": "herdr",
+      "resourceId": "w3:pD3",
+      "socketPath": "/Users/huynhgiabuu/.config/herdr/herdr.sock",
+      "terminalId": "term_659c4e98eab9e12",
+      "agentName": "reviewer-mt6udsof",
+      "foregroundProcessGroupId": 64422
+    },
+    "piDir": "/Users/huynhgiabuu/dev/projects/solid-gpui/.pi",
+    "dir": "/Users/huynhgiabuu/dev/projects/solid-gpui/.pi/artifacts/tasks",
+    "cwd": "/Users/huynhgiabuu/dev/projects/solid-gpui",
+    "status": "done",
+    "background": true,
+    "reportedStatus": "unknown",
+    "resultValid": false,
+    "completedAt": 1787552281873
+  },
+  {
+    "id": "mt6uijnp-d1cd",
+    "agentType": "reviewer",
+    "description": "Finish Slice 1 review",
+    "sessionName": "01a03268-e54f-7566-91e3-55ec95ddd4a9",
+    "startedAt": 1787552353891,
+    "paneId": "w3:pD4",
+    "handle": {
+      "backend": "herdr",
+      "resourceId": "w3:pD4",
+      "socketPath": "/Users/huynhgiabuu/.config/herdr/herdr.sock",
+      "terminalId": "term_659c4f6c39fa513",
+      "agentName": "reviewer-mt6uijnp",
+      "foregroundProcessGroupId": 65409
+    },
+    "piDir": "/Users/huynhgiabuu/dev/projects/solid-gpui/.pi",
+    "dir": "/Users/huynhgiabuu/dev/projects/solid-gpui/.pi/artifacts/tasks",
+    "cwd": "/Users/huynhgiabuu/dev/projects/solid-gpui",
+    "conversationId": "01a03268-e54f-7566-91e3-55ec95ddd4a9",
+    "status": "done",
+    "background": true,
+    "reportedStatus": "success",
+    "resultValid": true,
+    "completedAt": 1787553091982
+  }
+]

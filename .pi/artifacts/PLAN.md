@@ -1,0 +1,57 @@
+# PLAN
+
+### 2026-08-24 - Solid + GPUI OSS repo — spec (FROZEN 2026-08-24 after Q1–Q3)
+
+status: frozen: 2026-08-24 | next: Phase 1 implementation (slices below)
+
+## Identity
+
+Repo: **solid-gpui** (license Apache-2.0, ADR 003). Workspace layout:
+
+- `@solid-gpui/protocol` — TS types + (de)serializers for the mutation protocol; zero runtime deps
+- `@solid-gpui/helper` — Rust binary crate (stock upstream gpui via git dep) owning its own main thread
+- `@solid-gpui/solid` — Solid 2 renderer via `@solidjs/universal` + IPC transport + spawn/supervise of helper
+
+## Goal
+
+An Apache-2.0-licensed (ADR 003), Solid-first OSS repo that renders Solid 2 components into native
+GPUI windows (no webview), runnable under Node.js and Bun, with a clean-room architecture:
+idea-level inspiration from gpuix only; no gpuix code; no dependency on `@gpuix/*`.
+
+## Non-goals
+
+- No forking or copying gpuix source; no `@gpuix/native` / `@gpuix/react` dependency
+- No React renderer in v1 (Solid-first; React may come later behind the same protocol)
+- No Windows/Linux validation in Phase 1 (macOS-first; child-process model makes them cheap later)
+- No markdown/code/diff custom elements until Phase 3 (port from Comet, MIT, with attribution)
+
+## Acceptance criteria (Phase 1 — walking skeleton)
+
+- [ ] A Solid 2 (2.0.0-rc.x) app renders `div`/`text` with basic flexbox styles in a native window
+- [ ] Click event flows from GPUI back to a Solid handler
+- [ ] State change → minimal mutation (no full-tree diff) reaches the native layer
+- [ ] Works with `bun --hot` (remount without losing the window) and plain `node`
+- [ ] Counter demo committed with run instructions; `bun run example/counter` verified
+- [ ] LICENSE file present; repo public-ready
+
+## Resolved decisions (2026-08-24)
+
+- Q1 architecture: **ADR 002 = option C** (out-of-process helper, transport-agnostic protocol)
+- Q2 license: **ADR 003 = Apache-2.0**
+- Q3 name: **solid-gpui** (rename local dir when session is closed: `mv ~/dev/projects/gpuis ~/dev/projects/solid-gpui`)
+- Parked (non-decisions): IPC wire format v1 = newline-delimited JSON (binary framing deferred until measured); Windows/Linux validation (Phase 2+); React adapter (post-v1)
+
+## Slices (Phase 1, order = risk-first)
+
+1. Transport-agnostic mutation protocol (TS types + Rust trait, `applyBatch`-style batch op)
+   — verify: `cargo test` round-trip of a batch — risk: protocol churn
+2. Helper binary opens an empty GPUI window from stock upstream gpui (git dep, no fork)
+   — verify: `cargo run --bin helper` shows a window — risk: gpui git-dep drift
+3. JS↔helper IPC channel (stdio or UDS), spawn-from-package
+   — verify: echo round-trip from Node and Bun — risk: Bun edge cases
+4. Retained tree + `div`/`text` + minimal styles (flex, padding, color, size)
+   — verify: protocol test renders golden tree dump — risk: style parser scope creep
+5. Solid renderer via `@solidjs/universal` (`createRenderer`)
+   — verify: unit test renders counter to protocol log — risk: RC API drift
+6. Event backchannel (click) + `bun --hot` demo
+   — verify: counter demo manual run + recorded session — risk: remount lifecycle

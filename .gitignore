@@ -1,0 +1,8 @@
+node_modules/
+target/
+dist/
+*.log
+.DS_Store
+
+# pi task transcripts (durable artifacts stay tracked)
+.pi/artifacts/tasks/
