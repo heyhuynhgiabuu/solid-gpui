@@ -216,14 +216,14 @@ overflow_x_scroll / overflow_y_scroll (div.rs ~1474), ScrollHandle +
 track_scroll() for programmatic control, restrict_scroll_to_axis for their
 nested-scroll gotcha. AGENTS.md gotcha text is stale (fixed same day).
 
-- [ ] S8a Style mapping: overflow key accepts "scroll" | "scrollX" | "scrollY"
-      (closed set documented in protocol docs); unknown values ignored like
-      other unparsable styles
-- [ ] S8a Handle lifecycle: per-element ScrollHandle map on HostView, lazy
-      create at render, pruned when tree no longer holds the id
-- [ ] S8a Tests: window-mode test mounts tall content with overflow:scroll,
-      scrolls programmatically via handle path (no pixels asserted — assert
-      no error + ack), plus style-mapping unit test
+- [x] S8a Style mapping: overflow accepts "scroll"|"scrollX"|"scrollY" —
+      closed set in style.ts docs; parse_overflow is the single source of
+      truth (60a9b8a)
+- [x] S8a Handle lifecycle: per-element ScrollHandle map on HostView (Rc<RefCell>),
+      get-or-create at render, pruned per frame for dropped ids (60a9b8a)
+- [x] S8a Tests: parse_overflow unit tests (closed set + unknown) and
+      window-mode smoke: 200px scroll container over 2000px child, ack 9/9
+      (60a9b8a). Behavioral scroll proof lands in S8b via scrollTo commands.
 - [ ] S8b Commands: scrollTo {id,x,y} / getScrollOffset {id} -> Result
       payload; TS parity + fixtures
 - [ ] VERIFY: suites green; commit per sub-slice; independent review
