@@ -73,7 +73,24 @@ fn run_stdio() -> i32 {
     let stdout = std::io::stdout();
     let mut out = stdout.lock();
     for line in stdin.lock().lines() {
-        let Ok(line) = line else { break };
+        let line = match line {
+            Ok(line) => line,
+            Err(e) => {
+                // A reader error (e.g. invalid UTF-8) is a writer bug, not EOF:
+                // answer with a decode error so the JS side learns, then stop.
+                let _ = writeln!(
+                    out,
+                    "{}",
+                    reply_to_json(&Reply::Error {
+                        seq: None,
+                        code: ReplyCode::DecodeFailed,
+                        message: format!("failed to read batch line: {e}"),
+                    })
+                );
+                let _ = out.flush();
+                break;
+            }
+        };
         if line.trim().is_empty() {
             continue;
         }
@@ -125,7 +142,7 @@ fn main() {
                 cx.background_executor()
                     .timer(Duration::from_millis(ms))
                     .await;
-                let _ = cx.update(|cx| cx.quit());
+                cx.update(|cx| cx.quit());
             })
             .detach();
         }

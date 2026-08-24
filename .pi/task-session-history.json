@@ -71,5 +71,29 @@
     "reportedStatus": "unknown",
     "resultValid": false,
     "completedAt": 1787553833332
+  },
+  {
+    "id": "mt6wo1j7-380b",
+    "agentType": "reviewer",
+    "description": "Review Slice 3 IPC",
+    "sessionName": "task-mt6wo1j7-380b",
+    "startedAt": 1787555970425,
+    "paneId": "w3:pD7",
+    "handle": {
+      "backend": "herdr",
+      "resourceId": "w3:pD7",
+      "socketPath": "/Users/huynhgiabuu/.config/herdr/herdr.sock",
+      "terminalId": "term_659c5ce4891da16",
+      "agentName": "reviewer-mt6wo1j7",
+      "foregroundProcessGroupId": 76519
+    },
+    "piDir": "/Users/huynhgiabuu/dev/projects/solid-gpui/.pi",
+    "dir": "/Users/huynhgiabuu/dev/projects/solid-gpui/.pi/artifacts/tasks",
+    "cwd": "/Users/huynhgiabuu/dev/projects/solid-gpui",
+    "status": "done",
+    "background": true,
+    "reportedStatus": "success",
+    "resultValid": true,
+    "completedAt": 1787556882541
   }
 ]

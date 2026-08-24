@@ -9,7 +9,11 @@ import {
   type MutationBatch,
 } from "@solid-gpui/protocol"
 
-/** Ack for one applied batch. */
+/** Ack for one applied batch.
+ *
+ * `applied` counts decoded mutations until the retained tree exists (Slice 4);
+ * the Rust side documents the same placeholder semantics.
+ */
 export interface Ack {
   readonly seq: number
   readonly applied: number
@@ -21,8 +25,10 @@ export class HelperExitedError extends Error {
   constructor(
     readonly code: number | null,
     readonly signal: string | null,
+    readonly spawnError?: string,
   ) {
-    super(`solid-gpui helper exited (code=${code}, signal=${signal})`)
+    const cause = spawnError ? `: ${spawnError}` : ""
+    super(`solid-gpui helper exited (code=${code}, signal=${signal})${cause}`)
     this.name = "HelperExitedError"
   }
 }
@@ -42,6 +48,8 @@ export class ReplyError extends Error {
 export interface ExitInfo {
   readonly code: number | null
   readonly signal: string | null
+  /** Set when the process failed to spawn (Node 'error' event): e.g. ENOENT. */
+  readonly error?: string
 }
 
 export interface HelperOptions {
@@ -84,19 +92,31 @@ class HelperConnection {
     }
     // EPIPE on stdin writes after death is expected; the exit handler owns it.
     child.stdin?.on("error", () => {})
-    child.on("exit", (code, signal) => this.onExit(code, signal))
+    // 'close' (not 'exit'): fires only after stdio drained, so a final flushed
+    // ack is processed before pending is rejected (Node can emit 'exit' first).
+    child.on("close", (code, signal) => this.onExit(code, signal))
+    // Spawn failures (Node): 'error' fires and 'close' never does — surface it
+    // instead of crashing on an unhandled event.
+    child.on("error", (err) => this.onExit(null, null, err))
   }
 
   private onLine(line: string): void {
     if (!line.trim()) return
     const r = decodeReply(line)
     if (!r.ok) {
-      this.opts.onUnmatchedReply?.({
-        type: "error",
-        seq: null,
-        code: "decodeFailed",
-        message: `undecodable reply line: ${JSON.stringify(r.error)}`,
-      })
+      const message = `undecodable reply line: ${JSON.stringify(r.error)}`
+      if (this.opts.onUnmatchedReply) {
+        this.opts.onUnmatchedReply({
+          type: "error",
+          seq: null,
+          code: "decodeFailed",
+          message,
+        })
+      } else {
+        // Loud by default: a garbage reply means a helper bug; the pending
+        // batch for it would otherwise hang silently.
+        console.warn(`[solid-gpui] ${message}`)
+      }
       return
     }
     const reply = r.value
@@ -115,26 +135,47 @@ class HelperConnection {
     this.opts.onUnmatchedReply?.(reply)
   }
 
-  private onExit(code: number | null, signal: string | null): void {
+  private onExit(code: number | null, signal: string | null, error?: Error): void {
+    if (this.closed) return
     this.closed = true
-    this.exitInfo = { code, signal }
+    this.exitInfo = { code, signal, error: error?.message }
     for (const p of this.pending.values()) {
-      p.reject(new HelperExitedError(code, signal))
+      p.reject(new HelperExitedError(code, signal, error?.message))
     }
     this.pending.clear()
     this.exitedResolve(this.exitInfo)
   }
 
-  /** Send one batch; resolves on its ack, rejects on its error reply or death. */
+  /** Send one batch; resolves on its ack, rejects on its error reply or death.
+   *
+   * Reusing a seq while its previous batch is still in flight is a caller bug
+   * (acks are correlated by seq) and rejects immediately.
+   */
   sendBatch(batch: MutationBatch): Promise<Ack> {
     if (this.closed) {
       return Promise.reject(
-        new HelperExitedError(this.exitInfo?.code ?? null, this.exitInfo?.signal ?? null),
+        new HelperExitedError(
+          this.exitInfo?.code ?? null,
+          this.exitInfo?.signal ?? null,
+          this.exitInfo?.error,
+        ),
+      )
+    }
+    if (this.pending.has(batch.seq)) {
+      return Promise.reject(
+        new Error(`sendBatch: seq ${batch.seq} is already in flight; acks correlate by seq`),
       )
     }
     return new Promise<Ack>((resolve, reject) => {
+      try {
+        this.child.stdin?.write(encodeBatch(batch) + "\n")
+      } catch (err) {
+        reject(err instanceof Error ? err : new Error(String(err)))
+        return
+      }
+      // Set after a successful write so a throwing write leaves no stale entry;
+      // the ack cannot arrive before the next event-loop turn.
       this.pending.set(batch.seq, { resolve, reject })
-      this.child.stdin?.write(encodeBatch(batch) + "\n")
     })
   }
 
@@ -150,12 +191,22 @@ class HelperConnection {
   }
 }
 
-/** Spawn the native helper in `--stdio` transport mode and supervise it. */
+/** Spawn the native helper in `--stdio` transport mode and supervise it.
+ *
+ * Bun throws synchronously from spawn() on ENOENT — rethrown as
+ * HelperExitedError. Node reports spawn failure asynchronously via the
+ * connection's `exited` info (`error` field) and pending rejections.
+ */
 export function spawnHelper(opts: HelperOptions = {}): HelperConnection {
   const binary = opts.binary ?? defaultBinary()
-  const child = spawn(binary, ["--stdio", ...(opts.args ?? [])], {
-    stdio: ["pipe", "pipe", "inherit"],
-  })
+  let child: ChildProcess
+  try {
+    child = spawn(binary, ["--stdio", ...(opts.args ?? [])], {
+      stdio: ["pipe", "pipe", "inherit"],
+    })
+  } catch (err) {
+    throw new HelperExitedError(null, null, err instanceof Error ? err.message : String(err))
+  }
   return new HelperConnection(child, opts)
 }
 

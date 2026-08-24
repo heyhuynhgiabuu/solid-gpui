@@ -22,13 +22,20 @@ Seam under test: real child process over stdio — helper `--stdio` mode
 wire type added to the shared protocol (fixture-parity both sides).
 Transport decision: stdio v1 (UDS deferred until measured) — announced to user.
 
-- [ ] RED: Rust stdio integration test (spawn binary, ack/error lines, EOF exit 0)
-- [ ] GREEN: protocol crate `Reply` + fixture parity; helper `--stdio` loop
-- [ ] RED: TS reply-decode test + client tests (module absent)
-- [ ] GREEN: `decodeReply` in protocol pkg; `@solid-gpui/client` implementation
-- [ ] Node compatibility smoke (same client code under node, per plan)
+- [x] RED: Rust stdio integration test (spawn binary, ack/error lines, EOF exit 0)
+- [x] GREEN: protocol crate `Reply` + fixture parity; helper `--stdio` loop
+- [x] RED: TS reply-decode test + client tests (module absent)
+- [x] GREEN: `decodeReply` in protocol pkg; `@solid-gpui/client` implementation
+- [x] Node compatibility smoke — NODE SMOKE OK under Node 24 (tsx + root tsconfig
+      paths; bun workspaces emit no node_modules links; import.meta.dir avoided)
 - [ ] VERIFY: all tests (bun ×2 pkgs, cargo ×2 crates), typecheck, clippy, fmt;
       commit; independent review before closing
+
+Run report (2026-08-24): RED observed all four stages (rust stdio test fail on
+missing mode; TS module-not-found ×2). GREEN: bun protocol 20/20, bun client 3/3
+(real child), cargo 6 suites ok (stdio integration 1/1), tsc ×2 clean, clippy clean,
+NODE SMOKE OK. Commit bf02123. Reviewer mt6wo1j7-380b running; slice stays active
+until verdict; fixes (if any) before closing.
 
 Cross-ref: PLAN.md#2026-08-24---solid--gpui-oss-repo-spec-frozen-2026-08-24-after-q1q3
 

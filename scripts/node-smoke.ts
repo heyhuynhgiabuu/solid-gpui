@@ -25,4 +25,22 @@ await helper.close()
 const exit = await helper.exited
 if (exit.code !== 0) throw new Error(`helper exited ${exit.code}`)
 
+// Spawn-failure regression (Node-specific path: async 'error' event must not
+// crash the process; exited must settle with the spawn error).
+const failed = spawnHelper({ binary: "/nonexistent/solid-gpui-helper" })
+const failedExit = await failed.exited
+if (failedExit.code !== null || failedExit.signal !== null || !failedExit.error) {
+  throw new Error(`spawn failure must surface error info, got ${JSON.stringify(failedExit)}`)
+}
+await expectReject(failed.sendBatch(decoded.value))
+
 console.log("NODE SMOKE OK — ack", JSON.stringify(ack), "exit", JSON.stringify(exit))
+
+async function expectReject(p: Promise<unknown>): Promise<void> {
+  try {
+    await p
+  } catch {
+    return
+  }
+  throw new Error("expected rejection")
+}

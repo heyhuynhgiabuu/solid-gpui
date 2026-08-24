@@ -5,6 +5,8 @@
 use std::io::{BufRead, BufReader, Write};
 use std::process::{Command, Stdio};
 
+use solid_gpui_protocol::{from_json, to_json};
+
 fn skip() -> bool {
     std::env::var("SOLID_GPUI_SKIP_GUI_TESTS").is_ok()
 }
@@ -26,14 +28,16 @@ fn stdio_round_trip_ack_and_error() {
     let stdout = child.stdout.take().expect("stdout piped");
     let mut reader = BufReader::new(stdout);
 
-    // 1. A valid batch (the shared fixture) must be acked with seq + count.
-    let fixture = std::fs::read_to_string(
+    // 1. A valid batch (the shared fixture, compacted losslessly via the
+    //    protocol's own encoder — a naive whitespace strip would corrupt the
+    //    UTF-8 string contents) must be acked with seq + count.
+    let fixture_raw = std::fs::read_to_string(
         std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
             .join("../../packages/protocol/fixtures/batch-01.json"),
     )
     .expect("fixture readable");
-    let oneline = fixture.replace(['\n', ' '], "");
-    writeln!(stdin, "{oneline}").expect("write batch line");
+    let fixture = to_json(&from_json(&fixture_raw).expect("fixture parses"));
+    writeln!(stdin, "{fixture}").expect("write batch line");
     stdin.flush().expect("flush");
 
     let mut line = String::new();
