@@ -192,9 +192,13 @@ status: active
 - [x] S7a Wire into HostView::render (measures build_element wall time);
       SOLID_GPUI_DEBUG_OVERLAY=1 paints stats block bottom-left via native
       gpui styling (no StyleValue protocol change); overlay run verified no-crash
-- [ ] S7b Wire command family extension: {"type":"command","command":
-      "getStats"} -> Reply carrying stats JSON; TS decoder parity + fixture
-- [ ] S7b captureFrame {path} command: helper writes PNG of its own window
+- [x] S7b Wire command family: type field carries the command name
+      ({"type":"getStats","seq":N} / {"type":"captureFrame","seq","path"});
+      Reply gains Result{seq,value}; ReplyCode gains unsupported +
+      unknownCommand; TS decodeCommand/encodeCommand + client sendCommand
+      with seq correlation; fixtures parsed by BOTH languages (d1b3520)
+- [x] S7b captureFrame {path} command: helper grabs own window by pid via
+      xcap and writes PNG; verified end-to-end in stdio_window test
 - [ ] S7c bun perf harness: mount 200-row tree, drive N updates through
       window-mode helper, assert p95 build-ms budget via getStats
 - [ ] VERIFY: all suites green; commit per sub-slice; independent review
