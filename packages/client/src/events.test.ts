@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import type { SolidGpuiEvent } from "@solid-gpui/protocol"
-import { spawnHelper } from "./index"
+import { ReplyError, spawnHelper } from "./index"
 
 const fake = new URL("./__fixtures__/fake-helper.sh", import.meta.url).pathname
 
@@ -28,19 +28,16 @@ describe("sendCommand", () => {
     await helper.close()
   })
 
-  test("captureFrame resolves with path metadata", async () => {
-    // The fake ignores captureFrame lines, so this asserts only that the
-    // command does not resolve via the batch/event paths — use getStats
-    // semantics instead: send captureFrame and expect it to stay pending
-    // until close() rejects it.
+  test("command failure (error reply) rejects sendCommand with ReplyError", async () => {
     const helper = spawnHelper({ binary: fake, args: [] })
-    const pending = helper.sendCommand({
-      type: "captureFrame",
-      seq: 2,
-      path: "/tmp/x.png",
-    })
-    pending.catch(() => {}) // no unhandled rejection noise
+    const err = await helper
+      .sendCommand({ type: "captureFrame", seq: 2, path: "/tmp/x.png" })
+      .then(
+        () => null,
+        (e) => e,
+      )
+    expect(err).toBeInstanceOf(ReplyError)
+    expect((err as ReplyError).code).toBe("unsupported")
     await helper.close()
-    await expect(pending).rejects.toThrow()
   })
 })

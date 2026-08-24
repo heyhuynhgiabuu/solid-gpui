@@ -81,15 +81,29 @@ type Pending = {
 
 type EventListener = (event: SolidGpuiEvent) => void
 
-type CommandPending = {
-  resolve: (value: JsonValue) => void
-  reject: (err: Error) => void
-}
+/**
+ * ONE seq namespace across batches AND commands: the helper echoes whatever
+ * seq a request carried, and error replies carry only that seq — so two
+ * separate counters could cross-resolve each other's failures. Callers pick
+ * disjoint ranges (the Solid renderer owns the batch counter from 1; ad-hoc
+ * commands should stay far away from it).
+ */
+type PendingEntry =
+  | {
+      kind: "batch"
+      resolve: (ack: Ack) => void
+      reject: (err: Error) => void
+    }
+  | {
+      kind: "command"
+      resolve: (value: JsonValue) => void
+      reject: (err: Error) => void
+    }
 
 class HelperConnection {
   private readonly pending = new Map<number, Pending>()
   private readonly eventListeners: EventListener[] = []
-  private readonly pendingCommands = new Map<number, CommandPending>()
+
   private closed = false
   private exitInfo: ExitInfo | null = null
   private exitedResolve!: (info: ExitInfo) => void
@@ -144,15 +158,16 @@ class HelperConnection {
     }
     const reply = r.value
     if (reply.type === "result") {
-      const p = this.pendingCommands.get(reply.seq)
-      this.pendingCommands.delete(reply.seq)
-      p?.resolve(reply.value)
+      const p = this.pending.get(reply.seq)
+      this.pending.delete(reply.seq)
+      if (p?.kind === "command") p.resolve(reply.value)
       return
     }
     if (reply.type === "ack") {
       const p = this.pending.get(reply.seq)
       this.pending.delete(reply.seq)
-      p?.resolve({ seq: reply.seq, applied: reply.applied })
+      // An ack can only answer a batch; anything else is a helper bug.
+      if (p?.kind === "batch") p.resolve({ seq: reply.seq, applied: reply.applied })
       return
     }
     if (reply.seq !== null) {
@@ -172,10 +187,6 @@ class HelperConnection {
       p.reject(new HelperExitedError(code, signal, error?.message))
     }
     this.pending.clear()
-    for (const p of this.pendingCommands.values()) {
-      p.reject(new HelperExitedError(code, signal, error?.message))
-    }
-    this.pendingCommands.clear()
     this.exitedResolve(this.exitInfo)
   }
 
@@ -208,7 +219,7 @@ class HelperConnection {
       }
       // Set after a successful write so a throwing write leaves no stale entry;
       // the ack cannot arrive before the next event-loop turn.
-      this.pending.set(batch.seq, { resolve, reject })
+      this.pending.set(batch.seq, { kind: "batch", resolve, reject })
     })
   }
 
@@ -226,9 +237,11 @@ class HelperConnection {
         ),
       )
     }
-    if (this.pendingCommands.has(command.seq)) {
+    if (this.pending.has(command.seq)) {
       return Promise.reject(
-        new Error(`sendCommand: seq ${command.seq} is already in flight`),
+        new Error(
+          `sendCommand: seq ${command.seq} is already in flight; batches and commands share one seq namespace`,
+        ),
       )
     }
     return new Promise<JsonValue>((resolve, reject) => {
@@ -240,7 +253,7 @@ class HelperConnection {
       }
       // Set after a successful write; the reply cannot arrive before the next
       // event-loop turn.
-      this.pendingCommands.set(command.seq, { resolve, reject })
+      this.pending.set(command.seq, { kind: "command", resolve, reject })
     })
   }
 

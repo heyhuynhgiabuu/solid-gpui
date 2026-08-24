@@ -240,5 +240,29 @@
     "reportedStatus": "success",
     "resultValid": true,
     "completedAt": 1787576269125
+  },
+  {
+    "id": "mt7b8ukc-fc18",
+    "agentType": "reviewer",
+    "description": "Review S7 instrumentation slice",
+    "sessionName": "task-mt7b8ukc-fc18",
+    "startedAt": 1787580454232,
+    "paneId": "w3:pDW",
+    "handle": {
+      "backend": "herdr",
+      "resourceId": "w3:pDW",
+      "socketPath": "/Users/huynhgiabuu/.config/herdr/herdr.sock",
+      "terminalId": "term_659cb81b784d32b",
+      "agentName": "reviewer-mt7b8ukc",
+      "foregroundProcessGroupId": 39348
+    },
+    "piDir": "/Users/huynhgiabuu/dev/projects/solid-gpui/.pi",
+    "dir": "/Users/huynhgiabuu/dev/projects/solid-gpui/.pi/artifacts/tasks",
+    "cwd": "/Users/huynhgiabuu/dev/projects/solid-gpui",
+    "status": "done",
+    "background": true,
+    "reportedStatus": "failure",
+    "resultValid": true,
+    "completedAt": 1787581117790
   }
 ]
