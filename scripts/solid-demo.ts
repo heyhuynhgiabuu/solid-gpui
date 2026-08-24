@@ -46,9 +46,9 @@ const dispose = mount(() => {
         },
         onClick: () => setCount((c) => c + 1),
       },
-      "increment (no-op until events land)",
+      "increment (click me — events work!)",
     ),
-    h("div", { style: { fontSize: 12, color: "#6c7086" } }, "solid-gpui slice 5 demo"),
+    h("div", { style: { fontSize: 12, color: "#6c7086" } }, "solid-gpui slice 6 demo"),
   )
   return label
 }, renderer.createElement("#root"))
@@ -56,14 +56,17 @@ const dispose = mount(() => {
 await flush()
 console.log("mounted; initial ack done")
 
-// Drive a few signal updates — each should cross as ONE setText mutation.
-for (let i = 0; i < 3; i++) {
-  await new Promise((r) => setTimeout(r, 1200))
-  setCount((c) => c + 1)
-  setPressed((p) => !p)
-  await flush()
-  console.log("tick", i)
-}
+// Slice 6: keep the window open so the button can be clicked for real. Each
+// click crosses IPC as an event line and comes back through onEvent.
+connection.onEvent((ev) => {
+  console.log(`event: ${ev.eventType} on #${ev.id} at (${ev.x ?? "?"}, ${ev.y ?? "?"})`)
+})
+console.log("click the button in the window; Ctrl+C here to exit")
+
+const untilInterrupted = new Promise<void>((resolve) => {
+  process.on("SIGINT", () => resolve())
+})
+await untilInterrupted
 
 dispose()
 await flush()

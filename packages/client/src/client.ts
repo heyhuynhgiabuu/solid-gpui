@@ -3,10 +3,12 @@ import { createInterface } from "node:readline"
 import { resolve } from "node:path"
 import { fileURLToPath } from "node:url"
 import {
+  decodeEvent,
   decodeReply,
   encodeBatch,
   type ErrorReply,
   type MutationBatch,
+  type SolidGpuiEvent,
 } from "@solid-gpui/protocol"
 
 /** Ack for one applied batch.
@@ -62,7 +64,6 @@ export interface HelperOptions {
   /** Error replies we cannot correlate to a pending seq. */
   readonly onUnmatchedReply?: (reply: ErrorReply) => void
 }
-
 function defaultBinary(): string {
   // Runtime-agnostic equivalent of import.meta.dir (works in Bun and Node).
   const here = fileURLToPath(new URL(".", import.meta.url))
@@ -74,8 +75,11 @@ type Pending = {
   reject: (err: Error) => void
 }
 
+type EventListener = (event: SolidGpuiEvent) => void
+
 class HelperConnection {
   private readonly pending = new Map<number, Pending>()
+  private readonly eventListeners: EventListener[] = []
   private closed = false
   private exitInfo: ExitInfo | null = null
   private exitedResolve!: (info: ExitInfo) => void
@@ -104,8 +108,15 @@ class HelperConnection {
 
   private onLine(line: string): void {
     if (!line.trim()) return
+    // Demultiplex by wire family: replies answer batches (correlated by seq);
+    // events are async user input pushed between batches.
     const r = decodeReply(line)
     if (!r.ok) {
+      const e = decodeEvent(line)
+      if (e.ok) {
+        for (const listener of this.eventListeners) listener(e.value)
+        return
+      }
       const message = `undecodable reply line: ${JSON.stringify(r.error)}`
       if (this.opts.onUnmatchedReply) {
         this.opts.onUnmatchedReply({
@@ -179,6 +190,15 @@ class HelperConnection {
       // the ack cannot arrive before the next event-loop turn.
       this.pending.set(batch.seq, { resolve, reject })
     })
+  }
+
+  /** Subscribe to helper→JS input events (clicks). Returns an unsubscribe fn. */
+  onEvent(listener: EventListener): () => void {
+    this.eventListeners.push(listener)
+    return () => {
+      const i = this.eventListeners.indexOf(listener)
+      if (i >= 0) this.eventListeners.splice(i, 1)
+    }
   }
 
   /** Signal-death (SIGTERM) — for tests and manual teardown. */

@@ -1,10 +1,11 @@
 //! HostView: the GPUI view that renders the retained tree each frame.
 
 use gpui::{
-    AnyElement, Context, Div, IntoElement, ParentElement, Render, Rgba, SharedString, Styled,
-    Window, div, px, rgb, rgba,
+    AnyElement, Context, Div, InteractiveElement, IntoElement, ParentElement, Render, Rgba,
+    SharedString, StatefulInteractiveElement, Styled, Window, div, px, rgb, rgba,
 };
-use solid_gpui_protocol::{ElementId, ElementType, RetainedTree, StyleValue};
+use solid_gpui_protocol::{ElementId, ElementType, Event, RetainedTree, StyleValue};
+use std::io::Write;
 
 pub struct HostView {
     pub tree: RetainedTree,
@@ -16,12 +17,33 @@ impl HostView {
             tree: RetainedTree::new(),
         }
     }
+
+    /// Push a click event to the JS side as one NDJSON line. The process-
+    /// global stdout lock serializes this with the stdin thread's writes.
+    fn emit_click(&self, id: ElementId, event: &gpui::ClickEvent) {
+        let (x, y) = match event {
+            gpui::ClickEvent::Mouse(m) => (
+                Some(m.up.position.x.to_f64()),
+                Some(m.up.position.y.to_f64()),
+            ),
+            _ => (None, None),
+        };
+        let line = solid_gpui_protocol::event_to_json(&Event::Click {
+            id,
+            event_type: solid_gpui_protocol::EventType::Click,
+            x,
+            y,
+        });
+        let mut out = std::io::stdout().lock();
+        let _ = writeln!(out, "{line}");
+        let _ = out.flush();
+    }
 }
 
 impl Render for HostView {
-    fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         match self.tree.root() {
-            Some(root) => build_element(&self.tree, root),
+            Some(root) => build_element(&self.tree, root, cx),
             // No root yet: dark placeholder keeps the window alive pre-mount.
             None => div().size_full().bg(rgb(0x1e1e2e)).into_any_element(),
         }
@@ -31,7 +53,7 @@ impl Render for HostView {
 /// Map one retained node to a GPUI element. Unknown style keys/values are
 /// ignored (forward compatibility — see protocol StyleMap docs). Text nodes
 /// render as plain GPUI text children.
-fn build_element(tree: &RetainedTree, id: ElementId) -> AnyElement {
+fn build_element(tree: &RetainedTree, id: ElementId, cx: &mut Context<HostView>) -> AnyElement {
     let Some(node) = tree.get(id) else {
         return div().into_any_element();
     };
@@ -43,7 +65,19 @@ fn build_element(tree: &RetainedTree, id: ElementId) -> AnyElement {
         el = apply_style(el, key, value);
     }
     for child in &node.children {
-        el = el.child(build_element(tree, *child));
+        el = el.child(build_element(tree, *child, cx));
+    }
+    // Interactive elements must be stateful in gpui (.id()) for hit testing;
+    // cx.listener routes the click back into this view's event emission.
+    if node
+        .listeners
+        .contains(&solid_gpui_protocol::EventType::Click)
+    {
+        // .id() requires `Into<ElementId>`: usize maps to ElementId::Integer.
+        let listener = cx.listener(move |view, event: &gpui::ClickEvent, _window, _cx| {
+            view.emit_click(id, event);
+        });
+        return el.id(id.0 as usize).on_click(listener).into_any_element();
     }
     el.into_any_element()
 }

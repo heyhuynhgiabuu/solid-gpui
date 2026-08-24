@@ -207,8 +207,52 @@ pub fn reply_to_json(reply: &Reply) -> String {
 }
 
 /// Parse one reply line (used by the JS-side contract tests via fixtures;
-/// the TS client has its own decoder).
+/// the TS client decodes independently).
 pub fn reply_from_json(s: &str) -> Result<Reply, ProtocolError> {
+    serde_json::from_str(s).map_err(|e| ProtocolError::InvalidJson {
+        message: e.to_string(),
+    })
+}
+
+/// Helper→JS asynchronous input event (NOT a reply to any batch — events are
+/// pushed whenever the user interacts, between batches).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "type")]
+pub enum Event {
+    #[serde(rename = "event", rename_all = "camelCase")]
+    Click {
+        id: ElementId,
+        event_type: EventType,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        x: Option<f64>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        y: Option<f64>,
+    },
+}
+
+impl Event {
+    /// The element the event targets.
+    pub fn element_id(&self) -> ElementId {
+        match self {
+            Event::Click { id, .. } => *id,
+        }
+    }
+
+    /// The event type discriminator (mirrors the wire's `eventType`).
+    pub fn event_type(&self) -> EventType {
+        match self {
+            Event::Click { .. } => EventType::Click,
+        }
+    }
+}
+
+/// Serialize an event to one JSON line. Infallible for this type shape.
+pub fn event_to_json(event: &Event) -> String {
+    serde_json::to_string(event).expect("serializing a plain data event cannot fail")
+}
+
+/// Parse one event line (contract tests; the TS client decodes independently).
+pub fn event_from_json(s: &str) -> Result<Event, ProtocolError> {
     serde_json::from_str(s).map_err(|e| ProtocolError::InvalidJson {
         message: e.to_string(),
     })

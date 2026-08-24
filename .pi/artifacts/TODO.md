@@ -13,6 +13,30 @@ status: done (2026-08-24 — Q1–Q3 decided, spec frozen; community probe moved
 - [x] Freeze Phase 1 spec + slices in PLAN.md after Q1–Q3 (spec frozen 2026-08-24)
 - [ ] Community probe (r/solidjs, Solid Discord) — user action, parallel to Phase 1
 
+### 2026-08-24 - Slice 6: event backchannel (GPUI clicks → Solid handlers)
+status: active
+
+Seam under test: protocol `Event` wire type (fixture parity both sides) →
+helper window mode attaches gpui on_click per retained listeners and emits
+NDJSON events on stdout → client demultiplexes lines (reply vs event) and
+routes to the renderer handler registry → Solid onClick actually fires.
+Demo: counter button increments for real; bun --hot remount pattern.
+
+- [ ] RED: Rust event fixture parity + TS decodeEvent tests (absent)
+- [ ] GREEN: protocol Event type (Rust+TS); helper emits clicks via cx.listener
+- [ ] RED: client event-routing test (fake helper emitting an event line)
+- [ ] GREEN: client demultiplex (decodeReply ↔ decodeEvent) + onEvent callback
+      wired into @solid-gpui/solid render() registry
+- [ ] Demo: user clicks increment the count in the GPUI window
+- [ ] VERIFY: all suites green, tsc, clippy/fmt; commit; independent review
+
+Design notes: events are async server-push (not request/response) — separate
+wire family from Reply; helper writes directly under the global stdout lock;
+client tries decodeReply then decodeEvent per line. bun --hot remount works via
+setRoot-replace semantics (previous root destroyed on second mount).
+
+Cross-ref: PLAN.md#2026-08-24---solid--gpui-oss-repo-spec-frozen-2026-08-24-after-q1q3
+
 ### 2026-08-24 - Slice 5: Solid renderer (@solid-gpui/solid)
 status: done (2026-08-24, commits 250e7e2 + review fixes b8e5c42)
 

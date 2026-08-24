@@ -14,5 +14,7 @@ export type {
 } from "./mutation"
 export { decodeBatch, encodeBatch } from "./batch"
 export type { MutationBatch, ProtocolError, Result } from "./batch"
+export { decodeEvent } from "./event"
+export type { SolidGpuiEvent } from "./event"
 export { decodeReply } from "./reply"
 export type { ErrorReply, Reply, ReplyCode } from "./reply"

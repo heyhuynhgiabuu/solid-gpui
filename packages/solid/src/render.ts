@@ -29,6 +29,19 @@ export async function render(
       // Route through the client's per-seq correlation; ReplyError propagates.
       return connection.sendBatch(batch)
     })
+  // Event backchannel: helper clicks → handler registry lookup → invoke.
+  // Handlers are keyed `${id}:${eventType}` by the renderer's mutation apply.
+  connection.onEvent((event) => {
+    const fn = handler(event.id, event.eventType)
+    if (fn === undefined) {
+      console.warn(
+        `[solid-gpui] no handler for ${event.eventType} on element ${event.id} ` +
+          `(stale node or missing listener?)`,
+      )
+      return
+    }
+    fn()
+  })
   const container = renderer.createElement("#root")
   const dispose = render(code, container)
   await flush()

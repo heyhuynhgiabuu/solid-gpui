@@ -1,6 +1,6 @@
 use solid_gpui_protocol::{
-    ApplyError, Mutation, MutationBatch, MutationHandler, ProtocolError, Reply, ReplyCode,
-    from_json, reply_from_json, reply_to_json, to_json,
+    ApplyError, Event, EventType, Mutation, MutationBatch, MutationHandler, ProtocolError, Reply,
+    ReplyCode, event_from_json, event_to_json, from_json, reply_from_json, reply_to_json, to_json,
 };
 use std::fs;
 
@@ -105,6 +105,50 @@ fn error_reply_round_trips() {
     let json = reply_to_json(&reply);
     assert_eq!(reply_from_json(&json).unwrap(), reply);
     assert!(json.contains(r#""code":"decodeFailed""#));
+}
+
+#[test]
+fn event_fixture_parses_and_emits_exactly() {
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../packages/protocol/fixtures/event-01.json");
+    let raw = fs::read_to_string(path)
+        .expect("fixture readable")
+        .trim()
+        .to_string();
+    let event = event_from_json(&raw).expect("event parses");
+    assert_eq!(
+        event,
+        Event::Click {
+            id: 3.into(),
+            event_type: EventType::Click,
+            x: Some(12.5),
+            y: Some(40.0),
+        }
+    );
+    assert_eq!(event_to_json(&event), raw);
+}
+
+#[test]
+fn click_event_without_position_omits_nulls_on_wire() {
+    let json = event_to_json(&Event::Click {
+        id: 9.into(),
+        event_type: EventType::Click,
+        x: None,
+        y: None,
+    });
+    assert!(
+        !json.contains("null"),
+        "None positions must be omitted: {json}"
+    );
+    assert_eq!(
+        event_from_json(&json).unwrap(),
+        Event::Click {
+            id: 9.into(),
+            event_type: EventType::Click,
+            x: None,
+            y: None,
+        }
+    );
 }
 
 #[test]
