@@ -70,7 +70,11 @@ fn main() {
                 window_bounds: Some(WindowBounds::Windowed(bounds)),
                 ..Default::default()
             },
-            |_, cx| cx.new(|_| HelperView { label: "solid-gpui".into() }),
+            |_, cx| {
+                cx.new(|_| HelperView {
+                    label: "solid-gpui".into(),
+                })
+            },
         )
         .unwrap();
         cx.activate(true);
