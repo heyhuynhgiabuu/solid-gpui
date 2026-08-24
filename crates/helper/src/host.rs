@@ -3,10 +3,39 @@
 use crate::frame_stats::FrameStats;
 use gpui::{
     AnyElement, Context, Div, InteractiveElement, IntoElement, ParentElement, Render, Rgba,
-    SharedString, StatefulInteractiveElement, Styled, Window, div, px, rgb, rgba,
+    ScrollHandle, SharedString, StatefulInteractiveElement, Styled, Window, div, px, rgb, rgba,
 };
 use solid_gpui_protocol::{ElementId, ElementType, Event, RetainedTree, StyleValue};
+use std::cell::RefCell;
+use std::collections::HashMap;
 use std::io::Write;
+use std::rc::Rc;
+
+/// Live scroll handles for scrollable nodes, keyed by element id. Lazy-created
+/// at render; pruned in [`HostView::render`] once the tree drops the id. Rc /
+/// RefCell because `build_element` reaches them through a `&Context`, not a
+/// `&mut HostView`.
+type ScrollHandles = Rc<RefCell<HashMap<ElementId, ScrollHandle>>>;
+
+/// Which axes scroll for the `overflow` style key. Closed set — single source
+/// of truth so the renderer and the protocol docs agree (AGENTS invariant 1).
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+enum ScrollAxis {
+    X,
+    Y,
+    Both,
+}
+
+/// Parse the `overflow` style value into scroll axes; unknown values are
+/// ignored (style keys are forward-compatible).
+fn parse_overflow(value: &StyleValue) -> Option<ScrollAxis> {
+    match value.as_str() {
+        Some("scroll") => Some(ScrollAxis::Both),
+        Some("scrollX") => Some(ScrollAxis::X),
+        Some("scrollY") => Some(ScrollAxis::Y),
+        _ => None,
+    }
+}
 
 pub struct HostView {
     pub tree: RetainedTree,
@@ -14,6 +43,7 @@ pub struct HostView {
     stats: FrameStats,
     /// SOLID_GPUI_DEBUG_OVERLAY=1 paints frame stats into the window.
     overlay: bool,
+    scroll_handles: ScrollHandles,
 }
 
 impl HostView {
@@ -22,6 +52,7 @@ impl HostView {
             tree: RetainedTree::new(),
             stats: FrameStats::new(),
             overlay: std::env::var("SOLID_GPUI_DEBUG_OVERLAY").is_ok_and(|v| v == "1"),
+            scroll_handles: Rc::new(RefCell::new(HashMap::new())),
         }
     }
 
@@ -69,8 +100,15 @@ impl HostView {
 impl Render for HostView {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let started = std::time::Instant::now();
+        // Drop handles for ids the tree no longer holds (destroyed/moved).
+        // Clone the Rc first so the retain closure can borrow `self.tree`
+        // while the RefCell is borrowed (disjoint fields via one borrow).
+        let handles = self.scroll_handles.clone();
+        handles
+            .borrow_mut()
+            .retain(|id, _| self.tree.get(*id).is_some());
         let mut content = match self.tree.root() {
-            Some(root) => build_element(&self.tree, root, cx),
+            Some(root) => build_element(&self.tree, root, cx, &self.scroll_handles),
             // No root yet: dark placeholder keeps the window alive pre-mount.
             None => div().size_full().bg(rgb(0x1e1e2e)).into_any_element(),
         };
@@ -122,7 +160,12 @@ impl Render for HostView {
 /// Map one retained node to a GPUI element. Unknown style keys/values are
 /// ignored (forward compatibility — see protocol StyleMap docs). Text nodes
 /// render as plain GPUI text children.
-fn build_element(tree: &RetainedTree, id: ElementId, cx: &mut Context<HostView>) -> AnyElement {
+fn build_element(
+    tree: &RetainedTree,
+    id: ElementId,
+    cx: &mut Context<HostView>,
+    handles: &ScrollHandles,
+) -> AnyElement {
     let Some(node) = tree.get(id) else {
         return div().into_any_element();
     };
@@ -134,19 +177,36 @@ fn build_element(tree: &RetainedTree, id: ElementId, cx: &mut Context<HostView>)
         el = apply_style(el, key, value);
     }
     for child in &node.children {
-        el = el.child(build_element(tree, *child, cx));
+        el = el.child(build_element(tree, *child, cx, handles));
     }
-    // Interactive elements must be stateful in gpui (.id()) for hit testing;
-    // cx.listener routes the click back into this view's event emission.
-    if node
+
+    // Interactive elements must be stateful in gpui (.id()) for hit testing
+    // (scroll gestures and clicks both route through interactivity). Element
+    // ids are unique per tree, so one .id() serves both roles.
+    let axis = node.style.get("overflow").and_then(parse_overflow);
+    let has_click = node
         .listeners
-        .contains(&solid_gpui_protocol::EventType::Click)
-    {
-        // .id() requires `Into<ElementId>`: usize maps to ElementId::Integer.
+        .contains(&solid_gpui_protocol::EventType::Click);
+    if axis.is_none() && !has_click {
+        return el.into_any_element();
+    }
+
+    // .id() requires `Into<ElementId>`: usize maps to ElementId::Integer.
+    let mut el = el.id(id.0 as usize);
+    if let Some(axis) = axis {
+        let handle = handles.borrow_mut().entry(id).or_default().clone();
+        el = el.track_scroll(&handle);
+        el = match axis {
+            ScrollAxis::X => el.overflow_x_scroll(),
+            ScrollAxis::Y => el.overflow_y_scroll(),
+            ScrollAxis::Both => el.overflow_scroll(),
+        };
+    }
+    if has_click {
         let listener = cx.listener(move |view, event: &gpui::ClickEvent, _window, _cx| {
             view.emit_click(id, event);
         });
-        return el.id(id.0 as usize).on_click(listener).into_any_element();
+        el = el.on_click(listener);
     }
     el.into_any_element()
 }
@@ -233,13 +293,9 @@ fn apply_style(mut el: Div, key: &str, value: &StyleValue) -> Div {
                 el = el.justify_center();
             }
         }
-        "overflow" => {
-            // v1: gpui scrolling is a dedicated scrollable element, not a style;
-            // clip for now — real scroll arrives with the scroll element slice.
-            if value.as_str() == Some("scroll") {
-                el = el.overflow_y_hidden();
-            }
-        }
+        // NOTE: `overflow` is intentionally absent here — its scroll behavior
+        // needs the stateful element (.overflow_*_scroll lives on
+        // Stateful<Div>), so build_element wires it via parse_overflow.
         "cursor" => {
             if value.as_str() == Some("pointer") {
                 el = el.cursor_pointer();
@@ -315,5 +371,28 @@ mod tests {
         assert!(parse_color(&StyleValue::Text("red".into())).is_none());
         assert!(parse_color(&StyleValue::Text("#12345".into())).is_none());
         assert!(parse_color(&StyleValue::Number(5.into())).is_none());
+    }
+
+    #[test]
+    fn overflow_axis_closed_set() {
+        assert_eq!(
+            parse_overflow(&StyleValue::Text("scroll".into())),
+            Some(ScrollAxis::Both)
+        );
+        assert_eq!(
+            parse_overflow(&StyleValue::Text("scrollX".into())),
+            Some(ScrollAxis::X)
+        );
+        assert_eq!(
+            parse_overflow(&StyleValue::Text("scrollY".into())),
+            Some(ScrollAxis::Y)
+        );
+    }
+
+    #[test]
+    fn overflow_unknown_values_ignored() {
+        assert_eq!(parse_overflow(&StyleValue::Text("auto".into())), None);
+        assert_eq!(parse_overflow(&StyleValue::Text("hidden".into())), None);
+        assert_eq!(parse_overflow(&StyleValue::Number(1.into())), None);
     }
 }

@@ -13,6 +13,10 @@ export type StyleValue = string | number
  * ignore style keys it does not know instead of rejecting the whole batch
  * (forward compatibility). The closed union only governs what the renderer
  * may author.
+ *
+ * `overflow` takes a closed value set: "scroll" (both axes), "scrollX",
+ * "scrollY". Unknown values are ignored exactly like unknown keys — the
+ * renderer never clips content that overflow ("hidden" is not supported).
  */
 export type StyleKey =
   | "width"

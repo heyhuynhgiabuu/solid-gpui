@@ -128,3 +128,45 @@ fn window_mode_answers_getstats_and_captureframe() {
     let status = child.wait().expect("wait");
     assert_eq!(status.code(), Some(0), "EOF must exit 0");
 }
+
+#[test]
+fn window_mode_mounts_scroll_container() {
+    if skip() {
+        return;
+    }
+    let bin = env!("CARGO_BIN_EXE_solid-gpui-helper");
+    let mut child = Command::new(bin)
+        .arg("--stdio-window")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .spawn()
+        .expect("helper spawns");
+
+    let mut stdin = child.stdin.take().expect("stdin piped");
+    let reader = BufReader::new(child.stdout.take().expect("stdout piped"));
+    let mut lines = reader.lines();
+
+    // A 200px scroll container holding a 2000px tall child: exercising the
+    // overflow style mapping + per-element scroll handle allocation.
+    let batch = concat!(
+        r#"{"v":1,"seq":55,"mutations":["#,
+        r#"{"op":"createElement","id":1,"elementType":"div"},"#,
+        r#"{"op":"setRoot","id":1},"#,
+        r#"{"op":"setStyle","id":1,"style":{"overflow":"scroll","height":200}},"#,
+        r#"{"op":"createElement","id":2,"elementType":"div"},"#,
+        r#"{"op":"appendChild","parentId":1,"childId":2},"#,
+        r#"{"op":"setStyle","id":2,"style":{"height":2000}},"#,
+        r#"{"op":"createElement","id":3,"elementType":"text"},"#,
+        r#"{"op":"appendChild","parentId":2,"childId":3},"#,
+        r#"{"op":"setText","id":3,"text":"tall content"}]}"#,
+    );
+    writeln!(stdin, "{batch}").unwrap();
+    stdin.flush().unwrap();
+    let ack = lines.next().unwrap().expect("ack line");
+    assert_eq!(ack, r#"{"type":"ack","seq":55,"applied":9}"#);
+
+    // EOF quits the app cleanly.
+    drop(stdin);
+    let status = child.wait().expect("wait");
+    assert_eq!(status.code(), Some(0), "EOF must exit 0");
+}
