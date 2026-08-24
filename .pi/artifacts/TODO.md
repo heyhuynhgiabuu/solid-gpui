@@ -13,6 +13,32 @@ status: done (2026-08-24 — Q1–Q3 decided, spec frozen; community probe moved
 - [x] Freeze Phase 1 spec + slices in PLAN.md after Q1–Q3 (spec frozen 2026-08-24)
 - [ ] Community probe (r/solidjs, Solid Discord) — user action, parallel to Phase 1
 
+### 2026-08-24 - Slice 4: retained tree + real GPUI rendering
+status: active
+
+Seam under test: `RetainedTree` apply/validation (pure data, protocol crate,
+no gpui) → helper `--stdio-window` mode (channels: stdin thread ↔ gpui main,
+applied counts real, apply errors become seq-correlated error replies) →
+style-subset mapping → gpui elements → e2e (GUI-gated) + demo script.
+
+Part 4a (this commit):
+- [ ] RED: retained-tree unit tests (apply fixture, error semantics, cycles)
+- [ ] GREEN: `retained` module in protocol crate; cargo tests green
+- [ ] VERIFY: full test suite + clippy/fmt; commit
+
+Part 4b (next):
+- [ ] Helper `--stdio-window`: stdin thread + channels + cx.spawn apply loop
+- [ ] Style subset mapping → gpui elements; repaint via cx.notify()
+- [ ] e2e GUI-gated (bun: fixture ack applied=12; correlated ReplyError test)
+- [ ] Demo script; user visual check; independent review
+
+Semantics decided (documented in retained.rs): child must be parentless on
+append/insert (cycle-proof), removeChild keeps element alive for re-append,
+destroyElement returns destroyed ids, setRoot replaceable (bun --hot remount),
+setText requires text-type element.
+
+Cross-ref: PLAN.md#2026-08-24---solid--gpui-oss-repo-spec-frozen-2026-08-24-after-q1q3
+
 ### 2026-08-24 - Slice 3: stdio NDJSON IPC (JS client ↔ helper)
 status: done (2026-08-24, commits bf02123 + review fixes 89337fe)
 

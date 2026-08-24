@@ -2,10 +2,10 @@
   "v": 1,
   "seq": 42,
   "mutations": [
-    { "op": "setRoot", "id": 1 },
     { "op": "createElement", "id": 1, "elementType": "div" },
     { "op": "createElement", "id": 2, "elementType": "text" },
     { "op": "createElement", "id": 3, "elementType": "div" },
+    { "op": "setRoot", "id": 1 },
     { "op": "appendChild", "parentId": 1, "childId": 2 },
     { "op": "appendChild", "parentId": 1, "childId": 3 },
     { "op": "insertBefore", "parentId": 1, "childId": 3, "beforeId": 2 },

@@ -1,0 +1,276 @@
+//! The retained element tree: protocol mutations applied to owned data.
+//!
+//! Pure data with validation — no gpui, no IO. The helper's GPUI view reads
+//! this tree each frame; the JS side never sees it. Semantics (Slice 4):
+//!
+//! - `appendChild`/`insertBefore` require the child to be parentless (this
+//!   makes cycles structurally impossible; a child is re-parented only by
+//!   `removeChild` first). Appending an element to itself is an error.
+//! - `removeChild` detaches but keeps the element (and its subtree) alive for
+//!   re-append; `destroyElement` permanently removes the subtree and returns
+//!   the destroyed ids (callers clean up event listeners with them).
+//! - `setRoot` requires an existing element and may replace a previous root
+//!   (the `bun --hot` remount pattern swaps roots on a live window).
+//! - `setText` is only valid on text-type elements.
+//! - Destroying the current root clears it; the window shows nothing until a
+//!   new root is set.
+
+use std::collections::{BTreeMap, BTreeSet, HashMap};
+
+use crate::{ApplyError, ElementId, ElementType, EventType, Mutation, StyleMap};
+
+/// One retained host element.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Node {
+    pub element_type: ElementType,
+    pub style: StyleMap,
+    pub text: Option<String>,
+    pub children: Vec<ElementId>,
+    pub parent: Option<ElementId>,
+    pub listeners: BTreeSet<EventType>,
+}
+
+impl Node {
+    fn new(element_type: ElementType) -> Self {
+        Node {
+            element_type,
+            style: BTreeMap::new(),
+            text: None,
+            children: Vec::new(),
+            parent: None,
+            listeners: BTreeSet::new(),
+        }
+    }
+}
+
+/// The retained tree owned by the helper's GPUI view.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct RetainedTree {
+    elements: HashMap<ElementId, Node>,
+    root: Option<ElementId>,
+}
+
+impl RetainedTree {
+    pub fn new() -> Self {
+        RetainedTree::default()
+    }
+
+    pub fn root(&self) -> Option<ElementId> {
+        self.root
+    }
+
+    pub fn get(&self, id: ElementId) -> Option<&Node> {
+        self.elements.get(&id)
+    }
+
+    /// Apply one mutation. Fails without partial side effects on that
+    /// mutation (validated before any write).
+    pub fn apply(&mut self, mutation: &Mutation) -> Result<(), ApplyError> {
+        match mutation {
+            Mutation::CreateElement { id, element_type } => {
+                if self.elements.contains_key(id) {
+                    return Err(ApplyError::InvalidMutation {
+                        message: format!("element {id:?} already exists"),
+                    });
+                }
+                self.elements.insert(*id, Node::new(*element_type));
+                Ok(())
+            }
+            Mutation::DestroyElement { id } => {
+                if !self.elements.contains_key(id) {
+                    return Err(ApplyError::InvalidMutation {
+                        message: format!("destroyElement: no element {id:?}"),
+                    });
+                }
+                self.destroy_subtree(*id)?;
+                Ok(())
+            }
+            Mutation::AppendChild {
+                parent_id,
+                child_id,
+            } => self.attach(*parent_id, *child_id, None),
+            Mutation::RemoveChild {
+                parent_id,
+                child_id,
+            } => {
+                let child = self.child_of(*parent_id, *child_id)?;
+                self.elements
+                    .get_mut(&child.parent.expect("checked parent"))
+                    .unwrap()
+                    .children
+                    .retain(|c| *c != *child_id);
+                self.elements.get_mut(child_id).unwrap().parent = None;
+                Ok(())
+            }
+            Mutation::InsertBefore {
+                parent_id,
+                child_id,
+                before_id,
+            } => self.attach(*parent_id, *child_id, Some(*before_id)),
+            Mutation::SetStyle { id, style } => {
+                let node = self.mut_node(*id, "setStyle")?;
+                node.style = style.clone();
+                Ok(())
+            }
+            Mutation::SetText { id, text } => {
+                let node = self.mut_node(*id, "setText")?;
+                if node.element_type != ElementType::Text {
+                    return Err(ApplyError::InvalidMutation {
+                        message: format!("setText: element {id:?} is not a text element"),
+                    });
+                }
+                node.text = Some(text.clone());
+                Ok(())
+            }
+            Mutation::SetEventListener {
+                id,
+                event_type,
+                enabled,
+            } => {
+                let node = self.mut_node(*id, "setEventListener")?;
+                if *enabled {
+                    node.listeners.insert(*event_type);
+                } else {
+                    node.listeners.remove(event_type);
+                }
+                Ok(())
+            }
+            Mutation::SetRoot { id } => {
+                if !self.elements.contains_key(id) {
+                    return Err(ApplyError::InvalidMutation {
+                        message: format!("setRoot: no element {id:?} to become root"),
+                    });
+                }
+                self.root = Some(*id);
+                Ok(())
+            }
+        }
+    }
+
+    /// Permanently remove `id` and its whole subtree; detaches from its
+    /// parent (or clears the root) first. Returns destroyed ids in
+    /// parent-before-child order.
+    pub fn destroy_subtree(&mut self, id: ElementId) -> Result<Vec<ElementId>, ApplyError> {
+        if !self.elements.contains_key(&id) {
+            return Err(ApplyError::InvalidMutation {
+                message: format!("destroyElement: no element {id:?}"),
+            });
+        }
+        if let Some(parent) = self.elements.get(&id).and_then(|n| n.parent)
+            && let Some(p) = self.elements.get_mut(&parent)
+        {
+            p.children.retain(|c| *c != id);
+        }
+        if self.root == Some(id) {
+            self.root = None;
+        }
+        let mut destroyed = Vec::new();
+        let mut stack = vec![id];
+        while let Some(cur) = stack.pop() {
+            if let Some(node) = self.elements.remove(&cur) {
+                destroyed.push(cur);
+                stack.extend(node.children.iter().copied());
+            }
+        }
+        destroyed.sort_by_key(|_| 0); // stable: keep push order (parent first)
+        Ok(destroyed)
+    }
+
+    /// Shared append/insert. Appending requires the child to be parentless
+    /// (cycles are then structurally impossible; re-parent via `removeChild`
+    /// first). `insertBefore` may additionally REPOSITION a child that already
+    /// belongs to the same parent — DOM insertBefore semantics, exercised by
+    /// the shared fixture. `before` must be an existing child of the parent.
+    fn attach(
+        &mut self,
+        parent_id: ElementId,
+        child_id: ElementId,
+        before_id: Option<ElementId>,
+    ) -> Result<(), ApplyError> {
+        if !self.elements.contains_key(&parent_id) {
+            return Err(ApplyError::InvalidMutation {
+                message: format!("parent {parent_id:?} does not exist"),
+            });
+        }
+        let Some(child) = self.elements.get(&child_id) else {
+            return Err(ApplyError::InvalidMutation {
+                message: format!("child {child_id:?} does not exist"),
+            });
+        };
+        match child.parent {
+            None => {}
+            Some(p) if p == parent_id && before_id.is_some() => {
+                // DOM-style reposition within the same parent: legal for
+                // insertBefore only (appendChild stays strict).
+            }
+            Some(p) => {
+                return Err(ApplyError::InvalidMutation {
+                    message: format!(
+                        "child {child_id:?} already has a parent ({p:?}); removeChild first"
+                    ),
+                });
+            }
+        }
+        if parent_id == child_id {
+            return Err(ApplyError::InvalidMutation {
+                message: format!("element {child_id:?} cannot be appended to itself"),
+            });
+        }
+        let pos = match before_id {
+            None => None,
+            Some(before) => {
+                let parent_node = self.elements.get(&parent_id).expect("checked above");
+                let Some(pos) = parent_node.children.iter().position(|c| *c == before) else {
+                    return Err(ApplyError::InvalidMutation {
+                        message: format!(
+                            "insertBefore: {before:?} is not a child of parent {parent_id:?}"
+                        ),
+                    });
+                };
+                Some(pos)
+            }
+        };
+        {
+            let parent_node = self.elements.get_mut(&parent_id).expect("checked above");
+            // Remove any prior occurrence (reposition case) before inserting.
+            parent_node.children.retain(|c| *c != child_id);
+            match pos {
+                Some(p) => parent_node.children.insert(p, child_id),
+                None => parent_node.children.push(child_id),
+            }
+        }
+        self.elements
+            .get_mut(&child_id)
+            .expect("checked above")
+            .parent = Some(parent_id);
+        Ok(())
+    }
+
+    /// Validate that `child_id` is currently a child of `parent_id`.
+    fn child_of(&self, parent_id: ElementId, child_id: ElementId) -> Result<&Node, ApplyError> {
+        let parent = self
+            .elements
+            .get(&parent_id)
+            .ok_or_else(|| ApplyError::InvalidMutation {
+                message: format!("removeChild: no parent {parent_id:?}"),
+            })?;
+        if !parent.children.contains(&child_id) {
+            return Err(ApplyError::InvalidMutation {
+                message: format!("removeChild: {child_id:?} is not a child of {parent_id:?}"),
+            });
+        }
+        self.elements
+            .get(&child_id)
+            .ok_or_else(|| ApplyError::InvalidMutation {
+                message: format!("removeChild: no child {child_id:?}"),
+            })
+    }
+
+    fn mut_node(&mut self, id: ElementId, op: &str) -> Result<&mut Node, ApplyError> {
+        self.elements
+            .get_mut(&id)
+            .ok_or_else(|| ApplyError::InvalidMutation {
+                message: format!("{op}: no element {id:?}"),
+            })
+    }
+}

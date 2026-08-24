@@ -1,5 +1,4 @@
 //! Mutation wire protocol shared by the JS renderer and the native helper.
-//!
 //! Wire format: UTF-8 JSON objects, one per line (NDJSON) at the transport
 //! layer. This crate owns parsing/emitting only; semantic validation of a
 //! mutation sequence (parent exists, no cycles, single root) belongs to the
@@ -8,6 +7,10 @@
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::fmt;
+
+pub mod retained;
+
+pub use retained::{Node, RetainedTree};
 
 pub const PROTOCOL_VERSION: u32 = 1;
 
@@ -31,6 +34,12 @@ pub const ELEMENT_TYPES: &[&str] = &["div", "text"];
 #[serde(transparent)]
 pub struct ElementId(pub u32);
 
+impl From<u32> for ElementId {
+    fn from(v: u32) -> Self {
+        ElementId(v)
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum ElementType {
@@ -38,7 +47,7 @@ pub enum ElementType {
     Text,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum EventType {
     Click,
@@ -61,6 +70,16 @@ pub enum EventType {
 pub enum StyleValue {
     Number(serde_json::Number),
     Text(String),
+}
+
+impl StyleValue {
+    /// The string form, if this is a text value.
+    pub fn as_str(&self) -> Option<&str> {
+        match self {
+            StyleValue::Text(s) => Some(s),
+            StyleValue::Number(_) => None,
+        }
+    }
 }
 
 pub type StyleMap = BTreeMap<String, StyleValue>;

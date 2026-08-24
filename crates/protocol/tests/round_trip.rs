@@ -28,7 +28,7 @@ fn fixture_parses_and_round_trips() {
     assert_eq!(batch.v, 1);
     assert_eq!(batch.seq, 42);
     assert_eq!(batch.mutations.len(), 12);
-    assert!(matches!(batch.mutations[0], Mutation::SetRoot { .. }));
+    assert!(matches!(batch.mutations[3], Mutation::SetRoot { .. }));
     match &batch.mutations[8] {
         Mutation::SetText { text, .. } => assert_eq!(text, "Xin chào solid-gpui 🎉"),
         other => panic!("expected SetText at index 8, got {other:?}"),
