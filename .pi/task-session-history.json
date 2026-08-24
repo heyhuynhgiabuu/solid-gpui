@@ -47,5 +47,29 @@
     "reportedStatus": "success",
     "resultValid": true,
     "completedAt": 1787553091982
+  },
+  {
+    "id": "mt6v7ido-a63b",
+    "agentType": "scout",
+    "description": "Scout gpui window API",
+    "sessionName": "task-mt6v7ido-a63b",
+    "startedAt": 1787553519175,
+    "paneId": "w3:pD5",
+    "handle": {
+      "backend": "herdr",
+      "resourceId": "w3:pD5",
+      "socketPath": "/Users/huynhgiabuu/.config/herdr/herdr.sock",
+      "terminalId": "term_659c53c3058f814",
+      "agentName": "scout-mt6v7ido",
+      "foregroundProcessGroupId": 68735
+    },
+    "piDir": "/Users/huynhgiabuu/dev/projects/solid-gpui/.pi",
+    "dir": "/Users/huynhgiabuu/dev/projects/solid-gpui/.pi/artifacts/tasks",
+    "cwd": "/Users/huynhgiabuu/dev/projects/solid-gpui",
+    "status": "cancelled",
+    "background": true,
+    "reportedStatus": "unknown",
+    "resultValid": false,
+    "completedAt": 1787553833332
   }
 ]

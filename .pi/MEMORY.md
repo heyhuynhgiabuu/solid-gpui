@@ -48,3 +48,20 @@
   that literally could not compile against the truncated field type (compile-time RED).
 - Consumer guidance from review: style-key values must stay string|number; __proto__-style
   keys are inert today, but widening value types would require Map/defineProperty copies.
+
+## Slice 2 learnings (2026-08-24)
+
+- gpui on zed main (Aug 2026): entry is `gpui_platform::application().run(|cx: &mut App|…)`
+  (NOT crates.io 0.2.2's `Application::new()`). Deps: `gpui` + `gpui_platform` git;
+  macOS feature `font-kit` (real glyphs; without it placeholder text system), Linux later
+  `wayland`+`x11`. Window: `cx.open_window(WindowOptions{window_bounds:Some(WindowBounds::
+  Windowed(bounds)),..Default::default()}, |_,cx| cx.new(|_| View))`. Quit: `cx.quit()` on App.
+  Async: `cx.spawn(async move |cx| …)` with `cx.background_executor().timer(...)`.
+- Cargo git deps auto-discover `gpui`/`gpui_platform` by name across the zed workspace;
+  Cargo.lock pins the resolved commit — reproducible until we deliberately bump.
+- **BLOCKER (env)**: macOS gpui build compiles `shaders.metal` via `xcrun metal`; CLT-only
+  machines (this one, macOS 15.8) lack it AND lack `xcodebuild` to download the Metal
+  toolchain component. Requires full Xcode + `sudo xcode-select -s`. No workaround.
+- Parity contract pattern: Rust `#[ignore]`d generator test writes the snapshot fixture;
+  Rust locks its own emission byte-exact; bun decodes the same snapshot. Rust→TS drift
+  now caught by committed tests on both sides.

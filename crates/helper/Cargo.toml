@@ -1,0 +1,17 @@
+[package]
+name = "solid-gpui-helper"
+description = "Native GPUI window host for solid-gpui (out-of-process helper binary)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+# Stock upstream gpui — no fork, no patches (ADR 002). Cargo.lock pins the
+# exact commit on first resolve.
+gpui = { git = "https://github.com/zed-industries/zed" }
+# macOS: Metal is always available; font-kit enables real glyph rasterization.
+# Linux (Phase 2+): switch to features = ["wayland", "x11"].
+gpui_platform = { git = "https://github.com/zed-industries/zed", features = [
+    "font-kit",
+] }

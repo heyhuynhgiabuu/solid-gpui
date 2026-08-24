@@ -13,6 +13,28 @@ status: done (2026-08-24 — Q1–Q3 decided, spec frozen; community probe moved
 - [x] Freeze Phase 1 spec + slices in PLAN.md after Q1–Q3 (spec frozen 2026-08-24)
 - [ ] Community probe (r/solidjs, Solid Discord) — user action, parallel to Phase 1
 
+### 2026-08-24 - Slice 2: helper binary opens a GPUI window (stock upstream gpui)
+status: active
+
+Seam under test: committed Rust→TS cross-language parity (Rust `to_json` output
+snapshotted in-repo and parsed by bun test) and helper smoke run
+(`solid-gpui-helper --smoke <ms>` opens a window, draws, self-quits, exit 0).
+
+- [x] RED: TS parity test fails (rust-emitted fixture absent) + Rust emission test fails
+- [x] GREEN: generate rust-emitted snapshot from `to_json`; both sides pass (cargo 11/11, bun 15/15; commit 61f65f3)
+- [x] Scout: current gpui API on zed main — done directly from upstream sources:
+      `gpui_platform::application()` entry, macOS feature `font-kit`, examples
+      hello_world.rs / on_window_close_quit.rs / window.rs (spawn syntax)
+- [ ] Helper crate: git dep gpui, `--smoke` mode — code written (crates/helper),
+      **BLOCKED on env: machine has CLT only, no Xcode/Metal toolchain**
+      (`xcrun metal` missing → gpui_apple build script cannot compile shaders.metal;
+      needs full Xcode + `sudo xcode-select -s`, user action)
+- [ ] VERIFY: `cargo test -p solid-gpui-helper` green (smoke exits 0),
+      `cargo run -p solid-gpui-helper -- --smoke 2000` exit 0, user visually
+      confirms window; clippy/fmt; commit
+
+Cross-ref: PLAN.md#2026-08-24---solid--gpui-oss-repo-spec-frozen-2026-08-24-after-q1q3
+
 ### 2026-08-24 - Slice 1: mutation protocol (TS + Rust) with shared fixture
 status: done (2026-08-24, commit c73e89d)
 
