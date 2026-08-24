@@ -30,7 +30,8 @@ snapshotted in-repo and parsed by bun test) and helper smoke run
 - [x] VERIFY: `cargo test -p solid-gpui-helper` 2/2 green (smoke exit 0,
       ≥700ms elapsed), `cargo run -- --smoke 2000` exit 0 in 2.6s; clippy clean
       (zed-tree 'block' future-incompat warning only); fmt; commit 31a97d2.
-      User visual confirmation of the window: pending (asked)
+      User visual confirmation of the window: **confirmed 2026-08-24**
+      (window seen during `--smoke 2000` run). Slice 2 fully done.
 
 Cross-ref: PLAN.md#2026-08-24---solid--gpui-oss-repo-spec-frozen-2026-08-24-after-q1q3
 
