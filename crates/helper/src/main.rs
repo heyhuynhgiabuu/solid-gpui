@@ -87,8 +87,37 @@ fn main() {
 
 /// One decoded-or-failed batch line, sent from the stdin thread to the GPUI
 /// main thread.
+/// (seq, stable name) for error messages about a specific command.
+fn command_ident(command: &solid_gpui_protocol::Command) -> (u32, &'static str) {
+    match command {
+        solid_gpui_protocol::Command::GetStats { seq } => (*seq, "getStats"),
+        solid_gpui_protocol::Command::CaptureFrame { seq, .. } => (*seq, "captureFrame"),
+    }
+}
+
+/// Capture the helper's own window to `path` as PNG (S7b). Matches by process
+/// id so overlapping dev windows of other sessions are never grabbed.
+fn capture_own_window(path: &str) -> Result<serde_json::Value, String> {
+    let me = std::process::id();
+    let win = xcap::Window::all()
+        .map_err(|e| e.to_string())?
+        .into_iter()
+        .find(|w| w.pid().map(|p| p == me as u32).unwrap_or(false))
+        .ok_or_else(|| format!("own window not found (pid {me})"))?;
+    let image = win.capture_image().map_err(|e| e.to_string())?;
+    let width = image.width();
+    let height = image.height();
+    image.save(path).map_err(|e| e.to_string())?;
+    Ok(serde_json::json!({
+        "path": path,
+        "width": width,
+        "height": height,
+    }))
+}
+
 enum Job {
     Batch(solid_gpui_protocol::MutationBatch),
+    Command(solid_gpui_protocol::Command),
     Decode(ProtocolError),
 }
 
@@ -125,10 +154,24 @@ fn run_stdio() -> i32 {
                 seq: batch.seq,
                 applied: batch.mutations.len() as u32,
             },
-            Err(e) => Reply::Error {
-                seq: None,
-                code: ReplyCode::DecodeFailed,
-                message: e.to_string(),
+            Err(batch_err) => match solid_gpui_protocol::command_from_json(&line) {
+                // Commands are GUI-mode features; transport mode has no
+                // window, so every command answers Unsupported.
+                Ok(cmd) => {
+                    let (seq, name) = command_ident(&cmd);
+                    Reply::Error {
+                        seq: Some(seq),
+                        code: ReplyCode::Unsupported,
+                        message: format!(
+                            "{name} requires --stdio-window; transport mode has no window"
+                        ),
+                    }
+                }
+                Err(_) => Reply::Error {
+                    seq: None,
+                    code: ReplyCode::DecodeFailed,
+                    message: batch_err.to_string(),
+                },
             },
         };
         if writeln!(out, "{}", reply_to_json(&reply)).is_err() {
@@ -200,7 +243,14 @@ fn run_stdio_window() {
                 }
                 let job = match solid_gpui_protocol::from_json(&line) {
                     Ok(batch) => Job::Batch(batch),
-                    Err(e) => Job::Decode(e),
+                    Err(batch_err) => {
+                        match solid_gpui_protocol::command_from_json(&line) {
+                            Ok(cmd) => Job::Command(cmd),
+                            // Neither family decoded: report against the
+                            // batch attempt (the richer error of the two).
+                            Err(_) => Job::Decode(batch_err),
+                        }
+                    }
                 };
                 if job_tx.unbounded_send(job).is_err() {
                     break; // main loop gone
@@ -229,6 +279,30 @@ fn run_stdio_window() {
                         seq: None,
                         code: ReplyCode::DecodeFailed,
                         message: e.to_string(),
+                    },
+                    Job::Command(command) => match command {
+                        solid_gpui_protocol::Command::GetStats { seq } => window
+                            .update(cx, |view, _, _| Reply::Result {
+                                seq,
+                                value: view.stats_value(),
+                            })
+                            .unwrap_or_else(|e| Reply::Error {
+                                seq: Some(seq),
+                                code: ReplyCode::Unsupported,
+                                message: format!("window closed: {e}"),
+                            }),
+                        solid_gpui_protocol::Command::CaptureFrame { seq, path } => {
+                            // Capture runs outside the tree lock: it reads the
+                            // composited window, not the retained tree.
+                            match capture_own_window(&path) {
+                                Ok(value) => Reply::Result { seq, value },
+                                Err(message) => Reply::Error {
+                                    seq: Some(seq),
+                                    code: ReplyCode::ApplyFailed,
+                                    message,
+                                },
+                            }
+                        }
                     },
                     Job::Batch(batch) => {
                         let seq = batch.seq;

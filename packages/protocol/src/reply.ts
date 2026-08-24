@@ -2,10 +2,26 @@ import type { ProtocolError, Result } from "./batch"
 
 /** Machine-readable cause of an error reply. Mirrors Rust `ReplyCode`.
  * decodeFailed: seq is null (line untrustworthy). applyFailed: seq is set
- * (correlates to the caller). */
-export type ReplyCode = "decodeFailed" | "applyFailed"
+ * (correlates to the caller). unsupported: valid command, wrong helper mode.
+ * unknownCommand: command name outside the closed set. */
+export type ReplyCode = "decodeFailed" | "applyFailed" | "unsupported" | "unknownCommand"
 
-const REPLY_CODES: readonly ReplyCode[] = ["decodeFailed", "applyFailed"]
+/** JSON value type for Result reply payloads (getStats objects, captureFrame
+ * metadata). Kept permissive: each command defines its own shape. */
+export type JsonValue =
+  | string
+  | number
+  | boolean
+  | null
+  | { [key: string]: JsonValue }
+  | JsonValue[]
+
+const REPLY_CODES: readonly ReplyCode[] = [
+  "decodeFailed",
+  "applyFailed",
+  "unsupported",
+  "unknownCommand",
+]
 
 /** Helper→JS wire message: exactly one reply per received batch line. */
 export type Reply =
@@ -16,8 +32,10 @@ export type Reply =
       readonly code: ReplyCode
       readonly message: string
     }
+  | { readonly type: "result"; readonly seq: number; readonly value: JsonValue }
 
 export type ErrorReply = Extract<Reply, { type: "error" }>
+export type ResultReply = Extract<Reply, { type: "result" }>
 
 const isInt = (v: unknown, min: number, max: number): v is number =>
   typeof v === "number" && Number.isInteger(v) && v >= min && v <= max
@@ -30,6 +48,15 @@ const shape = (path: string, message: string): ProtocolError => ({
 
 const isDict = (v: unknown): v is Record<string, unknown> =>
   typeof v === "object" && v !== null && !Array.isArray(v)
+
+const isJsonValue = (v: unknown): v is JsonValue => {
+  if (v === null || typeof v === "string" || typeof v === "number" || typeof v === "boolean") {
+    return true
+  }
+  if (Array.isArray(v)) return v.every(isJsonValue)
+  if (isDict(v)) return Object.values(v).every(isJsonValue)
+  return false
+}
 
 /** Decode one reply line. Recoverable failures are Result errors, never thrown. */
 export function decodeReply(json: string): Result<Reply, ProtocolError> {
@@ -69,7 +96,19 @@ export function decodeReply(json: string): Result<Reply, ProtocolError> {
       }
       return { ok: true, value: { type: "error", seq, code: code as ReplyCode, message } }
     }
+    case "result": {
+      if (!isInt(parsed.seq, 0, 0xffff_ffff)) {
+        return { ok: false, error: shape("seq", "expected an integer in 0..=4294967295") }
+      }
+      // Payload shape is command-specific; presence + JSON-ness is all the
+      // wire-level decoder guarantees.
+      const payload = parsed.value
+      if (!isJsonValue(payload)) {
+        return { ok: false, error: shape("value", "expected a JSON payload") }
+      }
+      return { ok: true, value: { type: "result", seq: parsed.seq, value: payload } }
+    }
     default:
-      return { ok: false, error: shape("type", "expected \"ack\" or \"error\"") }
+      return { ok: false, error: shape("type", 'expected "ack", "error" or "result"') }
   }
 }

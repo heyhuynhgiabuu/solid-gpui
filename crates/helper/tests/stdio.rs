@@ -67,7 +67,19 @@ fn stdio_round_trip_ack_and_error() {
         "error must name the unknown op"
     );
 
-    // 3. EOF on stdin ends the process cleanly.
+    // 3. A valid command in transport mode answers Unsupported (no window),
+    //    correlated by the command's own seq.
+    writeln!(stdin, r#"{{"type":"getStats","seq":9}}"#).unwrap();
+    stdin.flush().unwrap();
+    let mut line = String::new();
+    reader.read_line(&mut line).expect("read unsupported reply");
+    let trimmed = line.trim();
+    assert!(
+        trimmed.starts_with(r#"{"type":"error","seq":9,"code":"unsupported""#),
+        "expected unsupported error for getStats in transport mode, got {trimmed}"
+    );
+
+    // 4. EOF on stdin ends the process cleanly.
     drop(stdin);
     let status = child.wait().expect("wait for exit");
     assert_eq!(status.code(), Some(0), "EOF must exit 0");

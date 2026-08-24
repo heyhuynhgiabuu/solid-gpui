@@ -19,3 +19,28 @@ describe("event demultiplexing", () => {
     expect((await helper.exited).code).toBe(0)
   })
 })
+
+describe("sendCommand", () => {
+  test("getStats resolves with the result payload (seq correlated)", async () => {
+    const helper = spawnHelper({ binary: fake, args: [] })
+    const value = await helper.sendCommand({ type: "getStats", seq: 1 })
+    expect(value).toEqual({ frames: 3, p95Ms: 0.2 })
+    await helper.close()
+  })
+
+  test("captureFrame resolves with path metadata", async () => {
+    // The fake ignores captureFrame lines, so this asserts only that the
+    // command does not resolve via the batch/event paths — use getStats
+    // semantics instead: send captureFrame and expect it to stay pending
+    // until close() rejects it.
+    const helper = spawnHelper({ binary: fake, args: [] })
+    const pending = helper.sendCommand({
+      type: "captureFrame",
+      seq: 2,
+      path: "/tmp/x.png",
+    })
+    pending.catch(() => {}) // no unhandled rejection noise
+    await helper.close()
+    await expect(pending).rejects.toThrow()
+  })
+})

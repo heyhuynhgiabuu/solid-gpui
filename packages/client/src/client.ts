@@ -3,11 +3,15 @@ import { createInterface } from "node:readline"
 import { resolve } from "node:path"
 import { fileURLToPath } from "node:url"
 import {
+  decodeCommand,
   decodeEvent,
   decodeReply,
   encodeBatch,
+  encodeCommand,
   type ErrorReply,
+  type JsonValue,
   type MutationBatch,
+  type SolidGpuiCommand,
   type SolidGpuiEvent,
 } from "@solid-gpui/protocol"
 
@@ -77,9 +81,15 @@ type Pending = {
 
 type EventListener = (event: SolidGpuiEvent) => void
 
+type CommandPending = {
+  resolve: (value: JsonValue) => void
+  reject: (err: Error) => void
+}
+
 class HelperConnection {
   private readonly pending = new Map<number, Pending>()
   private readonly eventListeners: EventListener[] = []
+  private readonly pendingCommands = new Map<number, CommandPending>()
   private closed = false
   private exitInfo: ExitInfo | null = null
   private exitedResolve!: (info: ExitInfo) => void
@@ -133,6 +143,12 @@ class HelperConnection {
       return
     }
     const reply = r.value
+    if (reply.type === "result") {
+      const p = this.pendingCommands.get(reply.seq)
+      this.pendingCommands.delete(reply.seq)
+      p?.resolve(reply.value)
+      return
+    }
     if (reply.type === "ack") {
       const p = this.pending.get(reply.seq)
       this.pending.delete(reply.seq)
@@ -156,6 +172,10 @@ class HelperConnection {
       p.reject(new HelperExitedError(code, signal, error?.message))
     }
     this.pending.clear()
+    for (const p of this.pendingCommands.values()) {
+      p.reject(new HelperExitedError(code, signal, error?.message))
+    }
+    this.pendingCommands.clear()
     this.exitedResolve(this.exitInfo)
   }
 
@@ -189,6 +209,38 @@ class HelperConnection {
       // Set after a successful write so a throwing write leaves no stale entry;
       // the ack cannot arrive before the next event-loop turn.
       this.pending.set(batch.seq, { resolve, reject })
+    })
+  }
+
+  /** Send one command; resolves with its Result payload, rejects on an error
+   * reply or death. Commands use their own seq space — reusing a seq while a
+   * command is in flight is a caller bug and rejects immediately.
+   */
+  sendCommand(command: SolidGpuiCommand): Promise<JsonValue> {
+    if (this.closed) {
+      return Promise.reject(
+        new HelperExitedError(
+          this.exitInfo?.code ?? null,
+          this.exitInfo?.signal ?? null,
+          this.exitInfo?.error,
+        ),
+      )
+    }
+    if (this.pendingCommands.has(command.seq)) {
+      return Promise.reject(
+        new Error(`sendCommand: seq ${command.seq} is already in flight`),
+      )
+    }
+    return new Promise<JsonValue>((resolve, reject) => {
+      try {
+        this.child.stdin?.write(encodeCommand(command) + "\n")
+      } catch (err) {
+        reject(err instanceof Error ? err : new Error(String(err)))
+        return
+      }
+      // Set after a successful write; the reply cannot arrive before the next
+      // event-loop turn.
+      this.pendingCommands.set(command.seq, { resolve, reject })
     })
   }
 

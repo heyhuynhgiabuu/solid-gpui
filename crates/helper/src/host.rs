@@ -25,6 +25,25 @@ impl HostView {
         }
     }
 
+    /// Wire payload for the S7b getStats command. Durations are milliseconds
+    /// rounded to microseconds; percentiles describe the retained-walk build
+    /// cost over the current ring window.
+    pub fn stats_value(&self) -> serde_json::Value {
+        let ms = |d: Option<std::time::Duration>| match d {
+            Some(d) => serde_json::json!((d.as_secs_f64() * 1_000_000.0).round() / 1000.0),
+            None => serde_json::Value::Null,
+        };
+        serde_json::json!({
+            "frames": self.stats.frames(),
+            "samples": self.stats.len(),
+            "p50Ms": ms(self.stats.percentile(0.5)),
+            "p90Ms": ms(self.stats.percentile(0.90)),
+            "p95Ms": ms(self.stats.percentile(0.95)),
+            "maxMs": ms(self.stats.max()),
+            "lastMs": ms(self.stats.last()),
+        })
+    }
+
     /// Push a click event to the JS side as one NDJSON line. The process-
     /// global stdout lock serializes this with the stdin thread's writes.
     fn emit_click(&self, id: ElementId, event: &gpui::ClickEvent) {

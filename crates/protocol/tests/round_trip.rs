@@ -1,6 +1,7 @@
 use solid_gpui_protocol::{
-    ApplyError, Event, EventType, Mutation, MutationBatch, MutationHandler, ProtocolError, Reply,
-    ReplyCode, event_from_json, event_to_json, from_json, reply_from_json, reply_to_json, to_json,
+    ApplyError, Command, Event, EventType, Mutation, MutationBatch, MutationHandler, ProtocolError,
+    Reply, ReplyCode, command_from_json, command_to_json, event_from_json, event_to_json,
+    from_json, reply_from_json, reply_to_json, to_json,
 };
 use std::fs;
 
@@ -149,6 +150,63 @@ fn click_event_without_position_omits_nulls_on_wire() {
             y: None,
         }
     );
+}
+
+#[test]
+fn get_stats_command_fixture_parses_and_emits_exactly() {
+    let raw = fs::read_to_string(fixture_path("command-get-stats.json"))
+        .expect("fixture readable")
+        .trim()
+        .to_string();
+    let cmd = command_from_json(&raw).expect("command parses");
+    assert_eq!(cmd, Command::GetStats { seq: 7 });
+    assert_eq!(command_to_json(&cmd), raw);
+}
+
+#[test]
+fn capture_frame_command_fixture_parses_and_emits_exactly() {
+    let raw = fs::read_to_string(fixture_path("command-capture-frame.json"))
+        .expect("fixture readable")
+        .trim()
+        .to_string();
+    let cmd = command_from_json(&raw).expect("command parses");
+    assert_eq!(
+        cmd,
+        Command::CaptureFrame {
+            seq: 8,
+            path: "/tmp/shot.png".into()
+        }
+    );
+    assert_eq!(command_to_json(&cmd), raw);
+}
+
+#[test]
+fn result_reply_fixture_parses_with_payload() {
+    let raw = fs::read_to_string(fixture_path("result-01.json"))
+        .expect("fixture readable")
+        .trim()
+        .to_string();
+    let reply = reply_from_json(&raw).expect("reply parses");
+    match reply {
+        Reply::Result { seq, value } => {
+            assert_eq!(seq, 7);
+            assert_eq!(value["frames"], 34);
+            assert_eq!(value["p95Ms"], 0.1);
+        }
+        other => panic!("expected Result reply, got {other:?}"),
+    }
+}
+
+#[test]
+fn unknown_command_name_is_invalid_shape_not_invalid_json() {
+    let err = command_from_json(r#"{"type":"teleport","seq":1}"#).expect_err("must not parse");
+    assert!(matches!(err, ProtocolError::InvalidShape { .. }), "{err:?}");
+}
+
+fn fixture_path(name: &str) -> std::path::PathBuf {
+    std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../packages/protocol/fixtures")
+        .join(name)
 }
 
 #[test]

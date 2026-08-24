@@ -180,9 +180,61 @@ pub enum ReplyCode {
     /// The batch decoded but a mutation failed to apply (validation).
     /// `seq` is `Some(..)`: the reply correlates to the caller.
     ApplyFailed,
+    /// A command line named a command this build does not know. Closed set,
+    /// same growth rule as the rest of the taxonomy.
+    UnknownCommand,
+    /// The command is valid but not available in the current helper mode
+    /// (e.g. getStats/captureFrame in `--stdio` transport mode, no GUI).
+    Unsupported,
 }
 
-/// Helper→JS direction of the wire: one NDJSON reply per received batch line.
+/// JS→helper side request that is NOT a mutation batch (queries, captures).
+/// Commands correlate by their own `seq`, sharing no counter with batches.
+/// The `type` field carries the command name itself — the demultiplexer
+/// matches it against this closed set after reply/event decoders decline.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "camelCase")]
+pub enum Command {
+    GetStats {
+        seq: u32,
+    },
+
+    CaptureFrame {
+        seq: u32,
+        /// Absolute path where the helper writes the PNG of its own window.
+        path: String,
+    },
+}
+
+/// Serialize a command to one JSON line. Infallible for this type shape.
+pub fn command_to_json(command: &Command) -> String {
+    serde_json::to_string(command).expect("serializing a plain data command cannot fail")
+}
+
+/// Parse one command line. Unknown command names are `InvalidShape` (closed
+/// set, mirroring unknownOp), not `InvalidJson`.
+pub fn command_from_json(s: &str) -> Result<Command, ProtocolError> {
+    let value: serde_json::Value =
+        serde_json::from_str(s).map_err(|e| ProtocolError::InvalidJson {
+            message: e.to_string(),
+        })?;
+    let type_str = value.get("type").and_then(|t| t.as_str());
+    if !matches!(type_str, Some("getStats") | Some("captureFrame")) {
+        return Err(ProtocolError::InvalidShape {
+            path: "type".into(),
+            message: format!(
+                "unknown command {:?}; expected getStats|captureFrame",
+                type_str.unwrap_or("<missing>")
+            ),
+        });
+    }
+    serde_json::from_value(value).map_err(|e| ProtocolError::InvalidJson {
+        message: e.to_string(),
+    })
+}
+
+/// Helper→JS direction of the wire: one NDJSON reply per received batch or
+/// command line.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "camelCase")]
 pub enum Reply {
@@ -198,6 +250,13 @@ pub enum Reply {
         seq: Option<u32>,
         code: ReplyCode,
         message: String,
+    },
+    #[serde(rename_all = "camelCase")]
+    Result {
+        seq: u32,
+        /// Command-specific payload (getStats object, captureFrame metadata).
+        /// Opaque to the protocol; each command defines its own shape.
+        value: serde_json::Value,
     },
 }
 

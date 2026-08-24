@@ -54,3 +54,27 @@ describe("decodeReply", () => {
     expect(r.ok).toBe(false)
   })
 })
+
+describe("decodeReply: result family", () => {
+  test("result fixture parses with payload object", () => {
+    const raw = JSON.stringify({ type: "result", seq: 7, value: { frames: 34, p95Ms: 0.1 } })
+    const r = decodeReply(raw)
+    expect(r.ok).toBe(true)
+    if (r.ok) {
+      expect(r.value).toEqual({
+        type: "result",
+        seq: 7,
+        value: { frames: 34, p95Ms: 0.1 },
+      })
+    }
+  })
+
+  test("new error codes accepted: unsupported, unknownCommand", () => {
+    for (const code of ["unsupported", "unknownCommand"] as const) {
+      const r = decodeReply(
+        JSON.stringify({ type: "error", seq: 3, code, message: "x" }),
+      )
+      expect(r.ok).toBe(true)
+    }
+  })
+})

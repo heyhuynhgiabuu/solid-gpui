@@ -12,6 +12,10 @@ futures = "0.3"
 # Stock upstream gpui — no fork, no patches (ADR 002). Cargo.lock pins the
 # exact commit on first resolve.
 gpui = { git = "https://github.com/zed-industries/zed" }
+# S7b captureFrame: cross-platform window capture (macOS CGWindowList under
+# the hood). Helper-only dep; protocol/client stay zero-dep.
+xcap = "0.9"
+serde_json = "1"
 # macOS: Metal is always available; font-kit enables real glyph rasterization.
 # Linux (Phase 2+): switch to features = ["wayland", "x11"].
 gpui_platform = { git = "https://github.com/zed-industries/zed", features = [
