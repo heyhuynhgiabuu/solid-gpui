@@ -94,6 +94,7 @@ fn command_ident(command: &solid_gpui_protocol::Command) -> (u32, &'static str) 
         solid_gpui_protocol::Command::CaptureFrame { seq, .. } => (*seq, "captureFrame"),
         solid_gpui_protocol::Command::ScrollTo { seq, .. } => (*seq, "scrollTo"),
         solid_gpui_protocol::Command::GetScrollOffset { seq, .. } => (*seq, "getScrollOffset"),
+        solid_gpui_protocol::Command::FocusElement { seq, .. } => (*seq, "focusElement"),
     }
 }
 
@@ -345,6 +346,25 @@ fn run_stdio_window() {
                                 code: ReplyCode::Unsupported,
                                 message: format!("window closed: {e}"),
                             }),
+                        solid_gpui_protocol::Command::FocusElement { seq, id } => window
+                            .update(cx, |view, window, cx| {
+                                match view.focus_element(id, window, cx) {
+                                    Ok(()) => Reply::Result {
+                                        seq,
+                                        value: serde_json::json!({ "applied": true }),
+                                    },
+                                    Err(message) => Reply::Error {
+                                        seq: Some(seq),
+                                        code: ReplyCode::ApplyFailed,
+                                        message,
+                                    },
+                                }
+                            })
+                            .unwrap_or_else(|e| Reply::Error {
+                                seq: Some(seq),
+                                code: ReplyCode::Unsupported,
+                                message: format!("window closed: {e}"),
+                            }),
                     },
                     Job::Batch(batch) => {
                         let seq = batch.seq;
@@ -355,14 +375,23 @@ fn run_stdio_window() {
                                 match view.tree.apply(m) {
                                     Ok(()) => {
                                         applied += 1;
-                                        // Materialize the scroll handle at apply
-                                        // time so scrollTo works before the first
-                                        // paint (render-population is lazy).
+                                        // Materialize scroll/focus handles at
+                                        // apply time so commands work before
+                                        // the first paint (render-population
+                                        // is lazy).
                                         if let solid_gpui_protocol::Mutation::SetStyle {
                                             id, ..
                                         } = m
                                         {
                                             view.ensure_scroll_handle(*id);
+                                            view.ensure_focus_handle(*id, cx);
+                                        }
+                                        if let solid_gpui_protocol::Mutation::SetEventListener {
+                                            id,
+                                            ..
+                                        } = m
+                                        {
+                                            view.ensure_focus_handle(*id, cx);
                                         }
                                     }
                                     Err(e) => {

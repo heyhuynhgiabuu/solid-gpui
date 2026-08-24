@@ -119,11 +119,13 @@ fn event_fixture_parses_and_emits_exactly() {
     let event = event_from_json(&raw).expect("event parses");
     assert_eq!(
         event,
-        Event::Click {
+        Event::Input {
             id: 3.into(),
             event_type: EventType::Click,
             x: Some(12.5),
             y: Some(40.0),
+            key: None,
+            modifiers: None,
         }
     );
     assert_eq!(event_to_json(&event), raw);
@@ -131,11 +133,13 @@ fn event_fixture_parses_and_emits_exactly() {
 
 #[test]
 fn click_event_without_position_omits_nulls_on_wire() {
-    let json = event_to_json(&Event::Click {
+    let json = event_to_json(&Event::Input {
         id: 9.into(),
         event_type: EventType::Click,
         x: None,
         y: None,
+        key: None,
+        modifiers: None,
     });
     assert!(
         !json.contains("null"),
@@ -143,13 +147,59 @@ fn click_event_without_position_omits_nulls_on_wire() {
     );
     assert_eq!(
         event_from_json(&json).unwrap(),
-        Event::Click {
+        Event::Input {
             id: 9.into(),
             event_type: EventType::Click,
             x: None,
             y: None,
+            key: None,
+            modifiers: None,
         }
     );
+}
+
+#[test]
+fn key_down_event_fixture_parses_and_emits_exactly() {
+    let raw = fs::read_to_string(fixture_path("event-keydown-01.json"))
+        .expect("fixture readable")
+        .trim()
+        .to_string();
+    let event = event_from_json(&raw).expect("event parses");
+    match &event {
+        Event::Input {
+            id,
+            event_type,
+            x,
+            y,
+            key,
+            modifiers,
+        } => {
+            assert_eq!(*id, ElementId(5));
+            assert_eq!(*event_type, EventType::KeyDown);
+            assert!(x.is_none() && y.is_none());
+            assert_eq!(key.as_deref(), Some("Enter"));
+            let m = modifiers.expect("modifiers present");
+            assert!(!m.ctrl && !m.alt && !m.shift && !m.cmd);
+        }
+    }
+    assert_eq!(event_to_json(&event), raw);
+}
+
+#[test]
+fn focus_element_command_fixture_parses_and_emits_exactly() {
+    let raw = fs::read_to_string(fixture_path("command-focus-element.json"))
+        .expect("fixture readable")
+        .trim()
+        .to_string();
+    let cmd = command_from_json(&raw).expect("command parses");
+    assert_eq!(
+        cmd,
+        Command::FocusElement {
+            seq: 12,
+            id: ElementId(3),
+        }
+    );
+    assert_eq!(command_to_json(&cmd), raw);
 }
 
 #[test]

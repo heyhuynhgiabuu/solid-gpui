@@ -3,6 +3,7 @@ import getStatsFixture from "../fixtures/command-get-stats.json"
 import captureFrameFixture from "../fixtures/command-capture-frame.json"
 import scrollToFixture from "../fixtures/command-scroll-to.json"
 import getScrollOffsetFixture from "../fixtures/command-get-scroll-offset.json"
+import focusElementFixture from "../fixtures/command-focus-element.json"
 import { decodeCommand, encodeCommand } from "./command"
 
 const ok = (json: string) => {
@@ -55,6 +56,17 @@ describe("decodeCommand", () => {
     expect(
       encodeCommand({ type: "getScrollOffset", seq: 10, id: 1 }),
     ).toBe(JSON.stringify(getScrollOffsetFixture))
+  })
+
+  test("focusElement fixture parses and re-encodes exactly (parity)", () => {
+    expect(ok(JSON.stringify(focusElementFixture))).toEqual({
+      type: "focusElement",
+      seq: 12,
+      id: 3,
+    })
+    expect(encodeCommand({ type: "focusElement", seq: 12, id: 3 })).toBe(
+      JSON.stringify(focusElementFixture),
+    )
   })
 
   test("scrollTo without id is invalidShape", () => {

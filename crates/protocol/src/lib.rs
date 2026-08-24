@@ -218,6 +218,11 @@ pub enum Command {
         seq: u32,
         id: ElementId,
     },
+
+    FocusElement {
+        seq: u32,
+        id: ElementId,
+    },
 }
 
 /// Serialize a command to one JSON line. Infallible for this type shape.
@@ -235,12 +240,16 @@ pub fn command_from_json(s: &str) -> Result<Command, ProtocolError> {
     let type_str = value.get("type").and_then(|t| t.as_str());
     if !matches!(
         type_str,
-        Some("getStats") | Some("captureFrame") | Some("scrollTo") | Some("getScrollOffset")
+        Some("getStats")
+            | Some("captureFrame")
+            | Some("scrollTo")
+            | Some("getScrollOffset")
+            | Some("focusElement")
     ) {
         return Err(ProtocolError::InvalidShape {
             path: "type".into(),
             message: format!(
-                "unknown command {:?}; expected getStats|captureFrame|scrollTo|getScrollOffset",
+                "unknown command {:?}; expected getStats|captureFrame|scrollTo|getScrollOffset|focusElement",
                 type_str.unwrap_or("<missing>")
             ),
         });
@@ -290,19 +299,38 @@ pub fn reply_from_json(s: &str) -> Result<Reply, ProtocolError> {
     })
 }
 
+/// Keyboard modifier flags carried on keyDown/keyUp events.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Modifiers {
+    pub ctrl: bool,
+    pub alt: bool,
+    pub shift: bool,
+    pub cmd: bool,
+}
+
 /// Helper→JS asynchronous input event (NOT a reply to any batch — events are
 /// pushed whenever the user interacts, between batches).
+///
+/// One variant covers all input kinds: `eventType` discriminates and the
+/// optional fields are present only where meaningful (x/y for pointers,
+/// key/modifiers for keys, nothing for focus/blur). skip_serializing_if keeps
+/// absent fields off the wire.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "type")]
 pub enum Event {
     #[serde(rename = "event", rename_all = "camelCase")]
-    Click {
+    Input {
         id: ElementId,
         event_type: EventType,
         #[serde(skip_serializing_if = "Option::is_none")]
         x: Option<f64>,
         #[serde(skip_serializing_if = "Option::is_none")]
         y: Option<f64>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        key: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        modifiers: Option<Modifiers>,
     },
 }
 
@@ -310,14 +338,14 @@ impl Event {
     /// The element the event targets.
     pub fn element_id(&self) -> ElementId {
         match self {
-            Event::Click { id, .. } => *id,
+            Event::Input { id, .. } => *id,
         }
     }
 
     /// The event type discriminator (mirrors the wire's `eventType`).
     pub fn event_type(&self) -> EventType {
         match self {
-            Event::Click { .. } => EventType::Click,
+            Event::Input { event_type, .. } => *event_type,
         }
     }
 }

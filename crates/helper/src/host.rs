@@ -2,12 +2,14 @@
 
 use crate::frame_stats::FrameStats;
 use gpui::{
-    AnyElement, Context, Div, InteractiveElement, IntoElement, ParentElement, Point, Render, Rgba,
-    ScrollHandle, SharedString, StatefulInteractiveElement, Styled, Window, div, px, rgb, rgba,
+    AnyElement, Context, Div, FocusHandle, InteractiveElement, IntoElement, ParentElement, Point,
+    Render, Rgba, ScrollHandle, SharedString, StatefulInteractiveElement, Styled, Window, div, px,
+    rgb, rgba,
 };
+use solid_gpui_protocol::EventType;
 use solid_gpui_protocol::{ElementId, ElementType, Event, RetainedTree, StyleValue};
 use std::cell::RefCell;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::io::Write;
 use std::rc::Rc;
 
@@ -16,6 +18,12 @@ use std::rc::Rc;
 /// RefCell because `build_element` reaches them through a `&Context`, not a
 /// `&mut HostView`.
 type ScrollHandles = Rc<RefCell<HashMap<ElementId, ScrollHandle>>>;
+
+/// Persistent focus handles for focusable elements, keyed by element id.
+/// Same lifecycle contract as ScrollHandles: lazy get-or-create at render,
+/// pruned per frame once the tree drops the id. Rc / RefCell because
+/// build_element reaches them through a &Context, not a &mut HostView.
+type FocusHandles = Rc<RefCell<HashMap<ElementId, FocusHandle>>>;
 
 /// Which axes scroll for the `overflow` style key. Closed set — single source
 /// of truth so the renderer and the protocol docs agree (AGENTS invariant 1).
@@ -44,6 +52,13 @@ pub struct HostView {
     /// SOLID_GPUI_DEBUG_OVERLAY=1 paints frame stats into the window.
     overlay: bool,
     scroll_handles: ScrollHandles,
+    focus_handles: FocusHandles,
+    /// Keeps cx.on_focus_in/out subscriptions alive for the view's lifetime.
+    focus_subscriptions: Vec<gpui::Subscription>,
+    /// Ids that already registered focus subscriptions. Rendering runs every
+    /// frame; without this, each render would register a fresh subscription
+    /// and one focus change would emit N duplicate events (observed 3x).
+    focus_subscribed: HashSet<ElementId>,
 }
 
 impl HostView {
@@ -53,6 +68,9 @@ impl HostView {
             stats: FrameStats::new(),
             overlay: std::env::var("SOLID_GPUI_DEBUG_OVERLAY").is_ok_and(|v| v == "1"),
             scroll_handles: Rc::new(RefCell::new(HashMap::new())),
+            focus_handles: Rc::new(RefCell::new(HashMap::new())),
+            focus_subscriptions: Vec::new(),
+            focus_subscribed: HashSet::new(),
         }
     }
 
@@ -125,8 +143,70 @@ impl HostView {
         Some((x.to_f64(), y.to_f64()))
     }
 
-    /// Push a click event to the JS side as one NDJSON line. The process-
-    /// global stdout lock serializes this with the stdin thread's writes.
+    /// Eagerly materialize a focus handle when a setStyle/setEventListener
+    /// makes a node focusable — focusElement must work before the first paint
+    /// (render-population is lazy). Creates through the app focus map so Tab
+    /// navigation sees it. Idempotent with the render-time get-or-create.
+    pub fn ensure_focus_handle(&self, id: ElementId, cx: &mut gpui::App) {
+        let wants_focus = self.tree.get(id).is_some_and(|n| {
+            n.style.contains_key("tabIndex")
+                || n.listeners.contains(&EventType::Focus)
+                || n.listeners.contains(&EventType::Blur)
+                || n.listeners.contains(&EventType::KeyDown)
+                || n.listeners.contains(&EventType::KeyUp)
+        });
+        if wants_focus {
+            self.focus_handles
+                .borrow_mut()
+                .entry(id)
+                .or_insert_with(|| cx.focus_handle());
+        }
+    }
+
+    /// S9: programmatic focus for the focusElement command. Fails when the
+    /// id was never rendered focusable (no FocusHandle).
+    pub fn focus_element(
+        &self,
+        id: ElementId,
+        window: &mut Window,
+        cx: &mut gpui::App,
+    ) -> Result<(), String> {
+        let handles = self.focus_handles.borrow();
+        let Some(handle) = handles.get(&id) else {
+            return Err(format!(
+                "no focusable element for id {}; set tabIndex on it first",
+                id.0
+            ));
+        };
+        handle.focus(window, cx);
+        Ok(())
+    }
+
+    /// Push one event line to the JS side. The process-global stdout lock
+    /// serializes this with the stdin thread's writes (deadlock invariant).
+    fn emit_event(
+        &self,
+        id: ElementId,
+        event_type: EventType,
+        x: Option<f64>,
+        y: Option<f64>,
+        key: Option<String>,
+        modifiers: Option<solid_gpui_protocol::Modifiers>,
+    ) {
+        let line = solid_gpui_protocol::event_to_json(&Event::Input {
+            id,
+            event_type,
+            x,
+            y,
+            key,
+            modifiers,
+        });
+        let mut out = std::io::stdout().lock();
+        let _ = writeln!(out, "{line}");
+        let _ = out.flush();
+    }
+
+    /// Push a click event to the JS side as one NDJSON line.
     fn emit_click(&self, id: ElementId, event: &gpui::ClickEvent) {
         let (x, y) = match event {
             gpui::ClickEvent::Mouse(m) => (
@@ -135,20 +215,56 @@ impl HostView {
             ),
             _ => (None, None),
         };
-        let line = solid_gpui_protocol::event_to_json(&Event::Click {
+        self.emit_event(id, EventType::Click, x, y, None, None);
+    }
+
+    /// Push a focus/blur event to the JS side.
+    fn emit_focus(&self, id: ElementId, focused: bool) {
+        let event_type = if focused {
+            EventType::Focus
+        } else {
+            EventType::Blur
+        };
+        self.emit_event(id, event_type, None, None, None, None);
+    }
+
+    /// Push a keyDown event to the JS side (keystroke key + modifiers).
+    fn emit_key(&self, id: ElementId, event: &gpui::KeyDownEvent) {
+        self.emit_event(
             id,
-            event_type: solid_gpui_protocol::EventType::Click,
-            x,
-            y,
-        });
-        let mut out = std::io::stdout().lock();
-        let _ = writeln!(out, "{line}");
-        let _ = out.flush();
+            EventType::KeyDown,
+            None,
+            None,
+            Some(event.keystroke.key.clone()),
+            Some(solid_gpui_protocol::Modifiers {
+                ctrl: event.keystroke.modifiers.control,
+                alt: event.keystroke.modifiers.alt,
+                shift: event.keystroke.modifiers.shift,
+                cmd: event.keystroke.modifiers.platform,
+            }),
+        );
+    }
+
+    /// Push a keyUp event to the JS side.
+    fn emit_key_up(&self, id: ElementId, event: &gpui::KeyUpEvent) {
+        self.emit_event(
+            id,
+            EventType::KeyUp,
+            None,
+            None,
+            Some(event.keystroke.key.clone()),
+            Some(solid_gpui_protocol::Modifiers {
+                ctrl: event.keystroke.modifiers.control,
+                alt: event.keystroke.modifiers.alt,
+                shift: event.keystroke.modifiers.shift,
+                cmd: event.keystroke.modifiers.platform,
+            }),
+        );
     }
 }
 
 impl Render for HostView {
-    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let started = std::time::Instant::now();
         // Drop handles for ids the tree no longer holds (destroyed/moved).
         // Clone the Rc first so the retain closure can borrow `self.tree`
@@ -157,8 +273,21 @@ impl Render for HostView {
         handles
             .borrow_mut()
             .retain(|id, _| self.tree.get(*id).is_some());
+        let focus = self.focus_handles.clone();
+        focus
+            .borrow_mut()
+            .retain(|id, _| self.tree.get(*id).is_some());
         let mut content = match self.tree.root() {
-            Some(root) => build_element(&self.tree, root, cx, &self.scroll_handles),
+            Some(root) => build_element(
+                &self.tree,
+                root,
+                window,
+                cx,
+                &self.scroll_handles,
+                &self.focus_handles,
+                &mut self.focus_subscriptions,
+                &mut self.focus_subscribed,
+            ),
             // No root yet: dark placeholder keeps the window alive pre-mount.
             None => div().size_full().bg(rgb(0x1e1e2e)).into_any_element(),
         };
@@ -210,11 +339,21 @@ impl Render for HostView {
 /// Map one retained node to a GPUI element. Unknown style keys/values are
 /// ignored (forward compatibility — see protocol StyleMap docs). Text nodes
 /// render as plain GPUI text children.
+///
+/// Interactive wiring (scroll, click, focus, keys) all needs the stateful
+/// element (.id()); element ids are unique per tree so one .id() serves every
+/// role. `window` is needed for focus subscriptions, `subscriptions` keeps
+/// those alive for the view's lifetime.
+#[allow(clippy::too_many_arguments)]
 fn build_element(
     tree: &RetainedTree,
     id: ElementId,
+    window: &mut Window,
     cx: &mut Context<HostView>,
-    handles: &ScrollHandles,
+    scroll_handles: &ScrollHandles,
+    focus_handles: &FocusHandles,
+    subscriptions: &mut Vec<gpui::Subscription>,
+    subscribed: &mut HashSet<ElementId>,
 ) -> AnyElement {
     let Some(node) = tree.get(id) else {
         return div().into_any_element();
@@ -227,30 +366,86 @@ fn build_element(
         el = apply_style(el, key, value);
     }
     for child in &node.children {
-        el = el.child(build_element(tree, *child, cx, handles));
+        el = el.child(build_element(
+            tree,
+            *child,
+            window,
+            cx,
+            scroll_handles,
+            focus_handles,
+            subscriptions,
+            subscribed,
+        ));
     }
 
-    // Interactive elements must be stateful in gpui (.id()) for hit testing
-    // (scroll gestures and clicks both route through interactivity). Element
-    // ids are unique per tree, so one .id() serves both roles.
     let axis = node.style.get("overflow").and_then(parse_overflow);
-    let has_click = node
-        .listeners
-        .contains(&solid_gpui_protocol::EventType::Click);
-    if axis.is_none() && !has_click {
+    let has_click = node.listeners.contains(&EventType::Click);
+    let has_focus =
+        node.listeners.contains(&EventType::Focus) || node.listeners.contains(&EventType::Blur);
+    let has_key =
+        node.listeners.contains(&EventType::KeyDown) || node.listeners.contains(&EventType::KeyUp);
+    // tabIndex: -1 focusable but not a tab stop, 0/positive = tab stop.
+    let tab_index: Option<isize> = match node.style.get("tabIndex") {
+        Some(StyleValue::Number(n)) => n.as_f64().map(|f| f as isize),
+        _ => None,
+    };
+    let wants_focus = tab_index.is_some() || has_focus || has_key;
+    if axis.is_none() && !has_click && !wants_focus {
         return el.into_any_element();
     }
 
     // .id() requires `Into<ElementId>`: usize maps to ElementId::Integer.
     let mut el = el.id(id.0 as usize);
     if let Some(axis) = axis {
-        let handle = handles.borrow_mut().entry(id).or_default().clone();
+        let handle = scroll_handles.borrow_mut().entry(id).or_default().clone();
         el = el.track_scroll(&handle);
         el = match axis {
             ScrollAxis::X => el.overflow_x_scroll(),
             ScrollAxis::Y => el.overflow_y_scroll(),
             ScrollAxis::Both => el.overflow_scroll(),
         };
+    }
+    if wants_focus {
+        // FocusHandle is cloneable and shared; tab config is applied per
+        // render so style changes to tabIndex re-apply on the same handle.
+        // No Default impl: create through the app's focus map (Context derefs
+        // to App), which also tracks the handle for window.focus_next/prev.
+        let handle = focus_handles
+            .borrow_mut()
+            .entry(id)
+            .or_insert_with(|| cx.focus_handle())
+            .clone();
+        let configured = match tab_index {
+            None | Some(-1) => handle.clone().tab_stop(false),
+            Some(n) => handle.clone().tab_stop(true).tab_index(n),
+        };
+        el = el.focusable().track_focus(&configured);
+        if has_focus && subscribed.insert(id) {
+            // Focus/blur subscriptions must outlive this render call, and
+            // register exactly once per element (render runs every frame).
+            // Note: activation is deferred one frame by gpui, so focus events
+            // for a focus issued in the same frame as the first render can be
+            // missed — callers should wait a frame after mount before
+            // expecting focus events (documented in the window test).
+            let sub_in = cx.on_focus_in(&handle, window, move |view, _window, _cx| {
+                view.emit_focus(id, true);
+            });
+            let sub_out = cx.on_focus_out(&handle, window, move |view, _event, _window, _cx| {
+                view.emit_focus(id, false);
+            });
+            subscriptions.push(sub_in);
+            subscriptions.push(sub_out);
+        }
+        if has_key {
+            let listener = cx.listener(move |view, event: &gpui::KeyDownEvent, _window, _cx| {
+                view.emit_key(id, event);
+            });
+            el = el.on_key_down(listener);
+            let listener = cx.listener(move |view, event: &gpui::KeyUpEvent, _window, _cx| {
+                view.emit_key_up(id, event);
+            });
+            el = el.on_key_up(listener);
+        }
     }
     if has_click {
         let listener = cx.listener(move |view, event: &gpui::ClickEvent, _window, _cx| {

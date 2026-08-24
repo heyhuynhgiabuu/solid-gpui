@@ -6,12 +6,21 @@ import { EVENT_TYPES, type EventType } from "./mutation"
  * between batches. The `type: "event"` tag lets the client demultiplex lines
  * cheaply before full decoding.
  */
+export type KeyModifiers = {
+  readonly ctrl: boolean
+  readonly alt: boolean
+  readonly shift: boolean
+  readonly cmd: boolean
+}
+
 export type SolidGpuiEvent = {
   readonly type: "event"
   readonly id: number
   readonly eventType: EventType
   readonly x?: number
   readonly y?: number
+  readonly key?: string
+  readonly modifiers?: KeyModifiers
 }
 
 const isInt = (v: unknown): v is number => typeof v === "number" && Number.isInteger(v)
@@ -56,6 +65,8 @@ export function decodeEvent(json: string): Result<SolidGpuiEvent, ProtocolError>
     eventType: EventType
     x?: number
     y?: number
+    key?: string
+    modifiers?: KeyModifiers
   } = { type: "event", id: parsed.id, eventType }
 
   for (const axis of ["x", "y"] as const) {
@@ -65,6 +76,30 @@ export function decodeEvent(json: string): Result<SolidGpuiEvent, ProtocolError>
       return { ok: false, error: shape(axis, "expected a number or null") }
     }
     out[axis] = v
+  }
+  if (parsed.key !== undefined && parsed.key !== null) {
+    if (typeof parsed.key !== "string") {
+      return { ok: false, error: shape("key", "expected a string or null") }
+    }
+    out.key = parsed.key
+  }
+  const mods = parsed.modifiers as Record<string, unknown> | undefined | null
+  if (mods !== undefined && mods !== null) {
+    if (
+      typeof mods !== "object" ||
+      typeof mods.ctrl !== "boolean" ||
+      typeof mods.alt !== "boolean" ||
+      typeof mods.shift !== "boolean" ||
+      typeof mods.cmd !== "boolean"
+    ) {
+      return { ok: false, error: shape("modifiers", "expected {ctrl,alt,shift,cmd} booleans") }
+    }
+    out.modifiers = {
+      ctrl: mods.ctrl,
+      alt: mods.alt,
+      shift: mods.shift,
+      cmd: mods.cmd,
+    }
   }
   return { ok: true, value: out }
 }

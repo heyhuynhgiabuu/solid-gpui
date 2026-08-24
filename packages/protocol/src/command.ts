@@ -10,6 +10,7 @@ export type SolidGpuiCommand =
   | { readonly type: "captureFrame"; readonly seq: number; readonly path: string }
   | { readonly type: "scrollTo"; readonly seq: number; readonly id: number; readonly x: number; readonly y: number }
   | { readonly type: "getScrollOffset"; readonly seq: number; readonly id: number }
+  | { readonly type: "focusElement"; readonly seq: number; readonly id: number }
 
 const isInt = (v: unknown): v is number => typeof v === "number" && Number.isInteger(v)
 
@@ -36,7 +37,7 @@ export function decodeCommand(json: string): Result<SolidGpuiCommand, ProtocolEr
   if (!isDict(parsed)) return { ok: false, error: shape("$", "expected an object") }
 
   const type = parsed.type
-  const KNOWN = ["getStats", "captureFrame", "scrollTo", "getScrollOffset"]
+  const KNOWN = ["getStats", "captureFrame", "scrollTo", "getScrollOffset", "focusElement"]
   if (!KNOWN.includes(type as string)) {
     return {
       ok: false,
@@ -77,6 +78,14 @@ export function decodeCommand(json: string): Result<SolidGpuiCommand, ProtocolEr
     }
     return { ok: true, value: { type: "getScrollOffset", seq: parsed.seq, id } }
   }
+  if (type === "focusElement") {
+    const id = parsed.id
+    const badId = !isInt(id) || (id as number) < 1 || (id as number) > 0xffff_ffff
+    if (badId) {
+      return { ok: false, error: shape("id", "focusElement needs an integer id") }
+    }
+    return { ok: true, value: { type: "focusElement", seq: parsed.seq, id } }
+  }
   // Fallthrough: every other known type returned above, so this is getStats.
   return { ok: true, value: { type: "getStats", seq: parsed.seq } }
 }
@@ -103,6 +112,13 @@ export function encodeCommand(command: SolidGpuiCommand): string {
   if (command.type === "getScrollOffset") {
     return JSON.stringify({
       type: "getScrollOffset",
+      seq: command.seq,
+      id: command.id,
+    })
+  }
+  if (command.type === "focusElement") {
+    return JSON.stringify({
+      type: "focusElement",
       seq: command.seq,
       id: command.id,
     })

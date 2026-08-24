@@ -11,6 +11,12 @@ fn skip() -> bool {
     std::env::var("SOLID_GPUI_SKIP_GUI_TESTS").is_ok()
 }
 
+/// Real-window tests must not run in parallel: macOS serializes window-server
+/// round trips anyway, and several windows at once push first-frame latency
+/// past any reasonable poll budget (observed: intermittent both-test failures
+/// under the default 4-thread test harness). Serialize them with a lock.
+static WINDOW_TEST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
 fn fixture_line() -> String {
     let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../../packages/protocol/fixtures/batch-01.json");
@@ -23,6 +29,7 @@ fn window_mode_applies_batches_and_correlates_errors() {
     if skip() {
         return;
     }
+    let _lock = WINDOW_TEST_LOCK.lock().unwrap();
     let bin = env!("CARGO_BIN_EXE_solid-gpui-helper");
     let mut child = Command::new(bin)
         .arg("--stdio-window")
@@ -70,6 +77,7 @@ fn window_mode_answers_getstats_and_captureframe() {
     if skip() {
         return;
     }
+    let _lock = WINDOW_TEST_LOCK.lock().unwrap();
     let bin = env!("CARGO_BIN_EXE_solid-gpui-helper");
     let mut child = Command::new(bin)
         .arg("--stdio-window")
@@ -134,6 +142,7 @@ fn window_mode_mounts_scroll_container() {
     if skip() {
         return;
     }
+    let _lock = WINDOW_TEST_LOCK.lock().unwrap();
     let bin = env!("CARGO_BIN_EXE_solid-gpui-helper");
     let mut child = Command::new(bin)
         .arg("--stdio-window")
@@ -176,6 +185,7 @@ fn window_mode_scrolls_via_commands() {
     if skip() {
         return;
     }
+    let _lock = WINDOW_TEST_LOCK.lock().unwrap();
     let bin = env!("CARGO_BIN_EXE_solid-gpui-helper");
     let mut child = Command::new(bin)
         .arg("--stdio-window")
@@ -208,9 +218,20 @@ fn window_mode_scrolls_via_commands() {
         r#"{"type":"ack","seq":55,"applied":9}"#
     );
 
-    // Give the window a frame to lay out (max_offset populates during
-    // prepaint, which getScrollOffset's clamp reads).
-    std::thread::sleep(std::time::Duration::from_millis(100));
+    // The window lays out asynchronously (max_offset populates in prepaint,
+    // which getScrollOffset's honesty clamp reads). Under parallel window
+    // tests the first frames can be delayed, so poll for the expected offset
+    // instead of trusting a fixed sleep.
+    fn read_offset(
+        stdin: &mut std::process::ChildStdin,
+        lines: &mut std::io::Lines<BufReader<std::process::ChildStdout>>,
+        seq: u32,
+    ) -> String {
+        let line = format!(r#"{{"type":"getScrollOffset","seq":{seq},"id":1}}"#);
+        writeln!(stdin, "{line}").unwrap();
+        stdin.flush().unwrap();
+        lines.next().unwrap().unwrap()
+    }
 
     // scrollTo sets the retained handle's offset (positive = down)...
     let line = r#"{"type":"scrollTo","seq":61,"id":1,"x":0.0,"y":500.0}"#;
@@ -221,17 +242,22 @@ fn window_mode_scrolls_via_commands() {
         r#"{"type":"result","seq":61,"value":{"applied":true}}"#
     );
 
-    // ...and getScrollOffset reads the actual visible position back exactly.
-    let line = r#"{"type":"getScrollOffset","seq":62,"id":1}"#;
-    writeln!(stdin, "{line}").unwrap();
-    stdin.flush().unwrap();
-    assert_eq!(
-        lines.next().unwrap().unwrap(),
-        r#"{"type":"result","seq":62,"value":{"offsetX":0.0,"offsetY":500.0}}"#
-    );
+    // ...and getScrollOffset reads the actual visible position back exactly
+    // (polling until layout has populated max_offset).
+    let want = r#"{"type":"result","seq":62,"value":{"offsetX":0.0,"offsetY":500.0}}"#;
+    let mut got = read_offset(&mut stdin, &mut lines, 62);
+    for _ in 0..10 {
+        if got == want {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(50));
+        got = read_offset(&mut stdin, &mut lines, 62);
+    }
+    assert_eq!(got, want);
 
     // Over-scroll clamps to the real content height (2000 - 200 viewport):
     // getScrollOffset reports what is actually shown, not the raw request.
+    // Layout is known by now (the poll above succeeded), so assert directly.
     let line = r#"{"type":"scrollTo","seq":63,"id":1,"x":0.0,"y":100000.0}"#;
     writeln!(stdin, "{line}").unwrap();
     stdin.flush().unwrap();
@@ -239,12 +265,98 @@ fn window_mode_scrolls_via_commands() {
         lines.next().unwrap().unwrap(),
         r#"{"type":"result","seq":63,"value":{"applied":true}}"#
     );
-    let line = r#"{"type":"getScrollOffset","seq":64,"id":1}"#;
+    assert_eq!(
+        read_offset(&mut stdin, &mut lines, 64),
+        r#"{"type":"result","seq":64,"value":{"offsetX":0.0,"offsetY":1800.0}}"#
+    );
+
+    // EOF quits the app cleanly.
+    drop(stdin);
+    let status = child.wait().expect("wait");
+    assert_eq!(status.code(), Some(0), "EOF must exit 0");
+}
+
+#[test]
+fn window_mode_focus_events_via_focus_element() {
+    if skip() {
+        return;
+    }
+    let _lock = WINDOW_TEST_LOCK.lock().unwrap();
+    let bin = env!("CARGO_BIN_EXE_solid-gpui-helper");
+    let mut child = Command::new(bin)
+        .arg("--stdio-window")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .spawn()
+        .expect("helper spawns");
+
+    let mut stdin = child.stdin.take().expect("stdin piped");
+    let reader = BufReader::new(child.stdout.take().expect("stdout piped"));
+    let mut lines = reader.lines();
+
+    // Root with two focusable children (tabIndex 0 + focus/blur listeners).
+    let batch = concat!(
+        r#"{"v":1,"seq":70,"mutations":["#,
+        r#"{"op":"createElement","id":1,"elementType":"div"},"#,
+        r#"{"op":"setRoot","id":1},"#,
+        r#"{"op":"createElement","id":2,"elementType":"div"},"#,
+        r#"{"op":"appendChild","parentId":1,"childId":2},"#,
+        r#"{"op":"setStyle","id":2,"style":{"tabIndex":0}},"#,
+        r#"{"op":"setEventListener","id":2,"eventType":"focus","enabled":true},"#,
+        r#"{"op":"setEventListener","id":2,"eventType":"blur","enabled":true},"#,
+        r#"{"op":"createElement","id":3,"elementType":"div"},"#,
+        r#"{"op":"appendChild","parentId":1,"childId":3},"#,
+        r#"{"op":"setStyle","id":3,"style":{"tabIndex":0}},"#,
+        r#"{"op":"setEventListener","id":3,"eventType":"focus","enabled":true},"#,
+        r#"{"op":"setEventListener","id":3,"eventType":"blur","enabled":true}]}"#,
+    );
+    writeln!(stdin, "{batch}").unwrap();
+    stdin.flush().unwrap();
+    assert_eq!(
+        lines.next().unwrap().unwrap(),
+        r#"{"type":"ack","seq":70,"applied":12}"#
+    );
+    // cx.on_focus_in/out subscriptions activate one frame AFTER first render
+    // (gpui defers activation), so let that pass before issuing any focus —
+    // otherwise the very first focus event is silently missed.
+    std::thread::sleep(std::time::Duration::from_millis(150));
+
+    // Focus element 2. gpui defers focus-event dispatch to the next frame,
+    // so the reply precedes the event line: assert the reply, then wait for
+    // the frame that dispatches the focus event.
+    let line = r#"{"type":"focusElement","seq":71,"id":2}"#;
     writeln!(stdin, "{line}").unwrap();
     stdin.flush().unwrap();
     assert_eq!(
         lines.next().unwrap().unwrap(),
-        r#"{"type":"result","seq":64,"value":{"offsetX":0.0,"offsetY":1800.0}}"#
+        r#"{"type":"result","seq":71,"value":{"applied":true}}"#
+    );
+    std::thread::sleep(std::time::Duration::from_millis(150));
+    assert_eq!(
+        lines.next().unwrap().unwrap(),
+        r#"{"type":"event","id":2,"eventType":"focus"}"#
+    );
+
+    // Move focus to 3: element 2 blurs, element 3 focuses (order-free).
+    let line = r#"{"type":"focusElement","seq":72,"id":3}"#;
+    writeln!(stdin, "{line}").unwrap();
+    stdin.flush().unwrap();
+    assert_eq!(
+        lines.next().unwrap().unwrap(),
+        r#"{"type":"result","seq":72,"value":{"applied":true}}"#
+    );
+    std::thread::sleep(std::time::Duration::from_millis(150));
+    let mut pair = [
+        lines.next().unwrap().unwrap(),
+        lines.next().unwrap().unwrap(),
+    ];
+    pair.sort();
+    assert_eq!(
+        pair,
+        [
+            r#"{"type":"event","id":2,"eventType":"blur"}"#.to_string(),
+            r#"{"type":"event","id":3,"eventType":"focus"}"#.to_string(),
+        ]
     );
 
     // EOF quits the app cleanly.
