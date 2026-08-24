@@ -2,10 +2,10 @@
 
 ## Landscape facts (verified 2026-08-24)
 
-- gpuix (remorses/gpuix): 770★, no LICENSE (all rights reserved), ~12–16 npm downloads/week
+- Prior art "the unlicensed bridge" (do not name in public docs): 770★, NO LICENSE (all rights reserved), ~12–16 npm downloads/week
   combined, macOS-only validated (Windows binding broken, issue #1), pins fork of zed.
-- gpuix issue #10 (2026-08-23): third party added Svelte support in ~500 LOC, zero Rust
-  changes, via `import { GpuixRenderer } from '@gpuix/native'` — proves adapter thinness.
+- Upstream issue #10 (2026-08-23): third party added Svelte support in ~500 LOC, zero Rust
+  changes, importing only the native package's renderer class — proves adapter thinness.
 - zed PR #63077 "gpui: Support embedding the macOS event loop" (by remorses, 2026-08-22):
   OPEN, unmerged, bot-review only. Adds `MacPlatform::new_embedded` + `pump_events`
   (1 file, +316/−31) for Node N-API hosts. Watch it; if merged, in-process backend gets cheap.
@@ -13,7 +13,7 @@
   `gpui` on crates.io is 0.2.2 (2025-10), 121k recent downloads — standalone momentum real.
 - Zed repo has dual LICENSE-APACHE/LICENSE-GPL; editor parts GPL, gpui family Apache-2.0.
 - Rich text/markdown/diff/syntax sources: port from Comet (github.com/zeronsh/comet, MIT)
-  — legal to port with attribution (gpuix itself did this).
+  — legal to port with attribution.
 - Dead/quiet competitors: fzdwx/gpui-react (19★, dead), Alex6357/alloy Solid+QuickJS (70★, 1 day).
 
 ## Runtime facts (verified 2026-08-24)
@@ -23,13 +23,14 @@
 - Bun: `latest` 1.4.0 (2026-08-20, first all-Rust release). TSFN exit crash fixed 2026-08-21
   AFTER 1.4.0 (#39810 — wait for 1.4.1+); nested-loop TSFN deadlock open (#36828);
   no Fast Refresh in `--hot` (#40179) → hot reload = full remount pattern.
-- gpuix side lessons (idea-level): batch mutations into ONE FFI/IPC call (`applyBatch`);
+- Prior-art lessons (idea-level): batch mutations into ONE FFI/IPC call;
   fixed-rate tick pump on macOS ~125fps, never setImmediate-driven (73% vs 1% CPU idle);
   debug frame overlay painted native-side, not via framework.
 
 ## Project stance
 
-- Clean-room vs gpuix: ideas only, no code/dep/fork-of-their-fork (ADR 001).
+- Clean-room vs prior art: ideas only — no code/dep/fork-of-their-fork (ADR 001);
+  do not name the prior art project in public docs (user request 2026-08-24).
 - **Decided 2026-08-24:** architecture = out-of-process helper + stock gpui, transport-agnostic
   protocol over UDS/stdio NDJSON (ADR 002); license = Apache-2.0 (ADR 003); name = **solid-gpui**,
   packages `@solid-gpui/{protocol,helper,solid}` (ADR 004). Spec FROZEN in PLAN.md.

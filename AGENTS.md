@@ -17,17 +17,16 @@ Solid reactivity → NDJSON mutation batches (stdio) → retained tree → GPUI 
 Out-of-process is a deliberate architecture decision (`.pi/artifacts/DECISIONS.md`,
 ADR 002): the helper owns its main thread and native event loop, so there is no
 Zed fork, no ThreadsafeFunction, and one code path per OS. Do not "simplify" it
-into an in-process addon. That design belongs to another project and carries a
-Zed-fork maintenance burden we refuse.
+into an in-process addon.
 
 ## Clean-room rules (legal, non-negotiable)
 
-- Never copy code from gpuix (it has **no license** — all rights reserved).
-  Ideas and architecture are fair game; expressions, files, diffs, and commits
-  are not.
-- Never depend on `@gpuix/*` npm packages.
+- This project was inspired by the *idea* of an existing unlicensed JS↔GPUI
+  bridge. Ideas and architecture are fair game; that project's code, files,
+  diffs, and commits are NOT — it has no license, so everything in it is all-
+  rights-reserved. Never copy from it, never depend on its packages.
 - Rich text/markdown/diff rendering will be ported from [Comet] (MIT) with
-  attribution headers — that is the legal source, not gpuix.
+  attribution headers — that is the legal source for those subsystems.
 
 [Comet]: https://github.com/zeronsh/comet
 

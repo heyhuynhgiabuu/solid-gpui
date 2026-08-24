@@ -16,11 +16,11 @@ Repo: **solid-gpui** (license Apache-2.0, ADR 003). Workspace layout:
 
 An Apache-2.0-licensed (ADR 003), Solid-first OSS repo that renders Solid 2 components into native
 GPUI windows (no webview), runnable under Node.js and Bun, with a clean-room architecture:
-idea-level inspiration from gpuix only; no gpuix code; no dependency on `@gpuix/*`.
+idea-level inspiration from the prior-art bridge only; no the prior-art bridge code; no dependency on `@the prior-art bridge/*`.
 
 ## Non-goals
 
-- No forking or copying gpuix source; no `@gpuix/native` / `@gpuix/react` dependency
+- No forking or copying the prior-art bridge source; no `@the prior-art bridge/native` / `@the prior-art bridge/react` dependency
 - No React renderer in v1 (Solid-first; React may come later behind the same protocol)
 - No Windows/Linux validation in Phase 1 (macOS-first; child-process model makes them cheap later)
 - No markdown/code/diff custom elements until Phase 3 (port from Comet, MIT, with attribution)

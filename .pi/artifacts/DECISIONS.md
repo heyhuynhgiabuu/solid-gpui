@@ -3,13 +3,13 @@
 ### 2026-08-24 - Phase 0 session
 status: active
 
-#### ADR 001: Clean-room stance toward gpuix
+#### ADR 001: Clean-room stance toward the prior-art bridge
 Decision: Take idea-level architecture only (mutation protocol → retained tree → GPUI frame
-build). Never copy gpuix source or commits, never depend on `@gpuix/*` packages, never
+build). Never copy the prior-art bridge source or commits, never depend on `@the prior-art bridge/*` packages, never
 carry remorses' unlicensed patch commits. Rich text/markdown/diff elements will be ported
 from Comet (MIT) with attribution when needed (Phase 3).
-Why: gpuix has no LICENSE (all rights reserved). Idea reuse is legal; expression reuse is not.
-User confirmed: no engagement with gpuix licensing (no issue opened).
+Why: the prior-art bridge has no LICENSE (all rights reserved). Idea reuse is legal; expression reuse is not.
+User confirmed: no engagement with the prior-art bridge licensing (no issue opened).
 Consequences: we solve the macOS event-loop problem ourselves (ADR 002); lower legal risk,
 more up-front engineering.
 
@@ -31,10 +31,10 @@ an in-process napi backend can be added behind the same protocol interface witho
 Decision: Apache-2.0 for the whole repo (LICENSE + headers).
 Why: patent grant; matches gpui family (Apache-2.0) we depend on; standard for Rust ecosystem.
 Consequences: LICENSE + NOTICE at repo root; Cargo `license = "Apache-2.0"`; package.json
-`"license": "Apache-2.0"`. Applies from first commit (gpuix's license gap is the cautionary tale).
+`"license": "Apache-2.0"`. Applies from first commit (the prior-art bridge's license gap is the cautionary tale).
 
 #### ADR 004: Repo name — solid-gpui (decided 2026-08-24)
 Decision: `solid-gpui` for repo, packages `@solid-gpui/*`, helper binary `solid-gpui-helper`.
-Why: says exactly what it is; distinct from `gpuix` (avoids clone perception); npm scope free to take.
+Why: says exactly what it is; distinct from `the prior-art bridge` (avoids clone perception); npm scope free to take.
 Consequences: local dir rename pending (user runs `mv` outside a live session); check npm scope
 availability before first publish.

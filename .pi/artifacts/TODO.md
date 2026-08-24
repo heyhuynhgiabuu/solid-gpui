@@ -3,7 +3,7 @@
 ### 2026-08-24 - Phase 0: architecture due diligence for Solid + GPUI OSS repo
 status: done (2026-08-24 — Q1–Q3 decided, spec frozen; community probe moved to Phase 1 block)
 
-- [x] Research gpuix repo (architecture, license gap, npm traction, fork burden) — prior session
+- [x] Research the prior-art bridge repo (architecture, license gap, npm traction, fork burden) — prior session
 - [x] Analyze fork embed patch (`MacPlatform::new_embedded` + `pump_events`, 1 file, +316/−31)
 - [x] Verify upstream PR zed-industries/zed#63077 status: open, not merged, bot-review only, created 2026-08-22
 - [x] Verify licensing: `gpui` + platform subcrates are Apache-2.0; Zed repo carries dual LICENSE-APACHE/LICENSE-GPL
