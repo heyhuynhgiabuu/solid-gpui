@@ -30,7 +30,7 @@ Prerequisites: Bun ≥1.4, Rust stable, full Xcode with the Metal toolchain
 (`xcrun metal --version` must work).
 
 ```sh
-git clone <this repo> && cd solid-gpui
+git clone https://github.com/heyhuynhgiabuu/solid-gpui && cd solid-gpui
 bun install
 cargo build -p solid-gpui-helper          # first build compiles gpui shaders
 bun run example/counter                  # counter in a real GPUI window;

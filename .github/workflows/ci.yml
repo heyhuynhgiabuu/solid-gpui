@@ -1,0 +1,59 @@
+# CI for solid-gpui.
+#
+# The helper needs macOS (Metal) for GUI paths, so Rust tests run on macOS
+# with SOLID_GPUI_SKIP_GUI_TESTS=1 (opens no windows on CI). TypeScript suites
+# are platform-independent and run on Linux.
+
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - run: bun install --frozen-lockfile
+      - run: bun run typecheck
+      - run: bun run test
+
+  rust:
+    runs-on: macos-14
+    env:
+      SOLID_GPUI_SKIP_GUI_TESTS: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo fmt --all -- --check
+      - run: cargo clippy --all-targets -- -D warnings
+      - run: cargo test -p solid-gpui-protocol -p solid-gpui-helper
+
+  node-smoke:
+    # Real Node runtime against the compiled helper (needs the binary, hence
+    # macOS; stdio mode opens no window).
+    runs-on: macos-14
+    env:
+      SOLID_GPUI_SKIP_GUI_TESTS: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo build -p solid-gpui-helper
+      - run: bun install --frozen-lockfile
+      - run: bunx tsx scripts/node-smoke.ts

@@ -6,7 +6,7 @@ members = ["crates/*"]
 version = "0.1.0"
 edition = "2024"
 license = "Apache-2.0"
-repository = "https://github.com/USER/solid-gpui"
+repository = "https://github.com/heyhuynhgiabuu/solid-gpui"
 
 [workspace.dependencies]
 serde = { version = "1", features = ["derive"] }
