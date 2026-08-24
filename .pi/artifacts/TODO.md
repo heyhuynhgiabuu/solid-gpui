@@ -234,3 +234,30 @@ nested-scroll gotcha. AGENTS.md gotcha text is stale (fixed same day).
       regression proof; r2 verdict: **S8 mergeable**. Closed 2026-08-24.
 
 Cross-ref: PLAN.md Phase 2 roadmap (S8 entry)
+
+### 2026-08-24 - S9: focus & keyboard (Phase 2)
+status: active
+Recon: gpui FocusHandle has native tab_index (isize) + tab_stop (bool) fields;
+focusable()/track_focus() on Stateful<Div>; cx.on_focus_in/on_focus_out per
+handle (window.rs / app/context.rs); window.focus_next/focus_prev for Tab;
+KeyDownEvent/KeyUpEvent carry keystroke.key:String + Modifiers. Event wire is
+a single-variant enum (tag type:event) with optional x/y — extend with
+optional key:String + modifiers{ctrl,alt,shift,cmd}; focus/blur need neither.
+
+- [ ] S9a Focusable core: tabIndex style key (number; -1 = focusable-not-tab,
+      0/>=1 = tab stop) -> FocusHandle map (mirror ScrollHandles: lazy at
+      render, prune per frame); onFocus/onBlur listeners -> focus/blur wire
+      events; focusElement command {id} for programmatic focus (also the test
+      hook); Event enum gains key+modifiers optional fields
+- [ ] S9a Tests: Event wire extension + focusElement fixture parity (both
+      languages); window test: mount focusable, focusElement -> focus event
+      line emitted, then blur on refocus-other or explicit test
+- [ ] S9b Keyboard: onKeyDown/onKeyUp -> keyDown/keyUp events carrying
+      key + modifiers; TS parity; window test: synthetic key via gpui
+      (keystroke injection) or assert wiring via emit helper
+- [ ] S9c Tab navigation (Rust-side window.focus_next/prev on Tab) +
+      autoFocus (style marker, focus once on first render) + tabIndex>0
+      ordering; window test for Tab cycling + autoFocus
+- [ ] VERIFY: suites green; commit per sub-slice; independent review
+
+Cross-ref: PLAN.md Phase 2 roadmap (S9 entry)
