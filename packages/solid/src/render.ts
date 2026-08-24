@@ -59,10 +59,22 @@ export async function render(
       )
       return
     }
-    fn()
-    void flush().catch((err) => {
-      console.error("[solid-gpui] event-triggered flush failed:", err)
-    })
+    let threw: unknown
+    try {
+      fn()
+    } catch (err) {
+      // A user handler must not kill the host process (this callback runs
+      // from the readline loop) nor skip the flush of mutations applied
+      // before the throw.
+      threw = err
+    }
+    void flush()
+      .catch((err) => {
+        console.error("[solid-gpui] event-triggered flush failed:", err)
+      })
+      .then(() => {
+        if (threw !== undefined) console.error("[solid-gpui] onClick handler threw:", threw)
+      })
   })
   return {
     connection,

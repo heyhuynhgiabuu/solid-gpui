@@ -52,6 +52,13 @@ function tree(h: Parameters<RenderHandle["update"]>[0]) {
 
 if (!g.__counterHandle) {
   g.__counterHandle = await render(tree)
+  // Drop the cache when this connection dies (dispose, crash, helper exit) so
+  // a later --hot re-evaluation mounts FRESH instead of updating a corpse.
+  // Skip if a newer mount already replaced the cached handle.
+  const mounted = g.__counterHandle
+  void mounted.connection.exited.then(() => {
+    if (g.__counterHandle === mounted) g.__counterHandle = undefined
+  })
   console.log("mounted (fresh helper)")
 } else {
   await g.__counterHandle.update(tree)
@@ -66,7 +73,14 @@ if (!g.__counterWired && g.__counterHandle) {
   })
   console.log("click the button in the window; Ctrl+C here to exit")
   process.on("SIGINT", () => {
-    void g.__counterHandle!.dispose().then(() => process.exit(0))
+    // Never hang on teardown: dispose races a hard cap, exit regardless.
+    const handle = g.__counterHandle
+    g.__counterHandle = undefined
+    if (!handle) process.exit(0)
+    void Promise.race([
+      handle.dispose().catch((err) => console.error("[solid-gpui] dispose failed:", err)),
+      new Promise((r) => setTimeout(r, 3000)),
+    ]).then(() => process.exit(0))
   })
 }
 

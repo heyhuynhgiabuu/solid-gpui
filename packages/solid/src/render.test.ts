@@ -65,6 +65,38 @@ describe("render(): event backchannel wiring", () => {
     await handle.dispose()
   })
 
+  test("a throwing onClick handler does not break routing or the flush", async () => {
+    const fake = fakeConnection()
+    const [count, setCount] = createSignal(0)
+
+    const handle = await render(
+      (h) =>
+        h(
+          "div",
+          {
+            onClick: () => {
+              setCount((c) => c + 1)
+              throw new Error("boom")
+            },
+          },
+          () => `Count: ${count()}`,
+        ),
+      { connection: fake.connection as HelperConnection },
+    )
+
+    // Must not throw synchronously out of onEvent (readline callback) —
+    // an uncaught error here would kill the host process.
+    fake.fireClick(2)
+    await new Promise((r) => setTimeout(r, 20))
+
+    // State change applied BEFORE the throw still crosses the wire.
+    expect(count()).toBe(1)
+    const followUp = fake.batches.slice(1).flatMap((b) => b.mutations.map((m) => m.op))
+    expect(followUp).toContain("setText")
+
+    await handle.dispose()
+  })
+
   test("update() remounts through the same suite: top-swap ops + routing survives", async () => {
     const fake = fakeConnection()
     const [count, setCount] = createSignal(0)
