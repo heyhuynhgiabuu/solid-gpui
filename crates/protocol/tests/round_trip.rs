@@ -1,7 +1,7 @@
 use solid_gpui_protocol::{
-    ApplyError, Command, Event, EventType, Mutation, MutationBatch, MutationHandler, ProtocolError,
-    Reply, ReplyCode, command_from_json, command_to_json, event_from_json, event_to_json,
-    from_json, reply_from_json, reply_to_json, to_json,
+    ApplyError, Command, ElementId, Event, EventType, Mutation, MutationBatch, MutationHandler,
+    ProtocolError, Reply, ReplyCode, command_from_json, command_to_json, event_from_json,
+    event_to_json, from_json, reply_from_json, reply_to_json, to_json,
 };
 use std::fs;
 
@@ -175,6 +175,42 @@ fn capture_frame_command_fixture_parses_and_emits_exactly() {
         Command::CaptureFrame {
             seq: 8,
             path: "/tmp/shot.png".into()
+        }
+    );
+    assert_eq!(command_to_json(&cmd), raw);
+}
+
+#[test]
+fn scroll_to_command_fixture_parses_and_emits_exactly() {
+    let raw = fs::read_to_string(fixture_path("command-scroll-to.json"))
+        .expect("fixture readable")
+        .trim()
+        .to_string();
+    let cmd = command_from_json(&raw).expect("command parses");
+    assert_eq!(
+        cmd,
+        Command::ScrollTo {
+            seq: 9,
+            id: ElementId(1),
+            x: 0.0,
+            y: 500.0,
+        }
+    );
+    assert_eq!(command_to_json(&cmd), raw);
+}
+
+#[test]
+fn get_scroll_offset_command_fixture_parses_and_emits_exactly() {
+    let raw = fs::read_to_string(fixture_path("command-get-scroll-offset.json"))
+        .expect("fixture readable")
+        .trim()
+        .to_string();
+    let cmd = command_from_json(&raw).expect("command parses");
+    assert_eq!(
+        cmd,
+        Command::GetScrollOffset {
+            seq: 10,
+            id: ElementId(1),
         }
     );
     assert_eq!(command_to_json(&cmd), raw);

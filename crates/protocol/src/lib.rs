@@ -204,6 +204,20 @@ pub enum Command {
         /// Absolute path where the helper writes the PNG of its own window.
         path: String,
     },
+
+    ScrollTo {
+        seq: u32,
+        /// Retained element id holding a live scroll handle.
+        id: ElementId,
+        /// Target offset in px (absolute, not relative).
+        x: f64,
+        y: f64,
+    },
+
+    GetScrollOffset {
+        seq: u32,
+        id: ElementId,
+    },
 }
 
 /// Serialize a command to one JSON line. Infallible for this type shape.
@@ -219,11 +233,14 @@ pub fn command_from_json(s: &str) -> Result<Command, ProtocolError> {
             message: e.to_string(),
         })?;
     let type_str = value.get("type").and_then(|t| t.as_str());
-    if !matches!(type_str, Some("getStats") | Some("captureFrame")) {
+    if !matches!(
+        type_str,
+        Some("getStats") | Some("captureFrame") | Some("scrollTo") | Some("getScrollOffset")
+    ) {
         return Err(ProtocolError::InvalidShape {
             path: "type".into(),
             message: format!(
-                "unknown command {:?}; expected getStats|captureFrame",
+                "unknown command {:?}; expected getStats|captureFrame|scrollTo|getScrollOffset",
                 type_str.unwrap_or("<missing>")
             ),
         });

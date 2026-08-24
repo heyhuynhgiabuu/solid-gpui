@@ -92,6 +92,8 @@ fn command_ident(command: &solid_gpui_protocol::Command) -> (u32, &'static str) 
     match command {
         solid_gpui_protocol::Command::GetStats { seq } => (*seq, "getStats"),
         solid_gpui_protocol::Command::CaptureFrame { seq, .. } => (*seq, "captureFrame"),
+        solid_gpui_protocol::Command::ScrollTo { seq, .. } => (*seq, "scrollTo"),
+        solid_gpui_protocol::Command::GetScrollOffset { seq, .. } => (*seq, "getScrollOffset"),
     }
 }
 
@@ -303,6 +305,46 @@ fn run_stdio_window() {
                                 },
                             }
                         }
+                        solid_gpui_protocol::Command::ScrollTo { seq, id, x, y } => window
+                            .update(cx, |view, _window, cx| {
+                                match view.scroll_to(id, x, y) {
+                                    Ok(()) => {
+                                        // Re-render so the new offset paints.
+                                        cx.notify();
+                                        Reply::Result {
+                                            seq,
+                                            value: serde_json::json!({ "applied": true }),
+                                        }
+                                    }
+                                    Err(message) => Reply::Error {
+                                        seq: Some(seq),
+                                        code: ReplyCode::ApplyFailed,
+                                        message,
+                                    },
+                                }
+                            })
+                            .unwrap_or_else(|e| Reply::Error {
+                                seq: Some(seq),
+                                code: ReplyCode::Unsupported,
+                                message: format!("window closed: {e}"),
+                            }),
+                        solid_gpui_protocol::Command::GetScrollOffset { seq, id } => window
+                            .update(cx, |view, _window, _cx| match view.scroll_offset(id) {
+                                Some((x, y)) => Reply::Result {
+                                    seq,
+                                    value: serde_json::json!({ "offsetX": x, "offsetY": y }),
+                                },
+                                None => Reply::Error {
+                                    seq: Some(seq),
+                                    code: ReplyCode::ApplyFailed,
+                                    message: format!("no scrollable element for id {}", id.0),
+                                },
+                            })
+                            .unwrap_or_else(|e| Reply::Error {
+                                seq: Some(seq),
+                                code: ReplyCode::Unsupported,
+                                message: format!("window closed: {e}"),
+                            }),
                     },
                     Job::Batch(batch) => {
                         let seq = batch.seq;
@@ -311,7 +353,18 @@ fn run_stdio_window() {
                         let update_result = window.update(cx, |view, _window, cx| {
                             for m in &batch.mutations {
                                 match view.tree.apply(m) {
-                                    Ok(()) => applied += 1,
+                                    Ok(()) => {
+                                        applied += 1;
+                                        // Materialize the scroll handle at apply
+                                        // time so scrollTo works before the first
+                                        // paint (render-population is lazy).
+                                        if let solid_gpui_protocol::Mutation::SetStyle {
+                                            id, ..
+                                        } = m
+                                        {
+                                            view.ensure_scroll_handle(*id);
+                                        }
+                                    }
                                     Err(e) => {
                                         err = Some(e.to_string());
                                         break;

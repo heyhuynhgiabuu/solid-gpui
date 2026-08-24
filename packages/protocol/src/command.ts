@@ -8,6 +8,8 @@ import type { ProtocolError, Result } from "./batch"
 export type SolidGpuiCommand =
   | { readonly type: "getStats"; readonly seq: number }
   | { readonly type: "captureFrame"; readonly seq: number; readonly path: string }
+  | { readonly type: "scrollTo"; readonly seq: number; readonly id: number; readonly x: number; readonly y: number }
+  | { readonly type: "getScrollOffset"; readonly seq: number; readonly id: number }
 
 const isInt = (v: unknown): v is number => typeof v === "number" && Number.isInteger(v)
 
@@ -34,7 +36,8 @@ export function decodeCommand(json: string): Result<SolidGpuiCommand, ProtocolEr
   if (!isDict(parsed)) return { ok: false, error: shape("$", "expected an object") }
 
   const type = parsed.type
-  if (type !== "getStats" && type !== "captureFrame") {
+  const KNOWN = ["getStats", "captureFrame", "scrollTo", "getScrollOffset"]
+  if (!KNOWN.includes(type as string)) {
     return {
       ok: false,
       error: shape("type", `unknown command ${JSON.stringify(type ?? null)}`),
@@ -50,7 +53,32 @@ export function decodeCommand(json: string): Result<SolidGpuiCommand, ProtocolEr
     }
     return { ok: true, value: { type, seq: parsed.seq, path: parsed.path } }
   }
-  return { ok: true, value: { type, seq: parsed.seq } }
+  if (type === "scrollTo" || type === "getScrollOffset") {
+    // Locals first: typeof/isInt guards narrow plain bindings, not
+    // property accesses on a Record<string, unknown>.
+    const id = parsed.id
+    const x = parsed.x
+    const y = parsed.y
+    const badId = !isInt(id) || (id as number) < 1 || (id as number) > 0xffff_ffff
+    if (type === "scrollTo") {
+      if (badId || typeof x !== "number" || typeof y !== "number") {
+        return {
+          ok: false,
+          error: shape("id/x/y", "scrollTo needs integer id and numeric x/y"),
+        }
+      }
+      // Literal type fields: `type` is `unknown` and TS cannot narrow it
+      // across nested ifs (false-branch of a literal check on unknown stays
+      // unknown), so spell the variant name out here.
+      return { ok: true, value: { type: "scrollTo", seq: parsed.seq, id, x, y } }
+    }
+    if (badId) {
+      return { ok: false, error: shape("id", "getScrollOffset needs an integer id") }
+    }
+    return { ok: true, value: { type: "getScrollOffset", seq: parsed.seq, id } }
+  }
+  // Fallthrough: every other known type returned above, so this is getStats.
+  return { ok: true, value: { type: "getStats", seq: parsed.seq } }
 }
 
 /** Encode a command to one JSON line. Field order matches the Rust encoder's
@@ -61,6 +89,22 @@ export function encodeCommand(command: SolidGpuiCommand): string {
       type: "captureFrame",
       seq: command.seq,
       path: command.path,
+    })
+  }
+  if (command.type === "scrollTo") {
+    return JSON.stringify({
+      type: "scrollTo",
+      seq: command.seq,
+      id: command.id,
+      x: command.x,
+      y: command.y,
+    })
+  }
+  if (command.type === "getScrollOffset") {
+    return JSON.stringify({
+      type: "getScrollOffset",
+      seq: command.seq,
+      id: command.id,
     })
   }
   return JSON.stringify({ type: "getStats", seq: command.seq })

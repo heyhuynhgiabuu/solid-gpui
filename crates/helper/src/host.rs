@@ -2,7 +2,7 @@
 
 use crate::frame_stats::FrameStats;
 use gpui::{
-    AnyElement, Context, Div, InteractiveElement, IntoElement, ParentElement, Render, Rgba,
+    AnyElement, Context, Div, InteractiveElement, IntoElement, ParentElement, Point, Render, Rgba,
     ScrollHandle, SharedString, StatefulInteractiveElement, Styled, Window, div, px, rgb, rgba,
 };
 use solid_gpui_protocol::{ElementId, ElementType, Event, RetainedTree, StyleValue};
@@ -73,6 +73,45 @@ impl HostView {
             "maxMs": ms(self.stats.max()),
             "lastMs": ms(self.stats.last()),
         })
+    }
+
+    /// Eagerly materialize a scroll handle when a setStyle declares an
+    /// overflow scroll value — scrollTo must work before the first paint, and
+    /// the map is otherwise populated lazily during render. Idempotent with
+    /// the render-time get-or-create.
+    pub fn ensure_scroll_handle(&self, id: ElementId) {
+        if let Some(node) = self.tree.get(id) {
+            if node
+                .style
+                .get("overflow")
+                .and_then(parse_overflow)
+                .is_some()
+            {
+                self.scroll_handles.borrow_mut().entry(id).or_default();
+            }
+        }
+    }
+
+    /// S8b scrollTo: move a scrollable element's retained offset. Fails when
+    /// the id never rendered with an `overflow` scroll style (no handle).
+    pub fn scroll_to(&self, id: ElementId, x: f64, y: f64) -> Result<(), String> {
+        let handles = self.scroll_handles.borrow();
+        let Some(handle) = handles.get(&id) else {
+            return Err(format!(
+                "no scrollable element for id {}; set overflow=scroll on it first",
+                id.0
+            ));
+        };
+        handle.set_offset(Point::new(px(x as f32), px(y as f32)));
+        Ok(())
+    }
+
+    /// S8b getScrollOffset: read a scrollable element's current offset.
+    pub fn scroll_offset(&self, id: ElementId) -> Option<(f64, f64)> {
+        let handles = self.scroll_handles.borrow();
+        let handle = handles.get(&id)?;
+        let off = handle.offset();
+        Some((off.x.to_f64(), off.y.to_f64()))
     }
 
     /// Push a click event to the JS side as one NDJSON line. The process-

@@ -170,3 +170,67 @@ fn window_mode_mounts_scroll_container() {
     let status = child.wait().expect("wait");
     assert_eq!(status.code(), Some(0), "EOF must exit 0");
 }
+
+#[test]
+fn window_mode_scrolls_via_commands() {
+    if skip() {
+        return;
+    }
+    let bin = env!("CARGO_BIN_EXE_solid-gpui-helper");
+    let mut child = Command::new(bin)
+        .arg("--stdio-window")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .spawn()
+        .expect("helper spawns");
+
+    let mut stdin = child.stdin.take().expect("stdin piped");
+    let reader = BufReader::new(child.stdout.take().expect("stdout piped"));
+    let mut lines = reader.lines();
+
+    // Mount the same 200px scroll container over a 2000px child.
+    let batch = concat!(
+        r#"{"v":1,"seq":55,"mutations":["#,
+        r#"{"op":"createElement","id":1,"elementType":"div"},"#,
+        r#"{"op":"setRoot","id":1},"#,
+        r#"{"op":"setStyle","id":1,"style":{"overflow":"scroll","height":200}},"#,
+        r#"{"op":"createElement","id":2,"elementType":"div"},"#,
+        r#"{"op":"appendChild","parentId":1,"childId":2},"#,
+        r#"{"op":"setStyle","id":2,"style":{"height":2000}},"#,
+        r#"{"op":"createElement","id":3,"elementType":"text"},"#,
+        r#"{"op":"appendChild","parentId":2,"childId":3},"#,
+        r#"{"op":"setText","id":3,"text":"tall content"}]}"#,
+    );
+    writeln!(stdin, "{batch}").unwrap();
+    stdin.flush().unwrap();
+    assert_eq!(
+        lines.next().unwrap().unwrap(),
+        r#"{"type":"ack","seq":55,"applied":9}"#
+    );
+
+    // scrollTo sets the retained handle's offset...
+    writeln!(
+        stdin,
+        "{}",
+        r#"{"type":"scrollTo","seq":61,"id":1,"x":0.0,"y":500.0}"#
+    )
+    .unwrap();
+    stdin.flush().unwrap();
+    assert_eq!(
+        lines.next().unwrap().unwrap(),
+        r#"{"type":"result","seq":61,"value":{"applied":true}}"#
+    );
+
+    // ...and getScrollOffset reads it back exactly.
+    writeln!(stdin, "{}", r#"{"type":"getScrollOffset","seq":62,"id":1}"#).unwrap();
+    stdin.flush().unwrap();
+    assert_eq!(
+        lines.next().unwrap().unwrap(),
+        r#"{"type":"result","seq":62,"value":{"offsetX":0.0,"offsetY":500.0}}"#
+    );
+
+    // EOF quits the app cleanly.
+    drop(stdin);
+    let status = child.wait().expect("wait");
+    assert_eq!(status.code(), Some(0), "EOF must exit 0");
+}
