@@ -203,4 +203,8 @@ status: active
       getStats over the wire; baseline p95 = 0.942ms vs 10ms budget (0986260)
 - [ ] VERIFY: all suites green; commit per sub-slice; independent review
 
+Review round 1: NOT mergeable — Major fixed in 9266b9d (unified seq
+namespace; command error replies now reject their caller; regression test
+added). Resubmitting for round 2.
+
 Cross-ref: PLAN.md#2026-08-24---phase-2-candidate-roadmap-prior-art-informed
