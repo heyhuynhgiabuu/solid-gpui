@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import fixture from "../fixtures/batch-01.json"
+import rustEmitted from "../fixtures/rust-emitted-batch-01.json"
 import { elementId } from "./ids"
 import { decodeBatch, encodeBatch } from "./batch"
 import type { MutationBatch } from "./batch"
@@ -51,6 +52,18 @@ describe("decodeBatch round-trip", () => {
     const setText = first.mutations[8]
     expect(setText && "text" in setText && setText.text).toBe("Xin chào solid-gpui 🎉")
     expect(decoded(encodeBatch(first))).toEqual(first)
+  })
+})
+
+describe("Rust→TS parity (committed snapshot)", () => {
+  test("Rust-emitted JSON decodes to the same batch as the hand-written fixture", () => {
+    const fromRust = decoded(JSON.stringify(rustEmitted))
+    const fromHand = decoded(JSON.stringify(fixture))
+    expect(fromRust).toEqual(fromHand)
+  })
+
+  test("Rust-emitted snapshot is a single NDJSON line", () => {
+    expect(JSON.stringify(rustEmitted)).not.toContain("\n")
   })
 })
 

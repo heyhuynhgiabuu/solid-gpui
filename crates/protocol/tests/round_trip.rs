@@ -46,6 +46,32 @@ fn handler_receives_every_mutation_in_order() {
     assert_eq!(rec.ops, batch.mutations);
 }
 
+fn emitted_snapshot_path() -> std::path::PathBuf {
+    std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../packages/protocol/fixtures/rust-emitted-batch-01.json")
+}
+
+/// Slice 2 contract: the committed snapshot must be byte-identical to what
+/// Rust `to_json` emits for the shared fixture. Regenerate with
+/// `cargo test -p solid-gpui-protocol regenerate_rust_emission -- --ignored`
+/// and commit the result — bun tests parse the same file.
+#[test]
+fn rust_emission_matches_committed_snapshot() {
+    let batch = from_json(&fixture()).expect("fixture parses");
+    let emitted = to_json(&batch);
+    let snapshot = std::fs::read_to_string(emitted_snapshot_path())
+        .expect("snapshot missing — regenerate it (see this test's doc comment)");
+    assert_eq!(emitted, snapshot.trim_end());
+}
+
+#[test]
+#[ignore = "generator: run explicitly to (re)write the committed snapshot"]
+fn regenerate_rust_emission() {
+    let batch = from_json(&fixture()).expect("fixture parses");
+    std::fs::write(emitted_snapshot_path(), format!("{}\n", to_json(&batch)))
+        .expect("snapshot writable");
+}
+
 #[test]
 fn rejects_unsupported_version() {
     let err = from_json(r#"{"v":2,"seq":0,"mutations":[]}"#).unwrap_err();
