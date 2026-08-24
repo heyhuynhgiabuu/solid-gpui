@@ -66,6 +66,22 @@
 - in-flight promise hygiene: duplicate-seq guard + write-then-set ordering (a throwing
   sync write must not leak a pending entry).
 
+## Slice 4 learnings (2026-08-24)
+
+- My "cycles structurally impossible" claim was falsified by review: a PARENTLESS
+  ANCESTOR (the root!) could be appended into its own descendant — parentless ≠
+  acyclic. Real invariant needs an ancestor walk. Depth cap (256) doubles as the
+  render-stack bound and a cycle backstop.
+- gpui rgb(hex) skips the TOP byte (`[_, r, g, b]`) — 8-digit #rrggbbaa misrenders
+  and forces a=1; rgba(hex) is the correct constructor for alpha colors.
+- gpui has NO overflow_scroll style anymore — scrolling is a dedicated element
+  (`scrollable()`); v1 maps overflow:scroll → overflow_y_hidden (clip).
+- gpui current API notes: entry gpui_platform::application(); `cx.new` comes from
+  prelude::AppContext; WindowHandle::update closure is (view, window, cx) — 3 args;
+  cx.spawn(async move |cx|…); channels pattern stdin-thread ↔ futures mpsc → main.
+- Validation/rendering agreement principle: if the renderer silently drops it
+  (children of text nodes), validation must reject it — else `applied` lies.
+
 ## Slice 2 learnings (2026-08-24)
 
 - gpui on zed main (Aug 2026): entry is `gpui_platform::application().run(|cx: &mut App|…)`

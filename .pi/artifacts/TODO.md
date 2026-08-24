@@ -32,7 +32,11 @@ Part 4b:
 - [x] e2e GUI-gated (bun: fixture ack applied=12; correlated ReplyError test)
       (rust: stdio_window 1/1; bun client 7/7 window e2e included)
 - [x] Demo script; user visual check — **user saw the fixture render 2026-08-24**
-- [ ] Independent review verdict (mt6xrf5t-3592 running) → fix findings → close slice
+- [x] Independent review verdict — findings-should-fix: Major cycle hole +
+      3 minors + notes; ALL fixed with regression tests in 9b57c55 (ancestor
+      walk + MAX_DEPTH 256, root-clear on destroy, rgba() 8-digit colors,
+      text-node children rejected, fmt, GUI gating, window-closed reply).
+      Slice 4 CLOSED (commits 35900a6, 72d7059, 9b57c55).
 
 Semantics decided (documented in retained.rs): child must be parentless on
 append/insert (cycle-proof), removeChild keeps element alive for re-append,
