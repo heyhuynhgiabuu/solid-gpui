@@ -74,11 +74,6 @@ function defaultBinary(): string {
   return resolve(here, "../../../target/debug/solid-gpui-helper")
 }
 
-type Pending = {
-  resolve: (ack: Ack) => void
-  reject: (err: Error) => void
-}
-
 type EventListener = (event: SolidGpuiEvent) => void
 
 /**
@@ -101,7 +96,7 @@ type PendingEntry =
     }
 
 class HelperConnection {
-  private readonly pending = new Map<number, Pending>()
+  private readonly pending = new Map<number, PendingEntry>()
   private readonly eventListeners: EventListener[] = []
 
   private closed = false

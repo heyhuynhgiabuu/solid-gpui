@@ -264,5 +264,29 @@
     "reportedStatus": "failure",
     "resultValid": true,
     "completedAt": 1787581117790
+  },
+  {
+    "id": "mt7brdlu-56bb",
+    "agentType": "reviewer",
+    "description": "Re-review S7 after Major fix",
+    "sessionName": "task-mt7brdlu-56bb",
+    "startedAt": 1787581318863,
+    "paneId": "w3:pDX",
+    "handle": {
+      "backend": "herdr",
+      "resourceId": "w3:pDX",
+      "socketPath": "/Users/huynhgiabuu/.config/herdr/herdr.sock",
+      "terminalId": "term_659cbb53e73b22c",
+      "agentName": "reviewer-mt7brdlu",
+      "foregroundProcessGroupId": 42507
+    },
+    "piDir": "/Users/huynhgiabuu/dev/projects/solid-gpui/.pi",
+    "dir": "/Users/huynhgiabuu/dev/projects/solid-gpui/.pi/artifacts/tasks",
+    "cwd": "/Users/huynhgiabuu/dev/projects/solid-gpui",
+    "status": "done",
+    "background": true,
+    "reportedStatus": "failure",
+    "resultValid": true,
+    "completedAt": 1787581577830
   }
 ]
