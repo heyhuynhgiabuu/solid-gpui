@@ -43,3 +43,8 @@
 - serde: enum-level `rename_all` renames VARIANT names only; variant fields need their own `#[serde(rename_all = "camelCase")]`. Internally tagged "op" + untagged StyleValue over serde_json::Number (preserves int repr, unlike f64).
 - Bun 1.4.0 runs bun:test + JSON imports + TS zero-config; tsc strict + bun-types for typecheck.
 - Rust edition 2024 let-chains satisfy clippy collapsible_if.
+- Reviewer gotcha worth remembering: `x as u32` on a u64 silently truncates wire-reported
+  values (v=4294967298 read as 2) — report the full width or reject; caught only by a test
+  that literally could not compile against the truncated field type (compile-time RED).
+- Consumer guidance from review: style-key values must stay string|number; __proto__-style
+  keys are inert today, but widening value types would require Map/defineProperty copies.

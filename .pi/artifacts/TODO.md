@@ -14,7 +14,7 @@ status: done (2026-08-24 — Q1–Q3 decided, spec frozen; community probe moved
 - [ ] Community probe (r/solidjs, Solid Discord) — user action, parallel to Phase 1
 
 ### 2026-08-24 - Slice 1: mutation protocol (TS + Rust) with shared fixture
-status: active
+status: done (2026-08-24, commit c73e89d)
 
 Seam under test: `encodeBatch`/`decodeBatch` (TS, `@solid-gpui/protocol`) and
 `from_json`/`to_json` + `MutationHandler` (Rust, `solid-gpui-protocol`), plus one shared
@@ -25,10 +25,13 @@ JSON fixture consumed by both languages (cross-language wire contract).
 - [x] GREEN: TS decode/encode with typed ProtocolError (Result, no throw for recoverable) — 13/13 pass
 - [x] RED: Rust tests (cargo test) fail on stubbed from_json — 0 pass / 8 fail, stub Err observed
 - [x] GREEN: Rust serde types + pre-checks (unknownOp, version, eventType, id>=1) — 8/8 pass
-- [ ] VERIFY: bun test + cargo test + tsc noEmit + cargo clippy clean; independent reviewer verdict; commit
+- [x] VERIFY: bun test 13/13 + cargo test 10/10 + tsc noEmit OK + clippy clean; reviewer verdict **clean** (0 critical/major; 5 minors fixed or documented); commit c73e89d
 
 Run report (2026-08-24): RED observed both languages on stubs; GREEN: bun 13/13,
-cargo 8/8, tsc noEmit OK (after keyof-index-signature fix), clippy clean (after
-let-chains collapse). Reviewer mt6udsof-f64a running; commit deferred until verdict.
+cargo 8/8→10/10 after review fixes, tsc OK, clippy clean. Reviewer mt6udsof-f64a
+verdict clean (empirical cross-language probes incl. serde byte-shape, __proto__,
+bounds, dup keys); minors fixed: u64 version (no truncation), zero-id field paths,
+NDJSON \n test live, dead branch removed; documented: serde error-path parity
+deferred to Slice 2; note: JS number lossy >2^53 (doc'd in style.ts).
 
 Cross-ref: PLAN.md#2026-08-24---solid--gpui-oss-repo-spec-frozen-2026-08-24-after-q1q3
