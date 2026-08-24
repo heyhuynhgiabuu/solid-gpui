@@ -25,6 +25,14 @@ function fakeConnection() {
     connection: conn as unknown as HelperConnection,
     batches,
     fireClick: (id: number) => onEventCb?.({ type: "event", id, eventType: "click" }),
+    fireKey: (id: number) =>
+      onEventCb?.({
+        type: "event",
+        id,
+        eventType: "keyDown",
+        key: "Enter",
+        modifiers: { ctrl: true, alt: false, shift: false, cmd: false },
+      }),
   }
 }
 
@@ -135,4 +143,38 @@ describe("render(): event backchannel wiring", () => {
 
     await handle.dispose()
   })
+})
+
+test("onKeyDown handler receives key + modifiers payload", async () => {
+  const fake = fakeConnection()
+  let got: SolidGpuiEvent | undefined
+  const handle = await render(
+    (h) =>
+      h(
+        "div",
+        {
+          style: { display: "flex" },
+          onKeyDown: (event: SolidGpuiEvent) => {
+            got = event
+          },
+        },
+        "k",
+      ),
+    { connection: fake.connection as HelperConnection },
+  )
+
+  const mountOps = fake.batches[0]!.mutations.map((m) => m.op)
+  expect(mountOps).toContain("setEventListener")
+  fake.fireKey(2)
+
+  // Handler ran synchronously inside the event callback.
+  expect(got).toEqual({
+    type: "event",
+    id: 2,
+    eventType: "keyDown",
+    key: "Enter",
+    modifiers: { ctrl: true, alt: false, shift: false, cmd: false },
+  })
+
+  await handle.dispose()
 })

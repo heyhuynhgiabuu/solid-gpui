@@ -59,6 +59,10 @@ pub struct HostView {
     /// frame; without this, each render would register a fresh subscription
     /// and one focus change would emit N duplicate events (observed 3x).
     focus_subscribed: HashSet<ElementId>,
+    /// autoFocus target waiting for the next frame: focused via defer_in so
+    /// the focus subscription (activated one frame later by gpui) is live
+    /// when the focus happens — otherwise the focus event is silently missed.
+    autofocus_pending: Option<ElementId>,
 }
 
 impl HostView {
@@ -71,6 +75,7 @@ impl HostView {
             focus_handles: Rc::new(RefCell::new(HashMap::new())),
             focus_subscriptions: Vec::new(),
             focus_subscribed: HashSet::new(),
+            autofocus_pending: None,
         }
     }
 
@@ -150,6 +155,7 @@ impl HostView {
     pub fn ensure_focus_handle(&self, id: ElementId, cx: &mut gpui::App) {
         let wants_focus = self.tree.get(id).is_some_and(|n| {
             n.style.contains_key("tabIndex")
+                || n.style.contains_key("autoFocus")
                 || n.listeners.contains(&EventType::Focus)
                 || n.listeners.contains(&EventType::Blur)
                 || n.listeners.contains(&EventType::KeyDown)
@@ -161,6 +167,12 @@ impl HostView {
                 .entry(id)
                 .or_insert_with(|| cx.focus_handle());
         }
+    }
+
+    /// Record the autoFocus target; render() focuses it via a deferred
+    /// callback so the focus event is not missed (see autofocus_pending).
+    pub fn mark_autofocus(&mut self, id: ElementId) {
+        self.autofocus_pending.get_or_insert(id);
     }
 
     /// S9: programmatic focus for the focusElement command. Fails when the
@@ -230,36 +242,40 @@ impl HostView {
 
     /// Push a keyDown event to the JS side (keystroke key + modifiers).
     fn emit_key(&self, id: ElementId, event: &gpui::KeyDownEvent) {
-        self.emit_event(
+        let line = solid_gpui_protocol::event_to_json(&key_event(
             id,
             EventType::KeyDown,
-            None,
-            None,
-            Some(event.keystroke.key.clone()),
-            Some(solid_gpui_protocol::Modifiers {
-                ctrl: event.keystroke.modifiers.control,
-                alt: event.keystroke.modifiers.alt,
-                shift: event.keystroke.modifiers.shift,
-                cmd: event.keystroke.modifiers.platform,
-            }),
-        );
+            &event.keystroke,
+        ));
+        let mut out = std::io::stdout().lock();
+        let _ = writeln!(out, "{line}");
+        let _ = out.flush();
     }
 
     /// Push a keyUp event to the JS side.
     fn emit_key_up(&self, id: ElementId, event: &gpui::KeyUpEvent) {
-        self.emit_event(
-            id,
-            EventType::KeyUp,
-            None,
-            None,
-            Some(event.keystroke.key.clone()),
-            Some(solid_gpui_protocol::Modifiers {
-                ctrl: event.keystroke.modifiers.control,
-                alt: event.keystroke.modifiers.alt,
-                shift: event.keystroke.modifiers.shift,
-                cmd: event.keystroke.modifiers.platform,
-            }),
-        );
+        let line =
+            solid_gpui_protocol::event_to_json(&key_event(id, EventType::KeyUp, &event.keystroke));
+        let mut out = std::io::stdout().lock();
+        let _ = writeln!(out, "{line}");
+        let _ = out.flush();
+    }
+}
+
+/// Map a gpui keystroke to the wire event (pure — unit-tested modifier map).
+fn key_event(id: ElementId, event_type: EventType, keystroke: &gpui::Keystroke) -> Event {
+    Event::Input {
+        id,
+        event_type,
+        x: None,
+        y: None,
+        key: Some(keystroke.key.clone()),
+        modifiers: Some(solid_gpui_protocol::Modifiers {
+            ctrl: keystroke.modifiers.control,
+            alt: keystroke.modifiers.alt,
+            shift: keystroke.modifiers.shift,
+            cmd: keystroke.modifiers.platform,
+        }),
     }
 }
 
@@ -292,6 +308,18 @@ impl Render for HostView {
             None => div().size_full().bg(rgb(0x1e1e2e)).into_any_element(),
         };
         self.stats.push(started.elapsed());
+
+        // Focus the autoFocus target after this frame's deferred callbacks:
+        // the on_focus_in subscription (registered during build_element,
+        // activated via defer) must be live before handle.focus so the focus
+        // event reaches JS.
+        if let Some(id) = self.autofocus_pending.take() {
+            cx.defer_in(window, move |view, window, cx| {
+                if let Some(handle) = view.focus_handles.borrow().get(&id).cloned() {
+                    handle.focus(window, cx);
+                }
+            });
+        }
 
         if !self.overlay {
             return content;
@@ -389,7 +417,8 @@ fn build_element(
         Some(StyleValue::Number(n)) => n.as_f64().map(|f| f as isize),
         _ => None,
     };
-    let wants_focus = tab_index.is_some() || has_focus || has_key;
+    let has_autofocus = node.style.contains_key("autoFocus");
+    let wants_focus = tab_index.is_some() || has_focus || has_key || has_autofocus;
     if axis.is_none() && !has_click && !wants_focus {
         return el.into_any_element();
     }
@@ -436,6 +465,19 @@ fn build_element(
             subscriptions.push(sub_in);
             subscriptions.push(sub_out);
         }
+        // Tab navigates focus Rust-side (no IPC roundtrip per key). Handled
+        // on every focusable element because gpui only delivers keys to the
+        // focused element and window.on_key_event requires the paint phase.
+        let tab_listener = cx.listener(move |_view, event: &gpui::KeyDownEvent, window, cx| {
+            if event.keystroke.key == "tab" {
+                if event.keystroke.modifiers.shift {
+                    window.focus_prev(cx);
+                } else {
+                    window.focus_next(cx);
+                }
+            }
+        });
+        el = el.on_key_down(tab_listener);
         if has_key {
             let listener = cx.listener(move |view, event: &gpui::KeyDownEvent, _window, _cx| {
                 view.emit_key(id, event);
@@ -608,6 +650,41 @@ mod tests {
                 b: 0.0,
                 a: 0x80 as f32 / 255.0,
             }
+        );
+    }
+
+    #[test]
+    fn key_event_maps_modifiers_into_wire_shape() {
+        let ks = gpui::Keystroke {
+            modifiers: gpui::Modifiers {
+                control: true,
+                platform: true,
+                ..Default::default()
+            },
+            key: "Enter".into(),
+            ..Default::default()
+        };
+        let event = key_event(ElementId(9), EventType::KeyDown, &ks);
+        match &event {
+            Event::Input {
+                id,
+                event_type,
+                key,
+                modifiers,
+                ..
+            } => {
+                assert_eq!(*id, ElementId(9));
+                assert_eq!(*event_type, EventType::KeyDown);
+                assert_eq!(key.as_deref(), Some("Enter"));
+                let m = modifiers.expect("modifiers present");
+                assert!(m.ctrl && m.cmd && !m.alt && !m.shift, "{m:?}");
+            }
+        }
+        // Byte check: ctrl+cmd map to the wire flags, alt/shift stay false.
+        let json = solid_gpui_protocol::event_to_json(&event);
+        assert_eq!(
+            json,
+            r#"{"type":"event","id":9,"eventType":"keyDown","key":"Enter","modifiers":{"ctrl":true,"alt":false,"shift":false,"cmd":true}}"#
         );
     }
 

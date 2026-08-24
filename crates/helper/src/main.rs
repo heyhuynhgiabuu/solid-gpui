@@ -370,6 +370,7 @@ fn run_stdio_window() {
                         let seq = batch.seq;
                         let mut applied: u32 = 0;
                         let mut err: Option<String> = None;
+                        let mut autofocus_target: Option<solid_gpui_protocol::ElementId> = None;
                         let update_result = window.update(cx, |view, _window, cx| {
                             for m in &batch.mutations {
                                 match view.tree.apply(m) {
@@ -380,11 +381,18 @@ fn run_stdio_window() {
                                         // the first paint (render-population
                                         // is lazy).
                                         if let solid_gpui_protocol::Mutation::SetStyle {
-                                            id, ..
+                                            id,
+                                            style,
                                         } = m
                                         {
                                             view.ensure_scroll_handle(*id);
                                             view.ensure_focus_handle(*id, cx);
+                                            // autoFocus: first element whose
+                                            // style declares it wins; focused
+                                            // once (HTML semantics).
+                                            if style.contains_key("autoFocus") {
+                                                autofocus_target.get_or_insert(*id);
+                                            }
                                         }
                                         if let solid_gpui_protocol::Mutation::SetEventListener {
                                             id,
@@ -399,6 +407,11 @@ fn run_stdio_window() {
                                         break;
                                     }
                                 }
+                            }
+                            // autoFocus target focuses on the next frame via
+                            // defer_in (subscriptions activate one frame late).
+                            if let Some(id) = autofocus_target {
+                                view.mark_autofocus(id);
                             }
                             cx.notify();
                         });

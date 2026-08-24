@@ -8,6 +8,7 @@ import {
 import {
   elementId,
   type EventType,
+  type SolidGpuiEvent,
   type Mutation,
   type MutationBatch,
   type StyleMap,
@@ -44,8 +45,9 @@ export interface SolidGpuiRenderer {
   render(code: () => HostNode, container: HostNode): () => void
   /** Flush queued mutations as one batch through `send`. No-op when idle. */
   flush(): Promise<void>
-  /** Handler registry for future event backchannel (passive in v1). */
-  handler(id: number, event: EventType): (() => void) | undefined
+  /** Handler registry: returns the user's handler for an id+eventType.
+   *  Receives the full decoded event (keyDown carries key/modifiers). */
+  handler(id: number, event: EventType): ((event: SolidGpuiEvent) => void) | undefined
   /** Shadow-tree queries + removal (universal's Renderer type hides these). */
   removeNode(parent: HostNode, node: HostNode): void
   firstChild(node: HostNode): HostNode | undefined
@@ -93,7 +95,7 @@ export function createSolidRenderer(send: Send): SolidGpuiRenderer {
   let seq = 0
   const queue: Mutation[] = []
   const shadow = new Map<number, { parent: HostNode | null; children: HostNode[] }>()
-  const handlers = new Map<string, () => void>()
+  const handlers = new Map<string, (event: SolidGpuiEvent) => void>()
   let topNode: HostNode | null = null
   let poisoned: string | null = null
   let disposedAll: (() => void) | null = null
@@ -171,7 +173,7 @@ export function createSolidRenderer(send: Send): SolidGpuiRenderer {
       const event = EVENT_NAMES[name]
       if (event) {
         if (typeof value === "function") {
-          handlers.set(`${node.id}:${event}`, value as () => void)
+          handlers.set(`${node.id}:${event}`, value as (event: SolidGpuiEvent) => void)
           push({ op: "setEventListener", id, eventType: event, enabled: true })
         } else {
           handlers.delete(`${node.id}:${event}`)

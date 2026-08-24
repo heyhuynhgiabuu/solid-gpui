@@ -364,3 +364,53 @@ fn window_mode_focus_events_via_focus_element() {
     let status = child.wait().expect("wait");
     assert_eq!(status.code(), Some(0), "EOF must exit 0");
 }
+
+#[test]
+fn window_mode_autofocus_fires_without_focus_element() {
+    if skip() {
+        return;
+    }
+    let _lock = WINDOW_TEST_LOCK.lock().unwrap();
+    let bin = env!("CARGO_BIN_EXE_solid-gpui-helper");
+    let mut child = Command::new(bin)
+        .arg("--stdio-window")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .spawn()
+        .expect("helper spawns");
+
+    let mut stdin = child.stdin.take().expect("stdin piped");
+    let reader = BufReader::new(child.stdout.take().expect("stdout piped"));
+    let mut lines = reader.lines();
+
+    // One focusable child whose style declares autoFocus: mounting alone must
+    // focus it (HTML semantics), no focusElement command needed.
+    let batch = concat!(
+        r#"{"v":1,"seq":80,"mutations":["#,
+        r#"{"op":"createElement","id":1,"elementType":"div"},"#,
+        r#"{"op":"setRoot","id":1},"#,
+        r#"{"op":"createElement","id":2,"elementType":"div"},"#,
+        r#"{"op":"appendChild","parentId":1,"childId":2},"#,
+        r#"{"op":"setStyle","id":2,"style":{"autoFocus":"true","tabIndex":-1}},"#,
+        r#"{"op":"setEventListener","id":2,"eventType":"focus","enabled":true}]}"#,
+    );
+    writeln!(stdin, "{batch}").unwrap();
+    stdin.flush().unwrap();
+    assert_eq!(
+        lines.next().unwrap().unwrap(),
+        r#"{"type":"ack","seq":80,"applied":6}"#
+    );
+
+    // The focus event fires on the next frame (subscriptions activate one
+    // frame after first render, then autoFocus focuses during that apply).
+    std::thread::sleep(std::time::Duration::from_millis(200));
+    assert_eq!(
+        lines.next().unwrap().unwrap(),
+        r#"{"type":"event","id":2,"eventType":"focus"}"#
+    );
+
+    // EOF quits the app cleanly.
+    drop(stdin);
+    let status = child.wait().expect("wait");
+    assert_eq!(status.code(), Some(0), "EOF must exit 0");
+}

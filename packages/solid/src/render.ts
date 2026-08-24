@@ -61,7 +61,9 @@ export async function render(
     }
     let threw: unknown
     try {
-      fn()
+      // The full decoded event (key/modifiers for keyDown/keyUp, position for
+      // pointer events) is the handler's argument — matching DOM callbacks.
+      fn(event)
     } catch (err) {
       // A user handler must not kill the host process (this callback runs
       // from the readline loop) nor skip the flush of mutations applied
