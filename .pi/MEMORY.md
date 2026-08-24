@@ -69,6 +69,17 @@
 - TS narrowing trap: `(EVENT_TYPES as string[]).includes(v)` does NOT narrow;
   write an explicit `v is EventType` predicate.
 
+## Phase 1 closeout (2026-08-24)
+
+- Public repo: https://github.com/heyhuynhgiabuu/solid-gpui — CI green first
+  run: ts job on ubuntu (typecheck+bun suites); rust & node-smoke on macos-14
+  with SOLID_GPUI_SKIP_GUI_TESTS=1; clippy -D warnings clean.
+- SIGINT harness gotcha: `kill -INT` at a bash compound-command PID does NOT
+  reach bun (background jobs inherit SIG_IGN) — signal the bun child pid
+  directly or you will misread teardown as hanging.
+- screencapture/clipboard reads are blocked from the agent sandbox; visual
+  verification must go through the user (probe scripts beat screenshots).
+
 ## Slice 1 learnings (2026-08-24)
 
 - Wire contract pattern that works: one shared fixture JSON parsed by BOTH bun:test and cargo test — cross-language parity proven without transport. Keep for every protocol change.

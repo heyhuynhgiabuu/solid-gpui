@@ -16,8 +16,10 @@ status: done (2026-08-24 — Q1–Q3 decided, spec frozen; community probe moved
 ### 2026-08-24 - Slice 6: event backchannel (GPUI clicks → Solid handlers)
 status: Phase 1 CLOSED 2026-08-24 (reviewer: mergeable, 0 blocker/major).
 Three reviewer minors fixed in a39c08f (handler-throw containment, SIGINT
-hard-cap teardown, stale hot-reload handle). Remaining for public release:
-GitHub username in Cargo.toml repository field + CI workflow.
+hard-cap teardown, stale hot-reload handle). Public release DONE 2026-08-24: pushed to
+https://github.com/heyhuynhgiabuu/solid-gpui , CI all green on first run
+(ts on Linux; rust + node-smoke on macOS with GUI tests skipped).
+ONLY remaining item in Phase 1 scope: community probe (user action).
 Live --hot remount verified once (update(), same window); if the earlier
 reload-kills-helper crash recurs, investigate bun --hot child-process
 semantics. Independent review pending for ddd8860..8f7572f.
