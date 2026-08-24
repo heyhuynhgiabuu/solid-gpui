@@ -14,7 +14,7 @@ status: done (2026-08-24 — Q1–Q3 decided, spec frozen; community probe moved
 - [ ] Community probe (r/solidjs, Solid Discord) — user action, parallel to Phase 1
 
 ### 2026-08-24 - Slice 5: Solid renderer (@solid-gpui/solid)
-status: active
+status: done (2026-08-24, commits 250e7e2 + review fixes b8e5c42)
 
 Seam under test: `createSolidRenderer({ send })` — universal-renderer methods map to
 protocol mutations; `send` injectable (RecordingSend in unit tests, real helper
@@ -32,15 +32,18 @@ babel-preset-solid in bun).
       + makeH hyperscript (JSX needs babel/vite — documented limitation)
 - [x] Integration demo: real helper window renders Solid tree — **user saw the
       counter window** (Count: 0→3 fine-grained ticks, button color toggle)
-- [x] VERIFY: commit 250e7e2 done; independent review complete (mt6ywxoq-2f8f)
-      → verdict findings-should-fix: 1 critical (shadow dup entries on keyed
-      move), 3 majors (send-failure loss, conditions trap live in root test,
-      jsx-runtime export broken) + minors/notes → fix findings → close slice
+- [x] VERIFY: commit 250e7e2; review mt6ywxoq→mt6z73l2-35e4 verdict
+      findings-should-fix (1 critical: shadow dup entries on keyed moves;
+      3 majors: send-failure loss, live conditions trap in root test,
+      broken jsx-runtime export; minors/notes) — ALL fixed in b8e5c42 with
+      regression tests (For-move+clear unique removals, poison policy,
+      remount destroy, container tracking); README added; root test script
+      browser-conditioned. Slice 5 CLOSED.
 
 Cross-ref: PLAN.md#2026-08-24---solid--gpui-oss-repo-spec-frozen-2026-08-24-after-q1q3
 
 ### 2026-08-24 - Slice 4: retained tree + real GPUI rendering
-status: active
+status: done (2026-08-24, commits 35900a6 + 72d7059 + review fixes 9b57c55)
 
 Seam under test: `RetainedTree` apply/validation (pure data, protocol crate,
 no gpui) → helper `--stdio-window` mode (channels: stdin thread ↔ gpui main,
@@ -101,7 +104,7 @@ corrected two of my beliefs (see MEMORY).
 Cross-ref: PLAN.md#2026-08-24---solid--gpui-oss-repo-spec-frozen-2026-08-24-after-q1q3
 
 ### 2026-08-24 - Slice 2: helper binary opens a GPUI window (stock upstream gpui)
-status: active
+status: done (2026-08-24, commits 31a97d2; user visual confirmation received)
 
 Seam under test: committed Rust→TS cross-language parity (Rust `to_json` output
 snapshotted in-repo and parsed by bun test) and helper smoke run
