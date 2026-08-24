@@ -331,10 +331,12 @@ Design sketch:
       assert visible paint count via getStats or captureFrame; followTail:
       append items while at bottom → auto-follows (assert via scrollOffset
       staying at bottom). Fixture parity for the new element type.
-- [ ] S11b estimatedItemHeight remeasure: v1 fixed estimate; remeasure pass
-      measures real item heights and reports via getStats/listInfo command
-      (chat apps need growing rows). Optional windowed mounting for huge sets
-      (destroy off-screen siblings) only if UniformList alone is insufficient.
-- [ ] VERIFY: suites green; commit per sub-slice; independent review
+- [x] S11b remeasure: content mutations (setText/setStyle/setValue) inside an
+      item → remeasure_items(range) (gpui re-anchors scroll when the
+      remeasured item is at the scroll top); pure list_item_containing() maps
+      id→(list,item) unit-tested; window test exercises it. The List already
+      measures real heights as items render — the hint only seeds off-screen
+      items. No windowed mounting needed: gpui List virtualization suffices.
+- [ ] VERIFY S11: suites green; commits 9ee5d9e+81b9d3b+2657d4c; reviewer
 
 Cross-ref: PLAN.md Phase 2 roadmap (S11 entry)
