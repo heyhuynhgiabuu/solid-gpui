@@ -13,6 +13,25 @@ status: done (2026-08-24 — Q1–Q3 decided, spec frozen; community probe moved
 - [x] Freeze Phase 1 spec + slices in PLAN.md after Q1–Q3 (spec frozen 2026-08-24)
 - [ ] Community probe (r/solidjs, Solid Discord) — user action, parallel to Phase 1
 
+### 2026-08-24 - Slice 3: stdio NDJSON IPC (JS client ↔ helper)
+status: active
+
+Seam under test: real child process over stdio — helper `--stdio` mode
+(NDJSON in → ack/error NDJSON out, no gpui/GUI), TS `@solid-gpui/client`
+(spawn, per-seq correlation, supervision: pending-reject on exit), `Reply`
+wire type added to the shared protocol (fixture-parity both sides).
+Transport decision: stdio v1 (UDS deferred until measured) — announced to user.
+
+- [ ] RED: Rust stdio integration test (spawn binary, ack/error lines, EOF exit 0)
+- [ ] GREEN: protocol crate `Reply` + fixture parity; helper `--stdio` loop
+- [ ] RED: TS reply-decode test + client tests (module absent)
+- [ ] GREEN: `decodeReply` in protocol pkg; `@solid-gpui/client` implementation
+- [ ] Node compatibility smoke (same client code under node, per plan)
+- [ ] VERIFY: all tests (bun ×2 pkgs, cargo ×2 crates), typecheck, clippy, fmt;
+      commit; independent review before closing
+
+Cross-ref: PLAN.md#2026-08-24---solid--gpui-oss-repo-spec-frozen-2026-08-24-after-q1q3
+
 ### 2026-08-24 - Slice 2: helper binary opens a GPUI window (stock upstream gpui)
 status: active
 

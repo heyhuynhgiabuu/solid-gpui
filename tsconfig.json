@@ -1,0 +1,18 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "lib": ["ES2022"],
+    "strict": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "allowImportingTsExtensions": true,
+    "baseUrl": ".",
+    "paths": {
+      "@solid-gpui/protocol": ["./packages/protocol/src/index.ts"],
+      "@solid-gpui/client": ["./packages/client/src/index.ts"]
+    }
+  },
+  "include": ["scripts"]
+}

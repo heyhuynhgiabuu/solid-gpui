@@ -150,6 +150,48 @@ impl fmt::Display for ProtocolError {
 
 impl std::error::Error for ProtocolError {}
 
+/// Machine-readable cause of an error reply. Closed set; grows only with a
+/// protocol minor version.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum ReplyCode {
+    /// The batch line failed decoding. `seq` is `None` because a malformed
+    /// line cannot be trusted to carry a usable sequence number.
+    DecodeFailed,
+}
+
+/// Helper→JS direction of the wire: one NDJSON reply per received batch line.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "camelCase")]
+pub enum Reply {
+    #[serde(rename_all = "camelCase")]
+    Ack {
+        seq: u32,
+        /// Number of mutations consumed (until the retained tree exists,
+        /// this is the decoded count; Slice 4 makes it the applied count).
+        applied: u32,
+    },
+    #[serde(rename_all = "camelCase")]
+    Error {
+        seq: Option<u32>,
+        code: ReplyCode,
+        message: String,
+    },
+}
+
+/// Serialize a reply to one JSON line. Infallible for this type shape.
+pub fn reply_to_json(reply: &Reply) -> String {
+    serde_json::to_string(reply).expect("serializing a plain data reply cannot fail")
+}
+
+/// Parse one reply line (used by the JS-side contract tests via fixtures;
+/// the TS client has its own decoder).
+pub fn reply_from_json(s: &str) -> Result<Reply, ProtocolError> {
+    serde_json::from_str(s).map_err(|e| ProtocolError::InvalidJson {
+        message: e.to_string(),
+    })
+}
+
 /// Semantic failure while applying a decoded mutation (unknown parent,
 /// double root, ...). Transport never sees these; they describe retained-tree
 /// violations.

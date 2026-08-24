@@ -1,5 +1,6 @@
 use solid_gpui_protocol::{
-    ApplyError, Mutation, MutationBatch, MutationHandler, ProtocolError, from_json, to_json,
+    ApplyError, Mutation, MutationBatch, MutationHandler, ProtocolError, Reply, ReplyCode,
+    from_json, reply_from_json, reply_to_json, to_json,
 };
 use std::fs;
 
@@ -70,6 +71,40 @@ fn regenerate_rust_emission() {
     let batch = from_json(&fixture()).expect("fixture parses");
     std::fs::write(emitted_snapshot_path(), format!("{}\n", to_json(&batch)))
         .expect("snapshot writable");
+}
+
+#[test]
+fn reply_fixture_parses_and_emits_exactly() {
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../packages/protocol/fixtures/reply-01.json");
+    let raw = fs::read_to_string(path).expect("fixture readable");
+    let reply = reply_from_json(raw.trim()).expect("reply parses");
+    assert_eq!(
+        reply,
+        Reply::Ack {
+            seq: 42,
+            applied: 12
+        }
+    );
+    assert_eq!(
+        reply_to_json(&Reply::Ack {
+            seq: 42,
+            applied: 12
+        }),
+        raw.trim()
+    );
+}
+
+#[test]
+fn error_reply_round_trips() {
+    let reply = Reply::Error {
+        seq: None,
+        code: ReplyCode::DecodeFailed,
+        message: "unknown mutation op `teleport`".into(),
+    };
+    let json = reply_to_json(&reply);
+    assert_eq!(reply_from_json(&json).unwrap(), reply);
+    assert!(json.contains(r#""code":"decodeFailed""#));
 }
 
 #[test]

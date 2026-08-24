@@ -7,6 +7,7 @@ license.workspace = true
 repository.workspace = true
 
 [dependencies]
+solid-gpui-protocol = { path = "../protocol" }
 # Stock upstream gpui — no fork, no patches (ADR 002). Cargo.lock pins the
 # exact commit on first resolve.
 gpui = { git = "https://github.com/zed-industries/zed" }

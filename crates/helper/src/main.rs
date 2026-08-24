@@ -4,6 +4,7 @@
 //! self-quit after `--smoke <ms>` for CI-friendly verification (exit 0).
 //! The mutation IPC loop arrives with Slice 3.
 
+use std::io::{BufRead, Write};
 use std::time::Duration;
 
 use gpui::{
@@ -11,6 +12,7 @@ use gpui::{
     rgb, size,
 };
 use gpui_platform::application;
+use solid_gpui_protocol::{Reply, ReplyCode, reply_to_json};
 
 struct HelperView {
     label: SharedString,
@@ -39,15 +41,19 @@ impl Render for HelperView {
 }
 
 struct Args {
+    /// Transport mode: read NDJSON batches from stdin, reply per line, no GUI.
+    stdio: bool,
     /// Quit by ourselves after this many milliseconds (smoke mode).
     smoke_ms: Option<u64>,
 }
 
 fn parse_args() -> Args {
+    let mut stdio = false;
     let mut smoke_ms = None;
     let mut it = std::env::args().skip(1);
     while let Some(arg) = it.next() {
         match arg.as_str() {
+            "--stdio" => stdio = true,
             "--smoke" => {
                 smoke_ms = it.next().and_then(|v| v.parse().ok());
             }
@@ -57,11 +63,46 @@ fn parse_args() -> Args {
             }
         }
     }
-    Args { smoke_ms }
+    Args { stdio, smoke_ms }
+}
+
+/// Transport loop (Slice 3): batches in, replies out, no gpui. The retained
+/// tree (Slice 4) will replace the `applied = decoded count` placeholder.
+fn run_stdio() -> i32 {
+    let stdin = std::io::stdin();
+    let stdout = std::io::stdout();
+    let mut out = stdout.lock();
+    for line in stdin.lock().lines() {
+        let Ok(line) = line else { break };
+        if line.trim().is_empty() {
+            continue;
+        }
+        let reply = match solid_gpui_protocol::from_json(&line) {
+            Ok(batch) => Reply::Ack {
+                seq: batch.seq,
+                applied: batch.mutations.len() as u32,
+            },
+            Err(e) => Reply::Error {
+                seq: None,
+                code: ReplyCode::DecodeFailed,
+                message: e.to_string(),
+            },
+        };
+        if writeln!(out, "{}", reply_to_json(&reply)).is_err() {
+            break;
+        }
+        if out.flush().is_err() {
+            break;
+        }
+    }
+    0
 }
 
 fn main() {
     let args = parse_args();
+    if args.stdio {
+        std::process::exit(run_stdio());
+    }
 
     application().run(move |cx: &mut App| {
         let bounds = Bounds::centered(None, size(px(480.), px(360.0)), cx);
