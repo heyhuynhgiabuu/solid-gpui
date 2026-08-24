@@ -66,6 +66,25 @@
 - in-flight promise hygiene: duplicate-seq guard + write-then-set ordering (a throwing
   sync write must not leak a pending entry).
 
+## Slice 5 learnings (2026-08-24)
+
+- **THE trap of solid 2 rc outside browsers**: solid-js exports map node/worker/deno
+  conditions → dist/server.js — SSR STUBS WITHOUT REACTIVITY (initial render only).
+  Bun AND Node resolve node by default → effects never re-run, silently. Fix:
+  `--conditions=browser` (bun flag / NODE_OPTIONS). Upstream: solidjs/solid#2569.
+  Encode it in every test/demo script; document loudly for OSS users.
+- @solidjs/universal DEV build's createRenderer replaces render() with a variant
+  that schedules via {schedule:true} and returns a bare disposer — NO cleanupNodes
+  on dispose; prod build has cleanup. Host must own dispose semantics (we do).
+- Solid 2 defers effects through its own queue; universal render drains with tail
+  flush(). A host-side flush() must call solid's flush() FIRST, then batch.
+- solid-js 2: reactivity moved to @solidjs/signals (bun's .bun store); main entry
+  re-exports. createRoot owned-by-parent default; effects need owner.
+- JSX for solid needs babel-preset-solid/vite 'generate: universal' — bun run
+  applies react-style automatic JSX which is SEMANTICALLY WRONG for solid
+  (eager children evaluation). v0.1 ships makeH() hyperscript; JSX pipeline is a
+  documented gap (needs vite plugin or custom bun plugin later).
+
 ## Slice 4 learnings (2026-08-24)
 
 - My "cycles structurally impossible" claim was falsified by review: a PARENTLESS

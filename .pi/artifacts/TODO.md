@@ -21,12 +21,19 @@ protocol mutations; `send` injectable (RecordingSend in unit tests, real helper
 connection in demo). JSX via automatic runtime through our jsx-runtime (no
 babel-preset-solid in bun).
 
-- [ ] Verify solid-js 2.0.0-rc.1 universal API surface (h / universal / jsx-runtime)
-- [ ] RED: unit test — render component tree → exact mutation sequence; signal
-      update → minimal diff mutations
-- [ ] GREEN: renderer + flush batching + jsx-runtime + event registry (passive)
-- [ ] Integration demo: real helper window renders Solid JSX (user visual)
-- [ ] VERIFY: all suites, tsc, fmt/clippy; commit; independent review
+- [x] Verify solid-js 2.0.0-rc.1 universal API surface — createRenderer in
+      @solidjs/universal (separate pkg now); solid-js main has no renderer;
+      **critical discovery**: node/worker/deno conditions → SSR stubs, need
+      --conditions=browser (upstream issue #2569)
+- [x] RED: unit test — exact mount sequence + minimal-diff updates (5 tests,
+      all failing on stub/absent renderer)
+- [x] GREEN: renderer + flush (drains solid queue first) + own dispose
+      lifecycle (universal dev-build render lacks cleanupNodes — shadow guard)
+      + makeH hyperscript (JSX needs babel/vite — documented limitation)
+- [x] Integration demo: real helper window renders Solid tree — **user saw the
+      counter window** (Count: 0→3 fine-grained ticks, button color toggle)
+- [ ] VERIFY: commit 250e7e2 done; independent review running (mt6ywxoq-2f8f)
+      → fix findings → close slice
 
 Cross-ref: PLAN.md#2026-08-24---solid--gpui-oss-repo-spec-frozen-2026-08-24-after-q1q3
 
