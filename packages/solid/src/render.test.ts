@@ -64,4 +64,43 @@ describe("render(): event backchannel wiring", () => {
 
     await handle.dispose()
   })
+
+  test("update() remounts through the same suite: top-swap ops + routing survives", async () => {
+    const fake = fakeConnection()
+    const [count, setCount] = createSignal(0)
+
+    const handle = await render(
+      (h) =>
+        h(
+          "div",
+          { onClick: () => setCount((c) => c + 1) },
+          () => `Count: ${count()}`,
+        ),
+      { connection: fake.connection as HelperConnection },
+    )
+    const mountMutations = fake.batches[0]!.mutations.length
+    expect(mountMutations).toBeGreaterThan(0)
+
+    // bun --hot style remount through the SAME renderer/connection.
+    await handle.update((h) =>
+      h(
+        "div",
+        { onClick: () => setCount((c) => c + 10) },
+        () => `Count: ${count()}`,
+      ),
+    )
+
+    const swapOps = fake.batches.slice(1).flatMap((b) => b.mutations.map((m) => m.op))
+    expect(swapOps).toContain("destroyElement") // old subtree freed on the wire
+    expect(swapOps).toContain("setRoot")
+
+    // The NEW tree's onClick must be the one wired now. Ids continue the
+    // suite's monotonic sequence: container=1, old div=2, old text=3,
+    // new div=4, new text=5 — the click targets the new root div.
+    fake.fireClick(4)
+    await new Promise((r) => setTimeout(r, 20))
+    expect(count()).toBe(10)
+
+    await handle.dispose()
+  })
 })

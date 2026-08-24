@@ -11,6 +11,14 @@ export interface RenderHandle {
   connection: HelperConnection
   renderer: SolidGpuiRenderer
   container: HostNode
+  /** Remount a new tree in the same window/connection (bun --hot pattern).
+   *
+   * Runs through the SAME renderer suite, so the element-id sequence keeps
+   * increasing (a fresh suite would collide with ids live in the helper's
+   * retained tree) and the event routing stays attached. The wire-side old
+   * subtree is freed by insertNode's top-swap: destroyElement + setRoot.
+   */
+  update(code: (h: H) => HostNode): Promise<void>
   /** Dispose the Solid tree and close the helper window. */
   dispose(): Promise<void>
 }
@@ -37,7 +45,7 @@ export async function render(
     })
   const h = makeH(renderer)
   const container = renderer.createElement("#root")
-  const dispose = render(() => code(h), container)
+  let activeDispose = render(() => code(h), container)
   await flush()
   // Event backchannel: helper clicks → handler registry lookup → invoke →
   // flush. flush() pumps Solid's scheduler until the queue settles, so it is
@@ -60,8 +68,18 @@ export async function render(
     connection,
     renderer: { renderer, render, flush, handler, removeNode, firstChild, nextSibling },
     container,
+    update: async (code) => {
+      // Dispose the previous Solid tree FIRST: it kills the old tree's
+      // effects (zombie effects would touch destroyed nodes on the next
+      // signal write — seen as replaceText(undefined) in testing) and emits
+      // destroyElement for the old subtree; the fresh mount then setRoots
+      // cleanly through the same id sequence.
+      activeDispose()
+      activeDispose = render(() => code(h), container)
+      await flush()
+    },
     dispose: async () => {
-      dispose()
+      activeDispose()
       await flush()
       await connection.close()
     },
