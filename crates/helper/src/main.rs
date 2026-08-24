@@ -63,7 +63,7 @@ fn parse_args() -> Args {
 fn main() {
     let args = parse_args();
 
-    application().run(|cx: &mut App| {
+    application().run(move |cx: &mut App| {
         let bounds = Bounds::centered(None, size(px(480.), px(360.0)), cx);
         cx.open_window(
             WindowOptions {
