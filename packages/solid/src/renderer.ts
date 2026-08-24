@@ -56,6 +56,7 @@ const INPUT_STYLE_PROPS = new Set(["placeholder", "minRows", "maxRows"])
 const TAG_ELEMENT_TYPES: Record<string, ElementType> = {
   input: "input",
   textarea: "textarea",
+  list: "list",
 }
 
 export interface SolidGpuiRenderer {
