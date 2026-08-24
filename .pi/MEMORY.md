@@ -69,6 +69,20 @@
 - TS narrowing trap: `(EVENT_TYPES as string[]).includes(v)` does NOT narrow;
   write an explicit `v is EventType` predicate.
 
+## gpui scroll sign convention (S8 review round 1 — reviewer caught a REAL bug)
+- gpui `ScrollHandle::set_offset` uses the OPPOSITE sign of CSS scrollTop:
+  offset = distance from container top-left to first child top-left, growing
+  NEGATIVE as you scroll down; layout clamps to [-max, 0] (div.rs ~2364).
+- Wire must stay non-negative-positive-down (CSS-like); negate on the way in
+  and on the way out, and clamp reads against max_offset for honesty.
+- Reviewer lesson: a test reading the RAW handle state can mask a broken
+  scroll while passing. Behavior tests must assert what the USER sees (the
+  clamped visible position), not the internal request.
+- Verification lesson (again): never grep clippy output with a narrow
+  pattern like "warning: use of" — it misses whole lint families. Run
+  `cargo clippy --all-targets -- -D warnings` and check the exit, or grep
+  broad "^warning:|^error:" and read every line.
+
 ## Verification discipline (learned the hard way, S7 review round 2)
 
 - NEVER pipe a gate's output to /dev/null and trust `&& echo MARKER` from
