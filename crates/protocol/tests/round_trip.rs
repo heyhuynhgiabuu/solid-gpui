@@ -421,3 +421,36 @@ fn simulate_input_command_fixture_parses_and_emits_exactly() {
     );
     assert_eq!(command_to_json(&cmd), raw);
 }
+
+#[test]
+fn list_info_command_fixture_parses_and_emits_exactly() {
+    let raw = fs::read_to_string(fixture_path("command-list-info.json"))
+        .expect("fixture readable")
+        .trim()
+        .to_string();
+    let cmd = command_from_json(&raw).expect("command parses");
+    assert_eq!(
+        cmd,
+        Command::ListInfo {
+            seq: 33,
+            id: ElementId(4)
+        }
+    );
+    assert_eq!(command_to_json(&cmd), raw);
+}
+
+#[test]
+fn list_element_batch_fixture_parses_both_ways() {
+    let raw = fs::read_to_string(fixture_path("batch-list-01.json"))
+        .expect("fixture readable")
+        .trim()
+        .to_string();
+    let batch = from_json(&raw).expect("batch parses");
+    match &batch.mutations[0] {
+        Mutation::CreateElement { element_type, .. } => {
+            assert_eq!(*element_type, solid_gpui_protocol::ElementType::List);
+        }
+        other => panic!("expected createElement, got {other:?}"),
+    }
+    assert_eq!(to_json(&batch), raw);
+}

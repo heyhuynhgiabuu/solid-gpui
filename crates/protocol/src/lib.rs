@@ -29,7 +29,7 @@ pub const EVENT_TYPES: &[&str] = &[
     "submit",
 ];
 
-pub const ELEMENT_TYPES: &[&str] = &["div", "text", "input", "textarea"];
+pub const ELEMENT_TYPES: &[&str] = &["div", "text", "input", "textarea", "list"];
 
 /// Numeric id of a host element. 0 is reserved and never valid.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -49,6 +49,9 @@ pub enum ElementType {
     Text,
     Input,
     Textarea,
+    /// Virtualized list: the retained tree holds every item, gpui's List
+    /// paints only the visible subset. Children are the items.
+    List,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
@@ -246,6 +249,14 @@ pub enum Command {
         id: ElementId,
         text: String,
     },
+
+    /// Query a virtual list's live metrics: item count, how many items the
+    /// last frame actually painted (virtualization proof), and whether it is
+    /// scrolled to the end (followTail chat position).
+    ListInfo {
+        seq: u32,
+        id: ElementId,
+    },
 }
 
 /// Serialize a command to one JSON line. Infallible for this type shape.
@@ -269,11 +280,12 @@ pub fn command_from_json(s: &str) -> Result<Command, ProtocolError> {
             | Some("getScrollOffset")
             | Some("focusElement")
             | Some("simulateInput")
+            | Some("listInfo")
     ) {
         return Err(ProtocolError::InvalidShape {
             path: "type".into(),
             message: format!(
-                "unknown command {:?}; expected getStats|captureFrame|scrollTo|getScrollOffset|focusElement|simulateInput",
+                "unknown command {:?}; expected getStats|captureFrame|scrollTo|getScrollOffset|focusElement|simulateInput|listInfo",
                 type_str.unwrap_or("<missing>")
             ),
         });

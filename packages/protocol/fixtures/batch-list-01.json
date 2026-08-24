@@ -1,0 +1,1 @@
+{"v":1,"seq":10,"mutations":[{"op":"createElement","id":1,"elementType":"list"},{"op":"setRoot","id":1},{"op":"setStyle","id":1,"style":{"followTail":"true","itemHeight":24}}]}

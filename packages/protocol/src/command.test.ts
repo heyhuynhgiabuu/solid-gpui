@@ -5,6 +5,7 @@ import scrollToFixture from "../fixtures/command-scroll-to.json"
 import getScrollOffsetFixture from "../fixtures/command-get-scroll-offset.json"
 import focusElementFixture from "../fixtures/command-focus-element.json"
 import simulateInputFixture from "../fixtures/command-simulate-input.json"
+import listInfoFixture from "../fixtures/command-list-info.json"
 import { decodeCommand, encodeCommand } from "./command"
 
 const ok = (json: string) => {
@@ -87,6 +88,12 @@ describe("decodeCommand", () => {
       (parsed as { value: Parameters<typeof encodeCommand>[0] }).value,
     )
     expect(enc).toBe(JSON.stringify(simulateInputFixture))
+  })
+
+  test("listInfo fixture parses and re-encodes exactly (parity)", () => {
+    const parsed = decodeCommand(JSON.stringify(listInfoFixture))
+    expect(parsed).toEqual({ ok: true, value: { type: "listInfo", seq: 33, id: 4 } })
+    expect(encodeCommand(parsed.value)).toBe(JSON.stringify(listInfoFixture))
   })
 
   test("encodeCommand emits simulateInput correctly (not getStats)", () => {

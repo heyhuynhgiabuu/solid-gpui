@@ -44,5 +44,7 @@ export type StyleKey =
   | "placeholder"
   | "minRows"
   | "maxRows"
+  | "itemHeight"
+  | "followTail"
 
 export type StyleMap = { readonly [K in StyleKey]?: StyleValue }

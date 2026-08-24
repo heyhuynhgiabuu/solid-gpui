@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import fixture from "../fixtures/batch-01.json"
 import rustEmitted from "../fixtures/rust-emitted-batch-01.json"
+import listFixture from "../fixtures/batch-list-01.json"
 import { elementId } from "./ids"
 import { decodeBatch, encodeBatch } from "./batch"
 import type { MutationBatch } from "./batch"
@@ -126,6 +127,31 @@ describe("decodeBatch rejects malformed input", () => {
       expect(a && "elementType" in a && a.elementType).toBe("input")
       expect(b && "elementType" in b && b.elementType).toBe("textarea")
       expect(c && "op" in c && c.op).toBe("setValue")
+    }
+  })
+
+  test("list element type decodes (closed set widened)", () => {
+    const r = decodeBatch(
+      JSON.stringify({ v: 1, seq: 1, mutations: [{ op: "createElement", id: 1, elementType: "list" }] }),
+    )
+    expect(r.ok).toBe(true)
+    if (r.ok) {
+      const m = r.value.mutations[0]
+      expect(m && "elementType" in m && m.elementType).toBe("list")
+    }
+  })
+
+  test("list batch fixture parses (Rust↔TS parity)", () => {
+    const r = decodeBatch(JSON.stringify(listFixture))
+    expect(r.ok).toBe(true)
+    if (r.ok) {
+      const m = r.value.mutations[0]
+      expect(m && "elementType" in m && m.elementType).toBe("list")
+      const style = r.value.mutations[2]
+      expect(style && "style" in style && style.style).toEqual({
+        followTail: "true",
+        itemHeight: 24,
+      })
     }
   })
 

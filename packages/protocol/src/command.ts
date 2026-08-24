@@ -12,6 +12,7 @@ export type SolidGpuiCommand =
   | { readonly type: "getScrollOffset"; readonly seq: number; readonly id: number }
   | { readonly type: "focusElement"; readonly seq: number; readonly id: number }
   | { readonly type: "simulateInput"; readonly seq: number; readonly id: number; readonly text: string }
+  | { readonly type: "listInfo"; readonly seq: number; readonly id: number }
 
 const isInt = (v: unknown): v is number => typeof v === "number" && Number.isInteger(v)
 
@@ -45,6 +46,7 @@ export function decodeCommand(json: string): Result<SolidGpuiCommand, ProtocolEr
     "getScrollOffset",
     "focusElement",
     "simulateInput",
+    "listInfo",
   ]
   if (!KNOWN.includes(type as string)) {
     return {
@@ -97,6 +99,14 @@ export function decodeCommand(json: string): Result<SolidGpuiCommand, ProtocolEr
     }
     return { ok: true, value: { type: "getScrollOffset", seq: parsed.seq, id } }
   }
+  if (type === "listInfo") {
+    const id = parsed.id
+    const badId = !isInt(id) || (id as number) < 1 || (id as number) > 0xffff_ffff
+    if (badId) {
+      return { ok: false, error: shape("id", "listInfo needs an integer id") }
+    }
+    return { ok: true, value: { type: "listInfo", seq: parsed.seq, id } }
+  }
   if (type === "focusElement") {
     const id = parsed.id
     const badId = !isInt(id) || (id as number) < 1 || (id as number) > 0xffff_ffff
@@ -148,6 +158,13 @@ export function encodeCommand(command: SolidGpuiCommand): string {
       seq: command.seq,
       id: command.id,
       text: command.text,
+    })
+  }
+  if (command.type === "listInfo") {
+    return JSON.stringify({
+      type: "listInfo",
+      seq: command.seq,
+      id: command.id,
     })
   }
   return JSON.stringify({ type: "getStats", seq: command.seq })
