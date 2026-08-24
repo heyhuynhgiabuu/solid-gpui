@@ -201,7 +201,8 @@ status: active
       xcap and writes PNG; verified end-to-end in stdio_window test
 - [x] S7c bun perf harness: 200-row tree via render(), 30 paced updates,
       getStats over the wire; baseline p95 = 0.942ms vs 10ms budget (0986260)
-- [ ] VERIFY: all suites green; commit per sub-slice; independent review
+- [x] VERIFY S7: 3 review rounds (r1 Major seq-union fixed, r2 tsc-gate
+      lapse fixed, r3 mergeable); suites green
 
 Review rounds: r1 Major (error routing) fixed 9266b9d; r2 caught broken tsc
 gate (stale map generic) fixed b64f979 with visible-marker verification;
@@ -270,3 +271,29 @@ optional key:String + modifiers{ctrl,alt,shift,cmd}; focus/blur need neither.
       Closed 2026-08-24.
 
 Cross-ref: PLAN.md Phase 2 roadmap (S9 entry)
+
+### 2026-08-24 - S10: text input (Phase 2)
+status: active
+Recon: gpui InputHandler trait (platform.rs ~1673) = the NSTextInputClient
+surface: selected_text_range/marked_text_range/text_for_range/replace_text_in_range/
+replace_and_mark_text_in_range/unmark_text/bounds_for_range (IME composing,
+native caret/undo) — a view implements it and gpui routes native text input
+to it. Needs a TextInput element (elementType "input"/"textarea") that the
+focused input's InputHandler drives; value lives in the retained node and
+crosses the wire on change (controlled value sync both ways).
+
+- [ ] S10a Protocol: elementType "input" (and "textarea"); InputValue op or
+      reuse setText; onSubmit -> eventType submit with key variants
+- [ ] S10a Helper: TextInput view state per focused input (value UTF-16
+      mapping!), input element rendering (caret/placeholder), HostView (or a
+      child view) implements InputHandler, focus wiring to the input handle
+- [ ] S10a Tests: fixture parity; window test: focus input, simulate IME
+      replace via helper path -> value mutation crosses wire back to JS
+- [ ] S10b Textarea: multiline, min/maxRows autosize, Enter (submit vs
+      newline), Shift+Enter; onSubmit event
+- [ ] S10c Controlled value sync: JS value prop -> setValue op -> helper
+      state; helper edit -> change event -> JS updates state (both ways,
+      no loops)
+- [ ] VERIFY: suites green; commit per sub-slice; independent review
+
+Cross-ref: PLAN.md Phase 2 roadmap (S10 entry)
