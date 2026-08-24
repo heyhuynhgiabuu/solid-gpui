@@ -224,8 +224,11 @@ nested-scroll gotcha. AGENTS.md gotcha text is stale (fixed same day).
 - [x] S8a Tests: parse_overflow unit tests (closed set + unknown) and
       window-mode smoke: 200px scroll container over 2000px child, ack 9/9
       (60a9b8a). Behavioral scroll proof lands in S8b via scrollTo commands.
-- [ ] S8b Commands: scrollTo {id,x,y} / getScrollOffset {id} -> Result
-      payload; TS parity + fixtures
+- [x] S8b Commands: scrollTo {id,x,y} / getScrollOffset {id} -> Result;
+      fixtures parsed by both suites; apply-time handle materialization fixes
+      the pre-first-paint race; behavioral proof scrollTo(0,500) ->
+      getScrollOffset {offsetX:0.0,offsetY:500.0} (6c28687)
 - [ ] VERIFY: suites green; commit per sub-slice; independent review
+      (S8a 60a9b8a, S8b 6c28687; reviewer pending)
 
 Cross-ref: PLAN.md Phase 2 roadmap (S8 entry)
