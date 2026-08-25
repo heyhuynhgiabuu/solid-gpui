@@ -702,5 +702,30 @@
     "rawStatus": "success",
     "resultValid": true,
     "completedAt": 1787647436451
+  },
+  {
+    "id": "mt8gbici-7028",
+    "agentType": "reviewer",
+    "description": "Review S13e syntax highlighting",
+    "sessionName": "task-mt8gbici-7028",
+    "startedAt": 1787649442729,
+    "paneId": "w3:pES",
+    "handle": {
+      "backend": "herdr",
+      "resourceId": "w3:pES",
+      "socketPath": "/Users/huynhgiabuu/.config/herdr/herdr.sock",
+      "terminalId": "term_659db91bf090948",
+      "agentName": "reviewer-mt8gbici",
+      "foregroundProcessGroupId": 86600
+    },
+    "piDir": "/Users/huynhgiabuu/dev/projects/solid-gpui/.pi",
+    "dir": "/Users/huynhgiabuu/dev/projects/solid-gpui/.pi/artifacts/tasks",
+    "cwd": "/Users/huynhgiabuu/dev/projects/solid-gpui",
+    "status": "done",
+    "background": true,
+    "reportedStatus": "failure",
+    "rawStatus": "failure",
+    "resultValid": true,
+    "completedAt": 1787649759274
   }
 ]

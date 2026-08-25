@@ -482,7 +482,16 @@ entirely helper-side (fence tag already parsed into Block::CodeBlock).
       parse_full debt (n6) as a side effect; pruned per frame like other
       per-id maps; content-keyed resolver (identical fences share docs).
 - [x] S13e-d demo: python + yaml fences added to DOC_B.
-- [~] VERIFY: bun 96/96 · tsc ×3 · cargo all suites green in isolation ·
-      clippy · fmt · demo mounts. Pending: independent review.
+- [x] Review r1 (mt8gbici-7028): NOT MERGEABLE — Blocker fixed: resolver
+      was LANGUAGE-keyed so two same-language fences with different code got
+      the first fence's spans → over-length TextRuns → gpui panic (debug AND
+      release). Fix: MarkdownCacheEntry::build/resolve CONTENT-keyed API +
+      render passes (lang, code); defensive span clamp in runs_for_syntax_line;
+      regression tests RED→GREEN. Minors: demo python/yaml fences actually
+      added now (earlier script silently no-op'd — assert anchors!), notices
+      extended for syntax.rs + builtins.rs palette, minified-lines perf test
+      re-ported.
+- [x] VERIFY: bun 96/96 · tsc ×3 · cargo all suites green · clippy · fmt ·
+      node smoke. Pending: reviewer r2 on the fixes.
 
 Cross-ref: TODO.md#2026-08-25---s13-rich-text--markdowncodediff-ported-from-comet-mit

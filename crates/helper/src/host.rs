@@ -1181,9 +1181,9 @@ fn build_element(
 /// code fences, and render the block tree. gpui calls render() per FRAME, so
 /// both the parse AND the tree-sitter highlighting are cached per element and
 /// recomputed only when the source text changes — tree-sitter per frame would
-/// be far too expensive to accept as v1 debt. The resolver handed to
-/// render_tree is CONTENT-keyed (language+code): identical fences share one
-/// highlight document, deterministically.
+/// be far too expensive to accept as v1 debt. The resolver is CONTENT-keyed
+/// (language + code): identical fences share one document; different code of
+/// the same language must never receive another fence's line-relative spans.
 /// Element styles: `color` overrides body text, `backgroundColor` washes the
 /// wrapper, `fontSize` (14 = 1.0×) scales every metric linearly.
 fn build_markdown_element(
@@ -1202,48 +1202,21 @@ fn build_markdown_element(
         None => true,
     };
     if needs_rebuild {
-        let parsed = crate::markdown::parser::parse_full(&source);
-        let highlights = collect_code_fences(&parsed)
-            .into_iter()
-            .map(|(lang, code)| {
-                (
-                    lang.clone(),
-                    code.clone(),
-                    crate::markdown::syntax::highlight(crate::markdown::syntax::HighlightRequest {
-                        source: code.as_str(),
-                        path: None,
-                        fence_tag: lang.as_deref(),
-                    })
-                    .ok()
-                    .map(std::rc::Rc::new),
-                )
-            })
-            .collect();
-        cache.insert(
-            id,
-            crate::markdown::MarkdownCacheEntry {
-                source: source.clone(),
-                tree: std::rc::Rc::new(parsed),
-                highlights,
-            },
-        );
+        cache.insert(id, crate::markdown::MarkdownCacheEntry::build(&source));
     }
     let entry_tree = cache.get(&id).expect("just inserted").tree.clone();
     drop(cache);
 
-    // Content-keyed resolver over the cached fence list. Cloning the Rc is
-    // the whole cost per frame per code block; the borrow is released before
-    // any re-entrant cache mutation could occur (render never mutates it).
-    let highlight =
-        |lang_key: &str| -> Option<std::rc::Rc<crate::markdown::syntax::HighlightedDocument>> {
-            let cache = ctx.md_highlights.borrow();
-            let entry = cache.get(&id)?;
-            entry
-                .highlights
-                .iter()
-                .find(|(lang, _, _)| lang.as_deref() == Some(lang_key))
-                .and_then(|(_, _, doc)| doc.clone())
-        };
+    // Content-keyed resolution over the cached fence list. Cloning the Rc is
+    // the whole cost per frame per code block; the RefCell borrow never
+    // re-enters a mutation (render does not write the cache).
+    let highlight = |lang: Option<&str>,
+                     code: &str|
+     -> Option<std::rc::Rc<crate::markdown::syntax::HighlightedDocument>> {
+        let cache = ctx.md_highlights.borrow();
+        let entry = cache.get(&id)?;
+        entry.resolve(lang, code)
+    };
 
     let mut theme = crate::markdown::render::MdTheme::default();
     if let Some(color) = node.style.get("color").and_then(parse_color) {
@@ -1262,38 +1235,6 @@ fn build_markdown_element(
         el = el.bg(bg);
     }
     el.into_any_element()
-}
-
-/// Every code fence in a parsed markdown tree, in document order (pre-order
-/// walk mirroring the render traversal — the resolver is content-keyed, so
-/// order only affects which duplicate wins, deterministically).
-fn collect_code_fences(tree: &crate::markdown::parser::BlockTree) -> Vec<(Option<String>, String)> {
-    use crate::markdown::parser::Block;
-    fn walk(block: &Block, out: &mut Vec<(Option<String>, String)>) {
-        match block {
-            Block::CodeBlock { language, code } => {
-                out.push((language.clone(), code.clone()));
-            }
-            Block::BlockQuote { children } => {
-                for child in children {
-                    walk(child, out);
-                }
-            }
-            Block::List { items, .. } => {
-                for item in items {
-                    for child in item {
-                        walk(child, out);
-                    }
-                }
-            }
-            _ => {}
-        }
-    }
-    let mut out = Vec::new();
-    for top in &tree.blocks {
-        walk(&top.block, &mut out);
-    }
-    out
 }
 
 /// Wire interactive behavior (scroll handles, focus subscriptions, Tab

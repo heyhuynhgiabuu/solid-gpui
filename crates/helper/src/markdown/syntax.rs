@@ -867,6 +867,18 @@ mod tests {
     }
 
     #[test]
+    fn minified_lines_normalize_without_quadratic_rescans() {
+        let source = "let value=1;".repeat(8_000);
+        let document = highlight(HighlightRequest {
+            source: &source,
+            path: Some("bundle.js"),
+            fence_tag: None,
+        })
+        .unwrap();
+        assert!(document.lines[0].len() > 20_000);
+    }
+
+    #[test]
     fn rust_highlighting_distinguishes_structural_categories() {
         let source = r#"pub struct Widget { field: usize }
 fn build(value: usize) -> Widget {

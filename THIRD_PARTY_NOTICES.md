@@ -16,9 +16,17 @@ Copyright 2026 Wing:
 > The above copyright notice and this permission notice shall be included in
 > all copies or substantial portions of the Software.
 
-Upstream source of the port: `crates/ui/src/markdown/{parser.rs,render.rs}`
-at version 0.2.28. Adaptations for solid-gpui are marked in each file's
-header (streaming/mend/veil machinery removed; theme narrowed to a stub).
+Upstream sources of the port:
+- `crates/ui/src/markdown/{parser.rs,render.rs}` — markdown parse and
+  gpui rendering (crates/helper/src/markdown/{parser,render}.rs).
+- `crates/syntax/src/lib.rs` — tree-sitter highlighting contracts
+  (crates/helper/src/markdown/syntax.rs), with a reduced grammar set.
+- `crates/theme/src/builtins.rs` (`syntax()` mapping, zeron-dark palette) —
+  token-color table (crates/helper/src/markdown/render.rs `SyntaxPalette`).
+
+All at version 0.2.28. Adaptations for solid-gpui are marked in each
+file's header (streaming/mend/veil machinery removed; theme narrowed to a
+fixed palette; grammar subset bundled with typed fallback).
 
 ## Other dependencies
 

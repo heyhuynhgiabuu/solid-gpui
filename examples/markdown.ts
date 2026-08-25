@@ -40,7 +40,7 @@ fn main() {
 |:--------|:------:|-------:|
 | parser  | done   | Comet |
 | render  | done   | Comet |
-| syntax  | later  | S13e  |
+| syntax  | done   | S13e  |
 
 ---
 
@@ -55,9 +55,19 @@ This is a *second* document. The whole tree re-renders from ONE
 const md = h("markdown", { source: () => doc() })
 \`\`\`
 
+\`\`\`python
+def greet(name: str) -> str:
+    return f"hello, {name}!"
+\`\`\`
+
+\`\`\`yaml
+name: solid-gpui
+syntax: bundled
+\`\`\`
+
 - [x] mount
 - [x] swap
-- [ ] syntax highlighting (S13e)`
+- [x] syntax highlighting (S13e)`
 
 function tree(h: Parameters<RenderHandle["update"]>[0]) {
   const [doc, setDoc] = createSignal(DOC_A)

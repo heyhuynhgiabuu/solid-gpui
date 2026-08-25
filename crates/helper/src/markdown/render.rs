@@ -157,6 +157,11 @@ impl Default for MdTheme {
     }
 }
 
+/// Content-keyed highlight resolver: (language tag, fence code) → the
+/// highlighted document for THAT fence (identical fences share one).
+pub type HighlightResolver<'a> =
+    &'a dyn Fn(Option<&str>, &str) -> Option<std::rc::Rc<super::syntax::HighlightedDocument>>;
+
 /// Monotonic id allocator for one render pass. Ids key gpui element state
 /// (InteractiveText hover/click, code/table scroll handles), so they must be
 /// UNIQUE within the rendered tree. Upstream derives them arithmetically
@@ -189,7 +194,7 @@ pub fn render_tree(
     theme: &MdTheme,
     scale: f32,
     window: &Window,
-    highlight: &dyn Fn(&str) -> Option<std::rc::Rc<super::syntax::HighlightedDocument>>,
+    highlight: HighlightResolver<'_>,
 ) -> AnyElement {
     let mut ids = Ids::default();
     div()
@@ -216,7 +221,7 @@ pub fn render_block(
     scale: f32,
     window: &Window,
     ids: &mut Ids,
-    highlight: &dyn Fn(&str) -> Option<std::rc::Rc<super::syntax::HighlightedDocument>>,
+    highlight: HighlightResolver<'_>,
 ) -> AnyElement {
     match block {
         Block::Paragraph { runs } => text_element(
@@ -234,10 +239,10 @@ pub fn render_block(
             text_element(row, runs, size, line, true, ix, theme, scale)
         }
         Block::CodeBlock { language, code } => {
-            let owned = language
-                .as_deref()
-                .and_then(highlight)
-                .map(|doc| doc.lines.clone());
+            // CONTENT-keyed: identical fences share one document; different
+            // code of the same language must never receive another fence's
+            // line-relative spans.
+            let owned = highlight(language.as_deref(), code).map(|doc| doc.lines.clone());
             let hl = owned.as_deref();
             render_code_block(row, language.as_deref(), code, ix, theme, scale, hl)
         }
@@ -693,13 +698,22 @@ pub fn runs_for_syntax_line(
     let mut runs = Vec::new();
     let mut at = 0usize;
     for span in spans {
-        if span.range.start > at {
-            runs.push(plain(span.range.start - at));
+        // Clamp to the line: spans can never legitimately exceed it (they
+        // are line-relative), but a resolver bug must degrade to plain
+        // colors, never to an over-length TextRun — gpui's StyledText::
+        // with_runs panics on those in debug AND release.
+        let start = span.range.start.min(line.len());
+        let end = span.range.end.min(line.len()).max(start);
+        if start > at {
+            runs.push(plain(start - at));
+            at = start;
         }
-        let mut run = plain(span.range.len());
-        run.color = theme.syntax.color(span.kind);
-        runs.push(run);
-        at = span.range.end;
+        if end > at {
+            let mut run = plain(end - at);
+            run.color = theme.syntax.color(span.kind);
+            runs.push(run);
+            at = end;
+        }
     }
     if at < line.len() {
         runs.push(plain(line.len() - at));
@@ -739,6 +753,33 @@ fn syntax_runs_recolor_without_changing_layout() {
         .find(|r| r.color == theme.syntax.color(HighlightKind::Keyword))
         .expect("keyword run");
     assert!(keyword_run.len < line.len());
+}
+
+#[test]
+fn syntax_runs_clamp_spans_past_the_line() {
+    // Defensive contract: a resolver bug must degrade to wrong colors, never
+    // feed gpui an over-length TextRun (StyledText::with_runs panics in both
+    // debug and release on runs exceeding the text).
+    let theme = MdTheme::default();
+    let mono = font(theme.font_mono.clone());
+    let line = "if ok {"; // 6 bytes
+    let spans = vec![
+        crate::markdown::syntax::HighlightSpan {
+            range: 0..3,
+            kind: crate::markdown::syntax::HighlightKind::Keyword,
+        },
+        // Past-the-end span from a different fence: 4..10 exceeds len.
+        crate::markdown::syntax::HighlightSpan {
+            range: 4..10,
+            kind: crate::markdown::syntax::HighlightKind::Function,
+        },
+    ];
+    let runs = runs_for_syntax_line(line, &spans, &mono, &theme);
+    assert_eq!(
+        runs.iter().map(|r| r.len).sum::<usize>(),
+        line.len(),
+        "runs must exactly cover the line even with out-of-range spans"
+    );
 }
 
 #[cfg(test)]
