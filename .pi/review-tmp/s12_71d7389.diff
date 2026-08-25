@@ -1,0 +1,566 @@
+commit 71d73895245e858cd13936213c3ee28272a214a3
+Author: Buu <buddingnewinsights@gmail.com>
+Date:   Tue Aug 25 11:38:19 2026 +0700
+
+    feat(protocol): setAnimation mutation (S12a)
+    
+    Single op carrying a numeric target StyleMap + transitionMs + optional
+    easing (linear|easeIn|easeOut|easeInOut, default easeOut). Closed
+    animatable-key set (width/height/minWidth/minHeight/padding/gap/
+    borderRadius/fontSize/flexGrow/flexShrink/opacity) — unlike setStyle's
+    forward-compatible open set, interpolation needs a real numeric render path
+    so animating anything else is rejected on BOTH sides (TS decode =
+    invalidShape; Rust retained apply = InvalidMutation). Each key must already
+    hold a numeric value on the element (well-defined start). The target is
+    merged into the static style at apply time so the end state sticks without
+    further protocol traffic; the helper substitutes interpolated values per
+    frame until the transition completes (next commit).
+    
+    Fixtures batch-animation-01.json parsed + round-tripped byte-identically by
+    both suites (BTreeMap canonical key order — opacity before width).
+
+diff --git a/crates/protocol/src/lib.rs b/crates/protocol/src/lib.rs
+index ba58df8..81eba5b 100644
+--- a/crates/protocol/src/lib.rs
++++ b/crates/protocol/src/lib.rs
+@@ -93,6 +93,50 @@ impl StyleValue {
+ 
+ pub type StyleMap = BTreeMap<String, StyleValue>;
+ 
++/// Style keys that setAnimation accepts. Closed set (unlike setStyle's
++/// forward-compatible open set): interpolation needs a real numeric render
++/// path on the helper side, so animating an unsupported key must fail
++/// honestly instead of silently doing nothing.
++pub const ANIMATABLE_STYLE_KEYS: &[&str] = &[
++    "width",
++    "height",
++    "minWidth",
++    "minHeight",
++    "padding",
++    "gap",
++    "borderRadius",
++    "fontSize",
++    "flexGrow",
++    "flexShrink",
++    "opacity",
++];
++
++/// Easing curves setAnimation accepts (closed set, camelCase wire names).
++#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
++pub enum Easing {
++    #[serde(rename = "linear")]
++    Linear,
++    #[serde(rename = "easeIn")]
++    EaseIn,
++    #[serde(rename = "easeOut")]
++    EaseOut,
++    #[serde(rename = "easeInOut")]
++    EaseInOut,
++}
++
++impl Easing {
++    /// Wire name -> curve. `None` for unknown names (rejected upstream).
++    pub fn parse(name: &str) -> Option<Self> {
++        match name {
++            "linear" => Some(Easing::Linear),
++            "easeIn" => Some(Easing::EaseIn),
++            "easeOut" => Some(Easing::EaseOut),
++            "easeInOut" => Some(Easing::EaseInOut),
++            _ => None,
++        }
++    }
++}
++
+ #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+ #[serde(tag = "op", rename_all = "camelCase")]
+ pub enum Mutation {
+@@ -128,6 +172,21 @@ pub enum Mutation {
+         id: ElementId,
+         text: String,
+     },
++    /// Transition the element's current numeric values for `target`'s keys to
++    /// the target values over `transition_ms`. Targets must be numeric and
++    /// confined to [`ANIMATABLE_STYLE_KEYS`]; each key must already hold a
++    /// numeric value on the element (a well-defined start). The target is
++    /// merged into the element's static style at apply time, so the end state
++    /// sticks without any further protocol traffic; the helper substitutes
++    /// interpolated values each frame until the transition completes.
++    #[serde(rename_all = "camelCase")]
++    SetAnimation {
++        id: ElementId,
++        target: StyleMap,
++        transition_ms: u32,
++        /// One of linear|easeIn|easeOut|easeInOut; None means easeOut.
++        easing: Option<String>,
++    },
+     #[serde(rename_all = "camelCase")]
+     SetValue {
+         id: ElementId,
+@@ -444,6 +503,7 @@ const KNOWN_OPS: &[&str] = &[
+     "setStyle",
+     "setText",
+     "setValue",
++    "setAnimation",
+     "setEventListener",
+     "setRoot",
+ ];
+@@ -548,6 +608,7 @@ fn from_value(v: serde_json::Value) -> Result<MutationBatch, ProtocolError> {
+             | Mutation::SetStyle { id, .. }
+             | Mutation::SetText { id, .. }
+             | Mutation::SetValue { id, .. }
++            | Mutation::SetAnimation { id, .. }
+             | Mutation::SetEventListener { id, .. }
+             | Mutation::SetRoot { id } => (id.0 == 0).then_some("id"),
+             Mutation::AppendChild {
+diff --git a/crates/protocol/src/retained.rs b/crates/protocol/src/retained.rs
+index 4b92bed..44ae467 100644
+--- a/crates/protocol/src/retained.rs
++++ b/crates/protocol/src/retained.rs
+@@ -22,7 +22,7 @@
+ 
+ use std::collections::{BTreeMap, BTreeSet, HashMap};
+ 
+-use crate::{ApplyError, ElementId, ElementType, EventType, Mutation, StyleMap};
++use crate::{ApplyError, ElementId, ElementType, EventType, Mutation, StyleMap, StyleValue};
+ 
+ pub const MAX_DEPTH: usize = 256;
+ 
+@@ -123,6 +123,67 @@ impl RetainedTree {
+                 node.style = style.clone();
+                 Ok(())
+             }
++            Mutation::SetAnimation {
++                id,
++                target,
++                transition_ms: _,
++                easing,
++            } => {
++                let node = self.mut_node(*id, "setAnimation")?;
++                let easing_name = easing.as_deref().unwrap_or("easeOut");
++                if crate::Easing::parse(easing_name).is_none() {
++                    return Err(ApplyError::InvalidMutation {
++                        message: format!(
++                            "setAnimation: unknown easing {easing_name:?}; expected linear|easeIn|easeOut|easeInOut"
++                        ),
++                    });
++                }
++                for (key, value) in target {
++                    if !crate::ANIMATABLE_STYLE_KEYS.contains(&key.as_str()) {
++                        return Err(ApplyError::InvalidMutation {
++                            message: format!(
++                                "setAnimation: {key:?} is not animatable; expected one of {}",
++                                crate::ANIMATABLE_STYLE_KEYS.join("|")
++                            ),
++                        });
++                    }
++                    let to = match value {
++                        StyleValue::Number(n) => n.as_f64(),
++                        StyleValue::Text(_) => None,
++                    };
++                    let Some(to) = to else {
++                        return Err(ApplyError::InvalidMutation {
++                            message: format!(
++                                "setAnimation: target {key:?} must be numeric, got {value:?}"
++                            ),
++                        });
++                    };
++                    let from = match node.style.get(key) {
++                        Some(StyleValue::Number(n)) => n.as_f64(),
++                        _ => None,
++                    };
++                    let Some(_from) = from else {
++                        return Err(ApplyError::InvalidMutation {
++                            message: format!(
++                                "setAnimation: element {id:?} has no numeric start for {key:?}; set it via setStyle first"
++                            ),
++                        });
++                    };
++                    // End state sticks: merge the target into the static
++                    // style so the element rests there once (or without)
++                    // animation running.
++                    let to_number = serde_json::Number::from_f64(to).ok_or_else(|| {
++                        ApplyError::InvalidMutation {
++                            message: format!(
++                                "setAnimation: target {key:?} is not a finite number"
++                            ),
++                        }
++                    })?;
++                    node.style
++                        .insert(key.clone(), StyleValue::Number(to_number));
++                }
++                Ok(())
++            }
+             Mutation::SetText { id, text } => {
+                 let node = self.mut_node(*id, "setText")?;
+                 if node.element_type != ElementType::Text {
+diff --git a/crates/protocol/tests/retained.rs b/crates/protocol/tests/retained.rs
+index afcdea1..c2dea51 100644
+--- a/crates/protocol/tests/retained.rs
++++ b/crates/protocol/tests/retained.rs
+@@ -2,7 +2,9 @@
+ //! shape matches the mutation sequence, and invalid sequences fail with
+ //! precise errors. Pure data — no gpui, no IO.
+ 
+-use solid_gpui_protocol::{ApplyError, ElementType, EventType, Mutation, RetainedTree, from_json};
++use solid_gpui_protocol::{
++    ApplyError, ElementType, EventType, Mutation, RetainedTree, StyleMap, StyleValue, from_json,
++};
+ use std::fs;
+ 
+ fn fixture_batch() -> Vec<Mutation> {
+@@ -599,3 +601,116 @@ fn set_value_on_non_input_element_is_rejected() {
+         );
+     }
+ }
++
++fn num(v: f64) -> StyleValue {
++    // Test helper: values here are always finite.
++    StyleValue::Number(serde_json::Number::from_f64(v).unwrap())
++}
++
++/// Mount a div with numeric width/opacity so setAnimation has valid starts.
++fn animated_tree() -> RetainedTree {
++    let mut tree = RetainedTree::new();
++    apply_all(
++        &mut tree,
++        &[
++            Mutation::CreateElement {
++                id: 1.into(),
++                element_type: ElementType::Div,
++            },
++            Mutation::SetStyle {
++                id: 1.into(),
++                style: StyleMap::from([
++                    ("width".to_string(), StyleValue::Number(200u32.into())),
++                    ("opacity".to_string(), StyleValue::Number(1u32.into())),
++                ]),
++            },
++        ],
++    )
++    .unwrap();
++    tree
++}
++
++fn set_animation(target: StyleMap, easing: Option<String>) -> Mutation {
++    Mutation::SetAnimation {
++        id: 1.into(),
++        target,
++        transition_ms: 250,
++        easing,
++    }
++}
++
++#[test]
++fn set_animation_merges_target_so_end_state_sticks() {
++    let mut tree = animated_tree();
++    tree.apply(&set_animation(
++        StyleMap::from([
++            ("width".to_string(), StyleValue::Number(300u32.into())),
++            ("opacity".to_string(), num(0.5)),
++        ]),
++        Some("easeOut".to_string()),
++    ))
++    .unwrap();
++    let style = &tree.get(1.into()).unwrap().style;
++    // Targets are merged into the static style: once the animation finishes
++    // (or without animation support at all) the element rests at the target.
++    // Compare numerically: the merge stores f64 (serde_json numbers
++    // distinguish 300 from 300.0).
++    let merged = |key: &str| style.get(key).and_then(|v| match v {
++        StyleValue::Number(n) => n.as_f64(),
++        _ => None,
++    });
++    assert_eq!(merged("width"), Some(300.0));
++    assert_eq!(merged("opacity"), Some(0.5));
++}
++
++#[test]
++fn set_animation_rejects_keys_outside_the_closed_set() {
++    let mut tree = animated_tree();
++    // Style keys are forward-compatible for setStyle, but animation needs a
++    // real numeric render path — the animatable set is CLOSED.
++    let err = tree
++        .apply(&set_animation(
++            StyleMap::from([("display".to_string(), StyleValue::Text("flex".into()))]),
++            None,
++        ))
++        .unwrap_err();
++    assert!(err.to_string().contains("animatable"), "got: {err}");
++}
++
++#[test]
++fn set_animation_rejects_non_numeric_targets() {
++    let mut tree = animated_tree();
++    let err = tree
++        .apply(&set_animation(
++            StyleMap::from([("width".to_string(), StyleValue::Text("200px".into()))]),
++            None,
++        ))
++        .unwrap_err();
++    assert!(err.to_string().contains("numeric"), "got: {err}");
++}
++
++#[test]
++fn set_animation_requires_a_numeric_start_on_the_element() {
++    let mut tree = animated_tree();
++    // Interpolation needs a well-defined start: the key must already hold a
++    // number (you can only animate what is set).
++    let err = tree
++        .apply(&set_animation(
++            StyleMap::from([("padding".to_string(), StyleValue::Number(8u32.into()))]),
++            None,
++        ))
++        .unwrap_err();
++    assert!(err.to_string().contains("start"), "got: {err}");
++}
++
++#[test]
++fn set_animation_rejects_unknown_easing() {
++    let mut tree = animated_tree();
++    let err = tree
++        .apply(&set_animation(
++            StyleMap::from([("width".to_string(), StyleValue::Number(300u32.into()))]),
++            Some("spring".to_string()),
++        ))
++        .unwrap_err();
++    assert!(err.to_string().contains("easing"), "got: {err}");
++}
+diff --git a/crates/protocol/tests/round_trip.rs b/crates/protocol/tests/round_trip.rs
+index d9ef7a0..be4e82c 100644
+--- a/crates/protocol/tests/round_trip.rs
++++ b/crates/protocol/tests/round_trip.rs
+@@ -1,8 +1,7 @@
+ use solid_gpui_protocol::{
+     ApplyError, Command, ElementId, Event, EventType, Mutation, MutationBatch, MutationHandler,
+     ProtocolError, Reply, ReplyCode, command_from_json, command_to_json, event_from_json,
+-    event_to_json, from_json, reply_from_json, reply_to_json, to_json,
+-};
++    event_to_json, from_json, reply_from_json, reply_to_json, to_json, RetainedTree};
+ use std::fs;
+ 
+ fn fixture() -> String {
+@@ -454,3 +453,18 @@ fn list_element_batch_fixture_parses_both_ways() {
+     }
+     assert_eq!(to_json(&batch), raw);
+ }
++
++#[test]
++fn animation_batch_fixture_parses_both_ways() {
++    let raw = fs::read_to_string(fixture_path("batch-animation-01.json"))
++        .expect("fixture readable")
++        .trim()
++        .to_string();
++    let batch = from_json(&raw).expect("batch parses");
++    let mut tree = RetainedTree::new();
++    for m in &batch.mutations {
++        tree.apply(m).expect("fixture applies");
++    }
++    // Round-trips byte-identically after compaction.
++    assert_eq!(to_json(&batch), raw);
++}
+diff --git a/packages/protocol/fixtures/batch-animation-01.json b/packages/protocol/fixtures/batch-animation-01.json
+new file mode 100644
+index 0000000..394a4fc
+--- /dev/null
++++ b/packages/protocol/fixtures/batch-animation-01.json
+@@ -0,0 +1 @@
++{"v":1,"seq":20,"mutations":[{"op":"createElement","id":1,"elementType":"div"},{"op":"setRoot","id":1},{"op":"setStyle","id":1,"style":{"height":40,"opacity":1,"width":200}},{"op":"setAnimation","id":1,"target":{"opacity":0.5,"width":300},"transitionMs":250,"easing":"easeOut"}]}
+diff --git a/packages/protocol/src/batch.test.ts b/packages/protocol/src/batch.test.ts
+index 1b996b2..7d70397 100644
+--- a/packages/protocol/src/batch.test.ts
++++ b/packages/protocol/src/batch.test.ts
+@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test"
+ import fixture from "../fixtures/batch-01.json"
+ import rustEmitted from "../fixtures/rust-emitted-batch-01.json"
+ import listFixture from "../fixtures/batch-list-01.json"
++import animationFixture from "../fixtures/batch-animation-01.json"
+ import { elementId } from "./ids"
+ import { decodeBatch, encodeBatch } from "./batch"
+ import type { MutationBatch } from "./batch"
+@@ -155,6 +156,58 @@ describe("decodeBatch rejects malformed input", () => {
+     }
+   })
+ 
++  test("animation batch fixture parses (Rust↔TS parity)", () => {
++    const r = decodeBatch(JSON.stringify(animationFixture))
++    expect(r.ok).toBe(true)
++    if (r.ok) {
++      const anim = r.value.mutations[3]
++      expect(anim && "target" in anim && anim.target).toEqual({
++        opacity: 0.5,
++        width: 300,
++      })
++      expect(anim && "transitionMs" in anim && anim.transitionMs).toBe(250)
++    }
++  })
++
++  test("setAnimation rejects keys outside the closed animatable set", () => {
++    const r = decodeBatch(
++      JSON.stringify({
++        v: 1,
++        seq: 1,
++        mutations: [
++          { op: "setAnimation", id: 1, target: { display: "flex" }, transitionMs: 100 },
++        ],
++      }),
++    )
++    expect(!r.ok && r.error.kind === "invalidShape" && r.error.path.includes("target")).toBe(true)
++  })
++
++  test("setAnimation rejects non-numeric target values", () => {
++    const r = decodeBatch(
++      JSON.stringify({
++        v: 1,
++        seq: 1,
++        mutations: [
++          { op: "setAnimation", id: 1, target: { width: "200px" }, transitionMs: 100 },
++        ],
++      }),
++    )
++    expect(!r.ok && r.error.kind === "invalidShape" && r.error.path.includes("target")).toBe(true)
++  })
++
++  test("setAnimation rejects unknown easing names", () => {
++    const r = decodeBatch(
++      JSON.stringify({
++        v: 1,
++        seq: 1,
++        mutations: [
++          { op: "setAnimation", id: 1, target: { width: 300 }, transitionMs: 100, easing: "spring" },
++        ],
++      }),
++    )
++    expect(!r.ok && r.error.kind === "invalidShape" && r.error.path.includes("easing")).toBe(true)
++  })
++
+   test("unknown element type", () => {
+     const r = decodeBatch(
+       JSON.stringify({
+diff --git a/packages/protocol/src/batch.ts b/packages/protocol/src/batch.ts
+index 2e3805c..7ed8fdc 100644
+--- a/packages/protocol/src/batch.ts
++++ b/packages/protocol/src/batch.ts
+@@ -1,5 +1,7 @@
+ import { isElementIdValue, type ElementId } from "./ids"
+ import {
++  ANIMATABLE_STYLE_KEYS,
++  EASING_NAMES,
+   ELEMENT_TYPES,
+   EVENT_TYPES,
+   MUTATION_OPS,
+@@ -133,6 +135,61 @@ function decodeMutation(m: Dict, p: string): Result<Mutation, ProtocolError> {
+       // (forward compatibility — see StyleMap).
+       return { ok: true, value: { op, id: idR.value, style: style as unknown as StyleMap } }
+     }
++    case "setAnimation": {
++      const idR = id()
++      if (!idR.ok) return idR
++      const target = m.target
++      if (!isDict(target)) {
++        return { ok: false, error: shape(`${p}.target`, "expected an object") }
++      }
++      const keys = Object.keys(target)
++      if (keys.length === 0) {
++        return { ok: false, error: shape(`${p}.target`, "expected at least one animatable key") }
++      }
++      for (const k of keys) {
++        if (!(ANIMATABLE_STYLE_KEYS as readonly string[]).includes(k)) {
++          return {
++            ok: false,
++            error: shape(
++              `${p}.target.${k}`,
++              `not animatable; expected one of ${ANIMATABLE_STYLE_KEYS.join("|")}`,
++            ),
++          }
++        }
++        if (typeof target[k] !== "number" || !Number.isFinite(target[k])) {
++          return {
++            ok: false,
++            error: shape(`${p}.target.${k}`, "expected a finite number"),
++          }
++        }
++      }
++      const transitionMs = m.transitionMs
++      if (typeof transitionMs !== "number" || !Number.isInteger(transitionMs) || transitionMs < 0) {
++        return {
++          ok: false,
++          error: shape(`${p}.transitionMs`, "expected a non-negative integer"),
++        }
++      }
++      if (m.easing !== undefined) {
++        if (typeof m.easing !== "string" || !(EASING_NAMES as readonly string[]).includes(m.easing)) {
++          return {
++            ok: false,
++            error: shape(`${p}.easing`, `expected one of ${EASING_NAMES.join("|")}`),
++          }
++        }
++      }
++      // Boundary cast: keys and values validated above.
++      return {
++        ok: true,
++        value: {
++          op,
++          id: idR.value,
++          target: target as { [k in (typeof ANIMATABLE_STYLE_KEYS)[number]]?: number },
++          transitionMs,
++          ...(m.easing !== undefined ? { easing: m.easing as (typeof EASING_NAMES)[number] } : {}),
++        },
++      }
++    }
+     case "setText": {
+       const idR = id()
+       if (!idR.ok) return idR
+diff --git a/packages/protocol/src/mutation.ts b/packages/protocol/src/mutation.ts
+index 9006083..27b10ba 100644
+--- a/packages/protocol/src/mutation.ts
++++ b/packages/protocol/src/mutation.ts
+@@ -48,9 +48,41 @@ export type Mutation =
+   | { readonly op: "setStyle"; readonly id: ElementId; readonly style: StyleMap }
+   | { readonly op: "setText"; readonly id: ElementId; readonly text: string }
+   | { readonly op: "setValue"; readonly id: ElementId; readonly value: string }
++  | {
++      readonly op: "setAnimation"
++      readonly id: ElementId
++      readonly target: { readonly [k in AnimatableStyleKey]?: number }
++      readonly transitionMs: number
++      readonly easing?: EasingName
++    }
+   | { readonly op: "setEventListener"; readonly id: ElementId; readonly eventType: EventType; readonly enabled: boolean }
+   | { readonly op: "setRoot"; readonly id: ElementId }
+ 
++/**
++ * Closed set of style keys setAnimation may target (interpolation needs a
++ * numeric render path on the helper). Unlike setStyle's open set, animating
++ * an unsupported key is a decode error.
++ */
++export const ANIMATABLE_STYLE_KEYS = [
++  "width",
++  "height",
++  "minWidth",
++  "minHeight",
++  "padding",
++  "gap",
++  "borderRadius",
++  "fontSize",
++  "flexGrow",
++  "flexShrink",
++  "opacity",
++] as const
++
++export type AnimatableStyleKey = (typeof ANIMATABLE_STYLE_KEYS)[number]
++
++export const EASING_NAMES = ["linear", "easeIn", "easeOut", "easeInOut"] as const
++
++export type EasingName = (typeof EASING_NAMES)[number]
++
+ export const MUTATION_OPS = [
+   "createElement",
+   "destroyElement",
+@@ -60,6 +92,7 @@ export const MUTATION_OPS = [
+   "setStyle",
+   "setText",
+   "setValue",
++  "setAnimation",
+   "setEventListener",
+   "setRoot",
+ ] as const

@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test"
+import { createSignal } from "solid-js"
 import { createSolidRenderer, type Send } from "./renderer"
 import type { MutationBatch, Mutation } from "@solid-gpui/protocol"
 
@@ -83,6 +84,49 @@ describe("transition props animate style changes", () => {
     const styles = ms.filter((m): m is Extract<Mutation, { op: "setStyle" }> => m.op === "setStyle")
     // display flows statically; width excluded (animated).
     expect(styles.at(-1)?.style).toEqual({ display: "block" })
+    dispose()
+  })
+})
+
+describe("h() reactive style prop", () => {
+  test("function style re-flows on signal change: flip emits setAnimation", async () => {
+    const { makeH } = await import("./h")
+    const rec = recording()
+    const { renderer: R, render, flush } = createSolidRenderer(rec.send)
+    const h = makeH(R)
+    const container = R.createElement("#root")
+    const [open, setOpen] = createSignal(false)
+    const dispose = render(
+      () =>
+        h(
+          "div",
+          {
+            // Function style = reactive bag (compiled-JSX getter semantics):
+            // re-evaluated inside a render effect whenever its signals change.
+            style: () => ({ opacity: 1, width: open() ? 300 : 200 }),
+            transitionMs: 250,
+          },
+          "box",
+        ),
+      container,
+    )
+    await flush()
+    const mountOps = rec.batches[0]!.mutations.map((m) => m.op)
+    expect(mountOps).toContain("setStyle")
+
+    setOpen(true)
+    await flush()
+    const ms = lastMutations(rec.batches)
+    const anim = ms.find((m): m is Extract<Mutation, { op: "setAnimation" }> => m.op === "setAnimation")
+    expect(anim).toMatchObject({
+      op: "setAnimation",
+      target: { width: 300 },
+      transitionMs: 250,
+    })
+    // Only the changed animatable key animates; opacity is unchanged and
+    // stays in the static companion.
+    const style = ms.filter((m): m is Extract<Mutation, { op: "setStyle" }> => m.op === "setStyle").at(-1)
+    expect(style?.style).toEqual({ opacity: 1 })
     dispose()
   })
 })
