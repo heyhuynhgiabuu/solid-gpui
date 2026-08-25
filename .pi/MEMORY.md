@@ -479,3 +479,26 @@
   handles). active() requires Stateful<Div> — apply inside apply_interactive.
 - Rust protocol tests building nodes: Node::new is crate-private — build via
   RetainedTree + Mutation::apply (public API) instead.
+
+## P2 — input maturity (2026-08-26)
+
+- **Recon trước khi xây**: input core đã trưởng thành hơn roadmap giả định
+  (IME composing, UTF-16, autosize, emoji tests). Slice thu gọn thành
+  gap-closing có bằng chứng. Đọc code TRƯỚC khi kế hoạch nói "xây mới".
+- **onInput/onChange split là SEMANTIC BREAK cho consumer cũ**: mọi binding
+  onChange-co-từng-keystroke chết im lặng (chỉ nhận commit-on-blur). Sau
+  split, grep examples/README cho onChange — demo counter.ts bị reviewer
+  bắt (đã sửa cf42bdc).
+- **Dirty-flag lifecycle phải liệt kê được từng mutation site**: edit_input,
+  replace_and_mark (IME), paste/simulateInput/Enter → đều phải đi qua
+  edit paths; setValue là clearing path duy nhất. Reviewer verify bằng cách
+  đếm sites (3) — giữ con số đó khi thêm edit path mới.
+- **Anchor xóa ở ĐÚNG các chỗ value thay đổi** (edit + setValue), giữ qua
+  movement. Bỏ sót một chỗ → stale selection thay đổi nghĩa của edit kế
+  tiếp (M2/M3 đều là biến thể của lỗi này).
+- **Sink unification có giới hạn**: emit_event qua self.sink nhưng
+  emit_key/emit_key_up vẫn ghi stdout trực tiếp — đừng nói "tests observe
+  EVERY event" trong comment nếu chưa đúng.
+- Platform NSRange là sorted (location+length) — selection_reversed
+  unreachable qua set_selection production; nếu platform nào giao
+  anchor-first, dạy set_selection direction.

@@ -679,7 +679,8 @@ cross-language contract discipline (TS+Rust lockstep, fixtures regenerated).
       P1 CLOSED.
 
 ### 2026-08-26 - P2: input maturity (IME/selection/caret, onInput/onChange, multiline growth)
-status: active
+status: CLOSED 2026-08-26 (r1 CLEAN — verdict đúng hướng: invariants A–F
+đạt, gates xanh reviewer tự chạy; 4 Minor + 2 Note)
 
 Goal: inputs behave like real text fields per Phase 2 roadmap P2. The
 buffer/selection/caret must be verifiably host-side (IME queries arrive
@@ -715,4 +716,12 @@ closes correctness gaps found by adversarial typing tests.
       newline, Shift+Enter → submit) already implemented and GUI-covered;
       known limitation (logical lines, not wrapped) documented in code —
       reclassifying as a P5-class polish item, not this slice.
-- [ ] VERIFY: gates + independent review
+- [x] VERIFY: gates + independent review — r1 (mt8z3qsf-c971) verdict CLEAN:
+      dirty lifecycle hoàn chỉnh (C: 3 mutation sites, mọi path qua
+      edit_input/replace_and_mark), sink unification đúng phạm vi (D),
+      lockstep A đạt, back-compat blast radius chỉ demo (B, đã fix
+      cf42bdc). 4 Minors fixed trong 1238a1a: IME compose-over-selection
+      asymmetry (M2), phantom anchor sau setValue (M3), 3 doc comments
+      stale (M1), platform-range-ordering question documented (M4). Notes:
+      emit_key vẫn bypass sink (pre-existing), controlled inputs không bao
+      giờ emit change (deliberate, đã ghi nhận). P2 CLOSED.
