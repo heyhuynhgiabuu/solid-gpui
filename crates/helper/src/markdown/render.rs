@@ -51,9 +51,80 @@ pub const TABLE_MIN_COLUMN_CONTENT: f32 = 48.0;
 /// Minimum rendered column width in px, padding included.
 pub const TABLE_MIN_COLUMN_WIDTH: f32 = 96.0;
 
+/// Token-color palette for syntax highlighting: the zeron-dark 12-color set
+/// (Comet crates/theme/src/builtins.rs `syntax`), mapped to all 25
+/// HighlightKinds exactly like upstream's `syntax()` builder. Ported with the
+/// markdown render port (MIT, Copyright 2026 Wing — see THIRD_PARTY_NOTICES).
+#[derive(Debug, Clone, Copy)]
+pub struct SyntaxPalette {
+    pub comment: Hsla,
+    pub keyword: Hsla,
+    pub string: Hsla,
+    pub number: Hsla,
+    pub type_name: Hsla,
+    pub function: Hsla,
+    pub property: Hsla,
+    pub variable: Hsla,
+    pub punctuation: Hsla,
+    pub tag: Hsla,
+    pub attribute: Hsla,
+    pub invalid: Hsla,
+}
+
+impl Default for SyntaxPalette {
+    fn default() -> Self {
+        SyntaxPalette {
+            comment: gpui::rgba(0x92929aff).into(),
+            keyword: gpui::rgba(0x8b7cf6ff).into(),
+            string: gpui::rgba(0x34d399ff).into(),
+            number: gpui::rgba(0xfacc15ff).into(),
+            type_name: gpui::rgba(0xc084fcff).into(),
+            function: gpui::rgba(0x60a5faff).into(),
+            property: gpui::rgba(0xf472b6ff).into(),
+            variable: gpui::rgba(0xe8e8eaff).into(),
+            punctuation: gpui::rgba(0xa1a1aaff).into(),
+            tag: gpui::rgba(0xf472b6ff).into(),
+            attribute: gpui::rgba(0x22d3eeff).into(),
+            invalid: gpui::rgba(0xf87171ff).into(),
+        }
+    }
+}
+
+impl SyntaxPalette {
+    /// Paint color for a token class (upstream `Theme::color` mapping).
+    pub fn color(self, kind: super::syntax::HighlightKind) -> Hsla {
+        use super::syntax::HighlightKind;
+        match kind {
+            HighlightKind::Comment => self.comment,
+            HighlightKind::Keyword => self.keyword,
+            HighlightKind::String => self.string,
+            HighlightKind::StringSpecial | HighlightKind::Escape => self.attribute,
+            HighlightKind::Number => self.number,
+            HighlightKind::Boolean => self.number,
+            HighlightKind::Type | HighlightKind::TypeBuiltin | HighlightKind::Constructor => {
+                self.type_name
+            }
+            HighlightKind::Function | HighlightKind::FunctionBuiltin => self.function,
+            HighlightKind::Macro => self.keyword,
+            HighlightKind::Property => self.property,
+            HighlightKind::Constant => self.number,
+            HighlightKind::Variable => self.variable,
+            HighlightKind::VariableSpecial => self.keyword,
+            HighlightKind::Parameter => self.variable,
+            HighlightKind::Operator => self.keyword,
+            HighlightKind::Punctuation => self.punctuation,
+            HighlightKind::Tag => self.tag,
+            HighlightKind::Attribute => self.attribute,
+            HighlightKind::Label => self.function,
+            HighlightKind::Embedded => self.punctuation,
+            HighlightKind::Invalid => self.invalid,
+        }
+    }
+}
+
 /// Fixed default palette + fonts for markdown rendering. Comet resolves this
 /// through its theme crate; solid-gpui derives it per element from the
-/// node's style (see [`MdTheme::from_style`]).
+/// node's style (see host.rs build_markdown_element).
 #[derive(Debug, Clone)]
 pub struct MdTheme {
     pub font_sans: SharedString,
@@ -64,6 +135,7 @@ pub struct MdTheme {
     pub border: Hsla,
     pub code_text: Hsla,
     pub code_wash: Hsla,
+    pub syntax: SyntaxPalette,
 }
 
 impl Default for MdTheme {
@@ -80,6 +152,7 @@ impl Default for MdTheme {
             border: gpui::hsla(0.0, 0.0, 1.0, 0.10),
             code_text: gpui::rgba(0xcba6f7ff).into(),
             code_wash: gpui::hsla(0.0, 0.0, 1.0, 0.06),
+            syntax: SyntaxPalette::default(),
         }
     }
 }
@@ -116,6 +189,7 @@ pub fn render_tree(
     theme: &MdTheme,
     scale: f32,
     window: &Window,
+    highlight: &dyn Fn(&str) -> Option<std::rc::Rc<super::syntax::HighlightedDocument>>,
 ) -> AnyElement {
     let mut ids = Ids::default();
     div()
@@ -124,7 +198,9 @@ pub fn render_tree(
         .gap(px(MD_BLOCK_GAP * scale))
         .children(tree.blocks.iter().map(|top| {
             let ix = ids.next();
-            render_block(row, &top.block, ix, theme, scale, window, &mut ids)
+            render_block(
+                row, &top.block, ix, theme, scale, window, &mut ids, highlight,
+            )
         }))
         .into_any_element()
 }
@@ -140,6 +216,7 @@ pub fn render_block(
     scale: f32,
     window: &Window,
     ids: &mut Ids,
+    highlight: &dyn Fn(&str) -> Option<std::rc::Rc<super::syntax::HighlightedDocument>>,
 ) -> AnyElement {
     match block {
         Block::Paragraph { runs } => text_element(
@@ -157,7 +234,12 @@ pub fn render_block(
             text_element(row, runs, size, line, true, ix, theme, scale)
         }
         Block::CodeBlock { language, code } => {
-            render_code_block(row, language.as_deref(), code, ix, theme, scale)
+            let owned = language
+                .as_deref()
+                .and_then(highlight)
+                .map(|doc| doc.lines.clone());
+            let hl = owned.as_deref();
+            render_code_block(row, language.as_deref(), code, ix, theme, scale, hl)
         }
         Block::BlockQuote { children } => div()
             // Accent-tinted quote: rail + a whisper of the same hue behind it.
@@ -175,7 +257,7 @@ pub fn render_block(
             .text_color(theme.text_muted)
             .children(children.iter().map(|child| {
                 let cix = ids.next();
-                render_block(row, child, cix, theme, scale, window, ids)
+                render_block(row, child, cix, theme, scale, window, ids, highlight)
             }))
             .into_any_element(),
         Block::List {
@@ -223,7 +305,7 @@ pub fn render_block(
                         .gap(px(4.0))
                         .children(item.iter().map(|child| {
                             let cix = ids.next();
-                            render_block(row, child, cix, theme, scale, window, ids)
+                            render_block(row, child, cix, theme, scale, window, ids, highlight)
                         })),
                 )
             }))
@@ -536,6 +618,7 @@ fn render_code_block(
     ix: usize,
     theme: &MdTheme,
     scale: f32,
+    highlight: Option<&[Vec<super::syntax::HighlightSpan>]>,
 ) -> AnyElement {
     let mono = font(theme.font_mono.clone());
     let scroll_id: SharedString = format!("{row}-code{ix}").into();
@@ -573,24 +656,89 @@ fn render_code_block(
                 .flex_col()
                 // One StyledText per line keeps the block's height exactly
                 // lines × line_height; horizontal overflow scrolls. Syntax
-                // highlighting (S13e) arrives as recolored runs per line —
-                // layout never changes.
-                .children(code.split('\n').map(|line| {
-                    let run = TextRun {
-                        len: line.len(),
-                        font: mono.clone(),
-                        color: theme.text,
-                        background_color: None,
-                        underline: None,
-                        strikethrough: None,
-                    };
+                // highlighting is recolored runs on the same mono font —
+                // layout never changes (highlight is pure paint).
+                .children(code.split('\n').enumerate().map(|(li, line)| {
+                    let spans = highlight
+                        .and_then(|h| h.get(li))
+                        .map(|s| s.as_slice())
+                        .unwrap_or(&[]);
+                    let runs = runs_for_syntax_line(line, spans, &mono, theme);
                     div()
                         .h(px(CODE_LINE_HEIGHT * scale))
                         .flex_none()
-                        .child(StyledText::new(SharedString::from(line)).with_runs(vec![run]))
+                        .child(StyledText::new(SharedString::from(line)).with_runs(runs))
                 })),
         )
         .into_any_element()
+}
+
+/// Build the exact-cover `TextRun` list for one code line from its tokens
+/// (ported from Comet). Same font everywhere — recoloring can never change
+/// layout; untokenized gaps take the plain code color.
+pub fn runs_for_syntax_line(
+    line: &str,
+    spans: &[super::syntax::HighlightSpan],
+    mono: &gpui::Font,
+    theme: &MdTheme,
+) -> Vec<TextRun> {
+    let plain = |len: usize| TextRun {
+        len,
+        font: mono.clone(),
+        color: theme.text,
+        background_color: None,
+        underline: None,
+        strikethrough: None,
+    };
+    let mut runs = Vec::new();
+    let mut at = 0usize;
+    for span in spans {
+        if span.range.start > at {
+            runs.push(plain(span.range.start - at));
+        }
+        let mut run = plain(span.range.len());
+        run.color = theme.syntax.color(span.kind);
+        runs.push(run);
+        at = span.range.end;
+    }
+    if at < line.len() {
+        runs.push(plain(line.len() - at));
+    }
+    runs.retain(|run| run.len > 0);
+    runs
+}
+
+#[test]
+fn syntax_runs_recolor_without_changing_layout() {
+    use crate::markdown::syntax::{HighlightKind, HighlightRequest, highlight};
+
+    let theme = MdTheme::default();
+    let mono = font(theme.font_mono.clone());
+    let line = r#"let x = "hi"; // done"#;
+    let document = highlight(HighlightRequest {
+        source: line,
+        path: None,
+        fence_tag: Some("rust"),
+    })
+    .unwrap();
+    let runs = runs_for_syntax_line(line, &document.lines[0], &mono, &theme);
+    // Exact cover of the line, single font, at least one recolored token.
+    assert_eq!(runs.iter().map(|r| r.len).sum::<usize>(), line.len());
+    assert!(runs.iter().all(|r| r.font == mono));
+    assert!(
+        runs.iter().any(|r| r.color != theme.text),
+        "expected at least one token color"
+    );
+    // Untokenized input is one plain run.
+    let plain = runs_for_syntax_line("plain text", &[], &mono, &theme);
+    assert_eq!(plain.len(), 1);
+    assert_eq!(plain[0].len, 10);
+    // Keyword tokens take the palette keyword color (zeron-dark violet).
+    let keyword_run = runs
+        .iter()
+        .find(|r| r.color == theme.syntax.color(HighlightKind::Keyword))
+        .expect("keyword run");
+    assert!(keyword_run.len < line.len());
 }
 
 #[cfg(test)]

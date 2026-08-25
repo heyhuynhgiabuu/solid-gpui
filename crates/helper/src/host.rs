@@ -204,6 +204,10 @@ pub struct HostView {
     /// Children each list rendered last frame (see RenderCtx).
     list_children: HashMap<ElementId, Vec<ElementId>>,
     pub(crate) animations: HashMap<ElementId, ActiveAnimation>,
+    /// Per-markdown-element parse + highlight cache (see MarkdownCacheEntry).
+    /// Rc/RefCell like the other per-id maps: render reads it while `self`
+    /// is borrowed by the Render impl.
+    markdown_cache: crate::markdown::MarkdownCaches,
 }
 
 impl HostView {
@@ -225,6 +229,7 @@ impl HostView {
             list_follow_armed: HashSet::new(),
             list_children: HashMap::new(),
             animations: HashMap::new(),
+            markdown_cache: Rc::new(RefCell::new(HashMap::new())),
         }
     }
 
@@ -720,6 +725,8 @@ struct RenderCtx<'a> {
     /// Snapshot taken at render start so every substitution in the frame
     /// interpolates against the same instant.
     now: std::time::Instant,
+    /// Per-markdown-element parse + highlight cache (see MarkdownCacheEntry).
+    md_highlights: &'a crate::markdown::MarkdownCaches,
 }
 
 /// The style value a build loop should apply for `key`: the interpolated
@@ -1000,6 +1007,10 @@ impl Render for HostView {
         inputs
             .borrow_mut()
             .retain(|id, _| self.tree.get(*id).is_some());
+        let md_cache = self.markdown_cache.clone();
+        md_cache
+            .borrow_mut()
+            .retain(|id, _| self.tree.get(*id).is_some());
         let host = cx.entity().downgrade();
         // Reset the virtualization counters: build_element's list items
         // increment them during layout, after this render call returns.
@@ -1031,6 +1042,7 @@ impl Render for HostView {
             list_children: &mut self.list_children,
             animations: &self.animations,
             now,
+            md_highlights: &self.markdown_cache,
             list_settle: list_settle.clone(),
         };
         let mut content = match self.tree.root() {
@@ -1133,7 +1145,7 @@ fn build_element(
         return build_list_element(tree, id, window, cx, ctx);
     }
     if node.element_type == ElementType::Markdown {
-        return build_markdown_element(tree, id, window);
+        return build_markdown_element(tree, id, window, ctx);
     }
     let mut el = div();
     for (key, value) in &node.style {
@@ -1165,16 +1177,74 @@ fn build_element(
     el.into_any_element()
 }
 
-/// Markdown element: parse the node's text (markdown source) and render the
-/// block tree. NOTE: gpui calls render() per FRAME (hover refreshes,
-/// animations, resize), so parse_full re-runs per frame — O(doc) per frame
-/// for active windows, like every other element rebuild here. Fine for v1
-/// document sizes; a source-keyed parse cache is the measured follow-up.
+/// Markdown element: parse the node's text (markdown source), highlight its
+/// code fences, and render the block tree. gpui calls render() per FRAME, so
+/// both the parse AND the tree-sitter highlighting are cached per element and
+/// recomputed only when the source text changes — tree-sitter per frame would
+/// be far too expensive to accept as v1 debt. The resolver handed to
+/// render_tree is CONTENT-keyed (language+code): identical fences share one
+/// highlight document, deterministically.
 /// Element styles: `color` overrides body text, `backgroundColor` washes the
 /// wrapper, `fontSize` (14 = 1.0×) scales every metric linearly.
-fn build_markdown_element(tree: &RetainedTree, id: ElementId, window: &mut Window) -> AnyElement {
+fn build_markdown_element(
+    tree: &RetainedTree,
+    id: ElementId,
+    window: &mut Window,
+    ctx: &RenderCtx,
+) -> AnyElement {
     let node = tree.get(id).expect("checked by caller");
     let source = node.text.clone().unwrap_or_default();
+
+    // Get-or-recompute the parse + highlight entry for this element's source.
+    let mut cache = ctx.md_highlights.borrow_mut();
+    let needs_rebuild = match cache.get(&id) {
+        Some(entry) => entry.source != source,
+        None => true,
+    };
+    if needs_rebuild {
+        let parsed = crate::markdown::parser::parse_full(&source);
+        let highlights = collect_code_fences(&parsed)
+            .into_iter()
+            .map(|(lang, code)| {
+                (
+                    lang.clone(),
+                    code.clone(),
+                    crate::markdown::syntax::highlight(crate::markdown::syntax::HighlightRequest {
+                        source: code.as_str(),
+                        path: None,
+                        fence_tag: lang.as_deref(),
+                    })
+                    .ok()
+                    .map(std::rc::Rc::new),
+                )
+            })
+            .collect();
+        cache.insert(
+            id,
+            crate::markdown::MarkdownCacheEntry {
+                source: source.clone(),
+                tree: std::rc::Rc::new(parsed),
+                highlights,
+            },
+        );
+    }
+    let entry_tree = cache.get(&id).expect("just inserted").tree.clone();
+    drop(cache);
+
+    // Content-keyed resolver over the cached fence list. Cloning the Rc is
+    // the whole cost per frame per code block; the borrow is released before
+    // any re-entrant cache mutation could occur (render never mutates it).
+    let highlight =
+        |lang_key: &str| -> Option<std::rc::Rc<crate::markdown::syntax::HighlightedDocument>> {
+            let cache = ctx.md_highlights.borrow();
+            let entry = cache.get(&id)?;
+            entry
+                .highlights
+                .iter()
+                .find(|(lang, _, _)| lang.as_deref() == Some(lang_key))
+                .and_then(|(_, _, doc)| doc.clone())
+        };
+
     let mut theme = crate::markdown::render::MdTheme::default();
     if let Some(color) = node.style.get("color").and_then(parse_color) {
         theme.text = color.into();
@@ -1185,18 +1255,45 @@ fn build_markdown_element(tree: &RetainedTree, id: ElementId, window: &mut Windo
         })
         .max(0.1);
     let row = format!("md{}", id.0);
-    let inner = crate::markdown::render::render_tree(
-        &row,
-        &crate::markdown::parser::parse_full(&source),
-        &theme,
-        scale,
-        window,
-    );
+    let inner =
+        crate::markdown::render::render_tree(&row, &entry_tree, &theme, scale, window, &highlight);
     let mut el = div().flex_col().child(inner);
     if let Some(bg) = node.style.get("backgroundColor").and_then(parse_color) {
         el = el.bg(bg);
     }
     el.into_any_element()
+}
+
+/// Every code fence in a parsed markdown tree, in document order (pre-order
+/// walk mirroring the render traversal — the resolver is content-keyed, so
+/// order only affects which duplicate wins, deterministically).
+fn collect_code_fences(tree: &crate::markdown::parser::BlockTree) -> Vec<(Option<String>, String)> {
+    use crate::markdown::parser::Block;
+    fn walk(block: &Block, out: &mut Vec<(Option<String>, String)>) {
+        match block {
+            Block::CodeBlock { language, code } => {
+                out.push((language.clone(), code.clone()));
+            }
+            Block::BlockQuote { children } => {
+                for child in children {
+                    walk(child, out);
+                }
+            }
+            Block::List { items, .. } => {
+                for item in items {
+                    for child in item {
+                        walk(child, out);
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+    let mut out = Vec::new();
+    for top in &tree.blocks {
+        walk(&top.block, &mut out);
+    }
+    out
 }
 
 /// Wire interactive behavior (scroll handles, focus subscriptions, Tab
@@ -1539,6 +1636,7 @@ fn build_list_element(
                 list_children: &mut view.list_children,
                 animations: &view.animations,
                 now: frame_now,
+                md_highlights: &view.markdown_cache,
                 list_settle: item_settle.clone(),
             };
             build_element(&view.tree, cid, window, vcx, &mut ctx)

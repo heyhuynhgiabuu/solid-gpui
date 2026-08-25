@@ -19,6 +19,25 @@ serde_json = "1"
 # S13 markdown: block-level parsing only (Comet uses 0.12; matched to keep
 # the port byte-compatible with upstream parser semantics).
 pulldown-cmark = "0.12"
+# S13e syntax highlighting: tree-sitter core + the bundled grammar subset
+# (Comet's crates/syntax port). Versions are PINNED EXACTLY like Comet's —
+# grammar crates rename constants (HIGHLIGHTS_QUERY vs HIGHLIGHT_QUERY)
+# between releases, so caret deps break the port. Everything else in their
+# LanguageId enum is unbundled by design -> plain-text fallback, keeping
+# binary size sane.
+tree-sitter = "=0.26.11"
+tree-sitter-highlight = "=0.26.11"
+tree-sitter-rust = "=0.24.2"
+tree-sitter-javascript = "=0.25.0"
+tree-sitter-typescript = "=0.23.2"
+tree-sitter-python = "=0.25.0"
+tree-sitter-go = "=0.25.0"
+tree-sitter-json = "=0.24.8"
+tree-sitter-bash = "=0.25.1"
+tree-sitter-toml-ng = "=0.7.0"
+tree-sitter-yaml = "=0.7.2"
+tree-sitter-css = "=0.25.0"
+tree-sitter-html = "=0.23.2"
 # macOS: Metal is always available; font-kit enables real glyph rasterization.
 # Linux (Phase 2+): switch to features = ["wayland", "x11"].
 gpui_platform = { git = "https://github.com/zed-industries/zed", features = [

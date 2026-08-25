@@ -457,3 +457,32 @@ Not in this session (later slices): syntax highlighting (tree-sitter), diff
 (changes.rs), streaming (mend/veil), text selection.
 
 Cross-ref: PLAN.md#2026-08-24---phase-2-candidate-roadmap-prior-art-informed
+
+### 2026-08-25 - S13e: code-block syntax highlighting (Comet crates/syntax port)
+status: active
+
+Port Comet's standalone syntax crate (tree-sitter based) into the helper,
+wire into markdown code blocks. No protocol changes - highlighting is
+entirely helper-side (fence tag already parsed into Block::CodeBlock).
+
+- [x] S13e-a syntax.rs port: HighlightKind/precedence, normalize_line,
+      from_absolute_spans, highlight_with_limits, alias/path/shebang tables;
+      thiserror dropped (manual Display/Error); bundled grammar subset =
+      rust/js/jsx/ts/tsx/python/go/json/jsonc/bash/toml/yaml/css/html
+      (unbundled variants -> GrammarUnavailable -> plain-text fallback);
+      Markdown-as-parent dropped; Html keeps injections. 12/12 ported tests.
+      Grammar versions pinned EXACTLY like Comet (constant names differ
+      between releases — caret deps broke the build once already).
+- [x] S13e-b render: SyntaxPalette (zeron-dark) in MdTheme +
+      runs_for_syntax_line; render_code_block consumes per-line spans;
+      syntax_runs_recolor_without_changing_layout test pins exact-cover +
+      single-font + recolor contract.
+- [x] S13e-c host cache: per-element MarkdownCacheEntry {source, tree,
+      highlights} compared by EXACT source text; kills the per-frame
+      parse_full debt (n6) as a side effect; pruned per frame like other
+      per-id maps; content-keyed resolver (identical fences share docs).
+- [x] S13e-d demo: python + yaml fences added to DOC_B.
+- [~] VERIFY: bun 96/96 · tsc ×3 · cargo all suites green in isolation ·
+      clippy · fmt · demo mounts. Pending: independent review.
+
+Cross-ref: TODO.md#2026-08-25---s13-rich-text--markdowncodediff-ported-from-comet-mit
