@@ -422,12 +422,22 @@ rich text is the PLAN-ordered slice, perf idea stays parked.
 - [x] S13b helper: parser port (pulldown-cmark 0.12 → BlockTree; parse_full +
       autolink + merge only) with ported unit tests — pure data, no gpui
       (9/9 parser tests green; streaming machinery deliberately not ported)
-- [ ] S13c helper: render port (paragraph/headings/inline/code blocks/
+- [x] S13c helper: render port (paragraph/headings/inline/code blocks/
       lists/blockquote/rule/table; links via InteractiveText; inline-code
-      washes; fixed default theme + style-key overrides) + window smoke test
-- [ ] S13d Solid API: h("markdown", {source}) → setText; demo
-      examples/markdown.ts; user visual confirmation
-- [ ] VERIFY: bun, tsc ×3, cargo, clippy, fmt + independent review
+      square washes; fixed MdTheme + color/backgroundColor/fontSize overrides)
+      + window smoke test (mutation-observed RED, 3× stable; commit f002429)
+- [x] S13d Solid API: h("markdown", {source}) → setText; children refused
+      client-side (warn, no wire op); reactive function source in makeH;
+      demo examples/markdown.ts mounts + swaps + theme-toggles (mounted
+      verified; SIGINT teardown hang is pre-existing, affects counter too;
+      user visual check pending). Commit f44d03d.
+- [~] VERIFY: bun 91/91 · tsc ×3 OK · cargo 7 suites green (incl. 12/12
+      window GUI) · clippy clean (only pre-existing zed-tree `block` note) ·
+      fmt clean · NODE SMOKE OK · demo mounts (examples/markdown.ts).
+      BLOCKED on: independent review — task tool rejects reviewer launches
+      ("expected a start/resume request" ×5, harness issue; scout launches
+      worked earlier). Retry next session. User visual check of the demo
+      pending. Slice stays open until review verdict.
 
 Not in this session (later slices): syntax highlighting (tree-sitter), diff
 (changes.rs), streaming (mend/veil), text selection.

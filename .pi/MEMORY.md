@@ -273,3 +273,41 @@
   must replay renderer-shaped batches through the real helper.
 - Per-id animation state with entry replace drops in-flight keys; timing
   belongs per-TRANSITION (key), merged by upsert.
+
+## S13 markdown port learnings (2026-08-25)
+
+- Comet (zeronsh/comet, MIT) markdown subsystem map: parser.rs is fully
+  standalone (pulldown-cmark 0.12 → BlockTree IR + GFM bare-URL autolink
+  + merge_runs canonicalization); render.rs depends on theme crate +
+  streaming veil + selection + copy plumbing — port flatten/render blocks,
+  stub the theme, drop the rest. changes.rs (diff) is 5248 LOC separate;
+  syntax = tree-sitter × ~25 grammars (heavy; separate slice).
+- Harness: writing anything under /tmp is BLOCKED by the safety filter on
+  macOS (/tmp → /private); use in-repo paths or ~/dev/scratch. The task
+  tool can start failing mid-session with "expected a start/resume
+  request" for ALL new launches (scout launched fine, reviewer rejected ×5
+  with identical request shape) — when it hits, record the review as
+  BLOCKED and retry next session rather than claiming it ran.
+- gpui in our pinned zed (35aab21): rgba(u32) is the only rgba signature
+  (no 4×float overload — Comet's rgba(r,g,b,a) calls must become
+  rgba(0xrrggbbaa) or hsla); TextRun/background_color is the square inline
+  wash (rounded canvas underlay is Comet-only, tied to their selection
+  machinery); InteractiveText::on_click(ranges, |ix, window, cx|) matches.
+- rustc (1.98) inference regression: `out.last_mut()` match on `==` of a
+  generic field + Vec::with_capacity no longer infers — annotate the Vec
+  type when porting Comet code (merge_runs needed `Vec<InlineRun>`).
+- Fixture canonicalization: Rust StyleMap is a BTreeMap → style keys sort
+  alphabetically in to_json; hand-written fixtures with unsorted style
+  objects fail the byte-equality round trip. Normalize via
+  python json.dumps(sorted style keys, separators=(',',':')).
+- makeH: function-valued props other than style (markdown `source`) need
+  the SAME R.effect wrap or updates never re-flow (eager read at mount).
+- insertNode refusal pattern: when the wire rejects an attach
+  (markdown children), refuse client-side with console.warn instead of
+  emitting an op that would poison the session.
+- SIGINT teardown of examples hangs (dispose race) in the agent sandbox
+  even for the pre-existing counter demo — not an S13 regression; kill -9
+  the bun pid after the probe.
+- Window-test mutation-check discipline that works: perl-inject a
+  panic!() into the render path under test, observe the GUI test FAIL
+  (helper abort kills the ack), revert, observe pass.
