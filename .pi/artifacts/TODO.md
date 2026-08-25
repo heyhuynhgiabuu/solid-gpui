@@ -655,8 +655,16 @@ cross-language contract discipline (TS+Rust lockstep, fixtures regenerated).
       hoverStyle/activeStyle props, markdown drops pre-wire; GUI smoke
       acked applied=5; counter.tsx demos hover+active live; commit a7f74f7.
       Group states (group/groupHover) DEFERRED to a follow-up slice.
-- [ ] P1-d shorthands: JS-side normalization (paddingX→paddingLeft/Right
-      etc.) in the solid package; unknown-keys rule preserved
-- [ ] P1-e text/shadow props: boxShadow, lineClamp, whiteSpace,
-      textOverflow where gpui supports them; rejected loudly otherwise
+- [x] P1-d shorthands: packages/solid/src/style-normalize.ts
+      expandShorthands (pure; padding/X/Y, margin/X/Y, inset, size →
+      physical keys), wired into setProperty("style") AND state layers;
+      unknown keys pass (open-key rule); wire carries physical keys only so
+      Rust learns one set; StyleKey union gains both spellings; commit
+      39f5d7f.
+- [x] P1-e text/shadow props: helper arms for boxShadow ("x y blur
+      [color]" via parse_color), lineClamp (floor 1), whiteSpace
+      nowrap|normal, textOverflow ellipsis; margins/inset sides applied;
+      apply_style refactored generic over Styled (refinements share the
+      table; overflow excluded by design); GUI smoke applied=3; commit
+      39f5d7f.
 - [ ] VERIFY: gates + independent review
