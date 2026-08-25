@@ -1723,11 +1723,187 @@ fn parse_px(s: &str) -> Option<f64> {
 }
 
 fn parse_color(value: &StyleValue) -> Option<Rgba> {
-    let h = value.as_str()?.strip_prefix('#')?;
-    match h.len() {
-        6 => u32::from_str_radix(h, 16).ok().map(rgb),
-        8 => u32::from_str_radix(h, 16).ok().map(rgba),
-        _ => None,
+    let s = value.as_str()?.trim();
+    if let Some(h) = s.strip_prefix('#') {
+        return match h.len() {
+            6 => u32::from_str_radix(h, 16).ok().map(rgb),
+            8 => u32::from_str_radix(h, 16).ok().map(rgba),
+            _ => None,
+        };
+    }
+    if let Some(rest) = s.strip_prefix("rgb(").and_then(|r| r.strip_suffix(')')) {
+        let [r, g, b] = css_ints(rest, 255)?;
+        return Some(rgb(((r as u32) << 16) | ((g as u32) << 8) | b as u32));
+    }
+    if let Some(rest) = s.strip_prefix("rgba(").and_then(|r| r.strip_suffix(')')) {
+        let [r, g, b] = css_ints(&rest.rsplit_once(',')?.0, 255)?;
+        let a = css_alpha(rest)?;
+        let a8 = (a * 255.0).round() as u32;
+        return Some(rgba(
+            (((r as u32) << 16) | ((g as u32) << 8) | b as u32) << 8 | a8,
+        ));
+    }
+    if let Some(rest) = s.strip_prefix("hsl(").and_then(|r| r.strip_suffix(')')) {
+        return hsl_to_rgba(rest, 1.0);
+    }
+    if let Some(rest) = s.strip_prefix("hsla(").and_then(|r| r.strip_suffix(')')) {
+        let a = css_alpha(rest)?;
+        return hsl_to_rgba(&rest.rsplit_once(',')?.0, a);
+    }
+    named_color(s).or_else(|| {
+        s.eq_ignore_ascii_case("transparent")
+            .then_some(rgba(0x00000000))
+    })
+}
+
+/// Parse the leading integer channels of an rgb()/rgba() body: exactly
+/// three comma-separated u8-range integers.
+fn css_ints(rest: &str, max: i64) -> Option<[i64; 3]> {
+    let mut parts = rest.split(',').map(str::trim);
+    let mut out = [0i64; 3];
+    for slot in &mut out {
+        let p = parts.next()?;
+        let n: i64 = p.parse().ok()?;
+        if !(0..=max).contains(&n) {
+            return None;
+        }
+        *slot = n;
+    }
+    // A 4th channel means the caller wanted rgba() semantics under rgb()
+    // spelling — reject rather than silently drop alpha.
+    if parts.next().is_some() {
+        return None;
+    }
+    Some(out)
+}
+
+/// Alpha channel of an rgba()/hsla() body: the LAST comma-separated field,
+/// 0.0..=1.0, quantized to u8 like CSS serialization does.
+fn css_alpha(rest: &str) -> Option<f64> {
+    let last = rest.rsplit(',').next()?.trim();
+    let a: f64 = last.parse().ok()?;
+    if !(0.0..=1.0).contains(&a) {
+        return None;
+    }
+    Some(a)
+}
+
+/// hsl()/hsla() body: hue (deg, may exceed 360), saturation and lightness
+/// (percent-suffixed), optional leading-trimmed alpha already extracted.
+fn hsl_to_rgba(rest: &str, alpha: f64) -> Option<Rgba> {
+    let mut parts = rest.split(',').map(str::trim);
+    let h_deg: f64 = parts.next()?.trim_end_matches("deg").parse().ok()?;
+    let s_pct = parts.next()?.strip_suffix('%')?.parse::<f64>().ok()?;
+    let l_pct = parts.next()?.strip_suffix('%')?.parse::<f64>().ok()?;
+    if parts.next().is_some() {
+        return None;
+    }
+    if !(0.0..=100.0).contains(&s_pct) || !(0.0..=100.0).contains(&l_pct) {
+        return None;
+    }
+    // CSS hue wraps; keep it positive for the f32 hue gpui expects (0..1 of a turn).
+    let h = ((h_deg % 360.0) + 360.0) % 360.0 / 360.0;
+    let s = s_pct / 100.0;
+    let l = l_pct / 100.0;
+    Some(gpui::hsla(h as f32, s as f32, l as f32, alpha as f32).into())
+}
+
+/// The CSS-named subset every UI needs; extended on demand. Case-insensitive.
+fn named_color(s: &str) -> Option<Rgba> {
+    let hex: u32 = match s.to_ascii_lowercase().as_str() {
+        "black" => 0x000000ff,
+        "white" => 0xffffffff,
+        "red" => 0xff0000ff,
+        "lime" => 0x00ff00ff,
+        "green" => 0x008000ff,
+        "blue" => 0x0000ffff,
+        "yellow" => 0xffff00ff,
+        "orange" => 0xffa500ff,
+        "purple" => 0x800080ff,
+        "pink" => 0xffc0cbff,
+        "gray" | "grey" => 0x808080ff,
+        "cyan" | "aqua" => 0x00ffffff,
+        "magenta" | "fuchsia" => 0xff00ffff,
+        "brown" => 0xa52a2aff,
+        "navy" => 0x000080ff,
+        "teal" => 0x008080ff,
+        "olive" => 0x808000ff,
+        "maroon" => 0x800000ff,
+        _ => return None,
+    };
+    Some(rgba(hex))
+}
+
+#[cfg(test)]
+mod parse_color_tests {
+    use super::*;
+    use gpui::Rgba;
+
+    fn sv(s: &str) -> StyleValue {
+        StyleValue::Text(s.to_string())
+    }
+
+    fn rgba_parts(c: Rgba) -> (f32, f32, f32, f32) {
+        let gpui::Hsla { h, s, l, a } = c.into();
+        (h, s, l, a)
+    }
+
+    #[test]
+    fn hex_still_works() {
+        assert_eq!(parse_color(&sv("#ff0000")), Some(rgb(0xff0000)));
+        assert_eq!(parse_color(&sv("#ff000080")), Some(rgba(0xff000080)));
+        assert_eq!(parse_color(&sv("#xyz")), None);
+        assert_eq!(parse_color(&StyleValue::Number(12u32.into())), None);
+    }
+
+    #[test]
+    fn css_function_colors() {
+        // rgb()/rgba() integers 0-255.
+        assert_eq!(parse_color(&sv("rgb(255, 0, 0)")), Some(rgb(0xff0000)));
+        assert_eq!(
+            parse_color(&sv("rgba(18, 52, 86, 0.5)")),
+            Some(rgba(0x12345680))
+        );
+        // Whitespace-tolerant.
+        assert_eq!(parse_color(&sv("rgb( 0,128,255 )")), Some(rgb(0x0080ff)));
+        assert_eq!(parse_color(&sv("rgb(1,2)")), None);
+        assert_eq!(parse_color(&sv("rgb(a,b,c)")), None);
+        assert_eq!(parse_color(&sv("rgb(256,0,0)")), None);
+    }
+
+    #[test]
+    fn hsl_function_colors() {
+        // hsl(120,50%,50%) ≙ #40bf40 (rgb 64,191,64).
+        let c = rgba_parts(parse_color(&sv("hsl(120, 50%, 50%)")).unwrap());
+        let expected = rgba_parts(rgb(0x40bf40));
+        // Channels round-trip through u8 quantization on the expected side;
+        // 1/255 of a channel is the floor of achievable agreement.
+        for (got, want) in [c.0, c.1, c.2]
+            .iter()
+            .zip([expected.0, expected.1, expected.2])
+        {
+            assert!(
+                (got - want).abs() < 5e-3,
+                "hsl channel off: {got} vs {want}"
+            );
+        }
+        // Alpha channel: hsla half-transparent.
+        let d = rgba_parts(parse_color(&sv("hsla(0, 100%, 50%, 0.5)")).unwrap());
+        assert!((d.3 - 0.5).abs() < 1e-3);
+        // Hue wraps at 360 and percentages are required to be unambiguous.
+        assert!(parse_color(&sv("hsl(120, 50, 50)")).is_none());
+        assert!(parse_color(&sv("hsl(400, 10%, 10%)")).is_some());
+    }
+
+    #[test]
+    fn named_colors() {
+        assert_eq!(parse_color(&sv("red")), Some(rgb(0xff0000)));
+        assert_eq!(parse_color(&sv("ReD")), Some(rgb(0xff0000)));
+        assert_eq!(parse_color(&sv("white")), Some(rgb(0xffffff)));
+        assert_eq!(parse_color(&sv("black")), Some(rgb(0x000000)));
+        assert_eq!(parse_color(&sv("notacolor")), None);
+        let t = rgba_parts(parse_color(&sv("transparent")).unwrap());
+        assert!(t.3 < 1e-6, "transparent must have zero alpha");
     }
 }
 
@@ -1958,7 +2134,8 @@ mod tests {
 
     #[test]
     fn bad_colors_are_none() {
-        assert!(parse_color(&StyleValue::Text("red".into())).is_none());
+        // "red" became VALID with named-color support; use junk strings.
+        assert!(parse_color(&StyleValue::Text("notacolor".into())).is_none());
         assert!(parse_color(&StyleValue::Text("#12345".into())).is_none());
         assert!(parse_color(&StyleValue::Number(5.into())).is_none());
     }
