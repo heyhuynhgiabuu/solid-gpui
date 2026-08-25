@@ -437,8 +437,12 @@
   tsdown.config.ts in each package dir resolves relative to that package
   (root-level config resolved entry paths from ITS location - outDir landed
   under scripts/ the first time).
-- **Recursive copy pitfall**: copying dist contents into a pre-made dist dir
-  nested dist/dist. Copy the whole dir onto a clean parent instead.
+- **BSD/macOS cp -R nests the source dir into an EXISTING destination under
+  BOTH spellings** - "cp -R dir dst" and "cp -R dir/. dst" (verified live;
+  the trailing-dot contents rule does not hold under -R on BSD cp). This
+  shipped a duplicate dist/dist tree in every published tarball twice. Use
+  Node fs.cpSync(src, dst, {recursive:true}) with a freshly rmSync'd
+  destination instead of shell cp in pack scripts.
 - **E2E local-tarball installs**: bun add fails on inter-package version pins
   (no registry has them). Use npm + overrides mapping every @solid-gpui/*
   dep to a file: tarball - simulates the published registry state.
