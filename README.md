@@ -24,7 +24,36 @@ bun --conditions=browser run examples/counter.ts
 
 [solidjs/solid#2569]: https://github.com/solidjs/solid/issues/2569
 
-## Quick start (macOS today)
+## Install (npm, no Rust toolchain)
+
+The helper binary ships in per-platform npm packages selected automatically
+by your platform (the esbuild model):
+
+```sh
+bun add @solid-gpui/solid solid-js   # or: npm i @solid-gpui/solid solid-js
+```
+
+```tsx
+import { render } from "@solid-gpui/solid"
+await render((h) => h("div", { style: { padding: 24 } }, "hello gpui"))
+```
+
+Run Node with `--conditions=browser` (see the trap below); Bun users on
+current versions resolve Solid correctly by default, but the flag is always
+safe. macOS 13+ on Apple silicon or Intel — the prebuilt helpers cover
+`darwin-arm64` and `darwin-x64`. Other platforms: build the helper from
+source (`cargo build -p solid-gpui-helper`) and point `SOLID_GPUI_HELPER`
+at it.
+
+Binary resolution order (first hit wins): the `SOLID_GPUI_HELPER` env var →
+a monorepo `target/debug` build → the platform npm package. If none
+resolves you get an error listing exactly what was tried and how to fix it.
+
+For JSX authoring, configure your bundler with
+`babel-preset-solid` (`{ generate: "universal", moduleName: "@solid-gpui/solid/jsx" }`);
+see `scripts/solid-jsx-preload.ts` for a zero-config Bun dev setup.
+
+## Quick start (from a checkout)
 
 Prerequisites: Bun ≥1.4, Rust stable, full Xcode with the Metal toolchain
 (`xcrun metal --version` must work).

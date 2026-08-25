@@ -589,19 +589,27 @@ no cargo toolchain. Helper binary ships in per-platform npm packages
 (esbuild model) selected via optionalDependencies; no runtime downloads.
 h()/JSX APIs unchanged.
 
-- [ ] S16-a ADR 005: per-platform npm packages + optionalDependencies over
+- [x] S16-a ADR 005: per-platform npm packages + optionalDependencies over
       runtime download (esbuild/swc precedent; offline-friendly; no client
       fetch code); publish order platform → main; macOS arm64+x64 for 0.1.0
-- [ ] S16-b client binary resolution chain (env override → dev target/debug
+- [x] S16-b client binary resolution chain (env override → dev target/debug
       → platform package via require.resolve), TDD with fixture platform
       package; helpful error when no binary found
-- [ ] S16-c build + pack: tsdown (or tsc) dist build for the 3 TS packages;
-      pack script assembling @solid-gpui/helper-darwin-{arm64,x64} from a
-      built binary (package.json with os/cpu/files, no deps); npm pack
-      tarball audit; temp-project E2E from local tarballs via bun
-- [ ] S16-d release workflow yml (tag v* → release build → package →
-      artifacts; publish job platform-first then main, gated on NPM_TOKEN)
-      + version-consistency check script + README install section
+- [x] S16-c build + pack: tsdown dist builds (3 pkgs, per-package config,
+      dts, ESM, workspace deps external); scripts/pack-package.mjs stages
+      published manifests (exports→dist, workspace:*→version pin) because
+      npm pack does not apply publishConfig; scripts/pack-helper.mjs
+      assembles platform packages (os/cpu fields). E2E VERIFIED in
+      ~/dev/scratch/s16-e2e-v4: npm install from local tarballs (overrides
+      simulate registry), real Node 24 smoke (ack/exit), window demo with
+      live click events — binary resolved via the platform package, no env,
+      no target dir.
+- [x] S16-d release.yml: helper matrix (darwin-arm64 macos-14 /
+      darwin-x64 macos-13) → version check (check-release.mjs --tag) →
+      build/pack → smoke with artifact binary → publish platform packages
+      FIRST then TS packages (ADR 005 invariant), no-token path validates
+      only. README gained an npm Install section; root scripts build /
+      pack:all / check:release.
 - [ ] VERIFY: gates + independent review
 
 Cross-ref: DECISIONS.md#adr-005

@@ -11,5 +11,9 @@
   },
   "scripts": {
     "test": "bun test"
+  },
+  "optionalDependencies": {
+    "@solid-gpui/helper-darwin-arm64": "0.1.0",
+    "@solid-gpui/helper-darwin-x64": "0.1.0"
   }
 }

@@ -1,0 +1,106 @@
+# Release pipeline (ADR 005): tag v* → build helper binaries → assemble
+# platform packages → publish platform packages FIRST, then the TS packages.
+#
+# Publish order is a hard invariant: @solid-gpui/client's optionalDependencies
+# pin exact helper versions, so a client published before its helper packages
+# installs into a broken state for every user at that version.
+#
+# Requires repo secret NPM_TOKEN (automation, publish rights on @solid-gpui/*).
+# Without the secret the job validates everything and stops before publish.
+
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  helper:
+    name: helper (${{ matrix.target }})
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: darwin-arm64
+            runner: macos-14
+            rust: aarch64-apple-darwin
+          - target: darwin-x64
+            runner: macos-13
+            rust: x86_64-apple-darwin
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.rust }}
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo build --release -p solid-gpui-helper --target ${{ matrix.rust }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Assemble platform package
+        run: |
+          node scripts/pack-helper.mjs \
+            --target ${{ matrix.target }} \
+            --binary target/${{ matrix.rust }}/release/solid-gpui-helper \
+            --version ${GITHUB_REF_NAME#v}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: helper-${{ matrix.target }}
+          path: dist/pack/helper-${{ matrix.target }}
+
+  publish:
+    needs: helper
+    runs-on: macos-14
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - run: bun install --frozen-lockfile
+      - name: Version consistency (packages ↔ tag ↔ helper pins)
+        run: node scripts/check-release.mjs --tag ${GITHUB_REF_NAME:-v0.0.0}
+      - name: Build TS packages
+        run: |
+          (cd packages/protocol && bunx tsdown)
+          (cd packages/client && bunx tsdown)
+          (cd packages/solid && bunx tsdown)
+      - name: Pack TS packages
+        run: |
+          node scripts/pack-package.mjs packages/protocol
+          node scripts/pack-package.mjs packages/client
+          node scripts/pack-package.mjs packages/solid
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist/pack
+          pattern: helper-*
+      - name: Smoke the built graph (real helper binary from the artifact)
+        run: bun run smoke:node
+        env:
+          SOLID_GPUI_HELPER: ${{ github.workspace }}/dist/pack/helper-darwin-arm64/solid-gpui-helper
+      - name: Publish platform packages (must precede the TS packages)
+        if: env.NPM_TOKEN != ''
+        run: |
+          for d in dist/pack/helper-*; do
+            (cd "$d" && npm publish --access public)
+          done
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+      - name: Publish TS packages
+        if: env.NPM_TOKEN != ''
+        run: |
+          npm publish dist/pack/solid-gpui-protocol --access public
+          npm publish dist/pack/solid-gpui-client --access public
+          npm publish dist/pack/solid-gpui-solid --access public
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+      - name: No NPM_TOKEN — validation-only
+        if: env.NPM_TOKEN == ''
+        run: echo "NPM_TOKEN absent; everything built and validated, nothing published."
