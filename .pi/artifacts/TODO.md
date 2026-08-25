@@ -408,8 +408,9 @@ Cross-ref: PLAN.md Phase 2 roadmap (S12 entry)
 
 ### 2026-08-25 - S13: rich text — markdown/code/diff ported from Comet (MIT)
 status: done (2026-08-25; markdown core complete. Syntax highlighting,
-diff rendering, streaming = S13e+ future slices. User visual check of
-examples/markdown.ts still welcome but not gating.)
+diff rendering, streaming = S13e+ future slices. USER confirmed the demo
+works 2026-08-25 — window renders, swap + theme toggle operate as
+intended.)
 
 Phase 3 opener per PLAN roadmap order (S7–S12 closed). Legal source: Comet
 (github.com/zeronsh/comet, MIT, Copyright 2026 Wing) — port with attribution
