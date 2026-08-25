@@ -459,7 +459,9 @@ Not in this session (later slices): syntax highlighting (tree-sitter), diff
 Cross-ref: PLAN.md#2026-08-24---phase-2-candidate-roadmap-prior-art-informed
 
 ### 2026-08-25 - S13e: code-block syntax highlighting (Comet crates/syntax port)
-status: active
+status: done (2026-08-25; r1 NOT MERGEABLE — language-keyed resolver Blocker
+fixed content-keyed + span clamp; r2 verdict CLEAN, all suites independently
+green. Diff rendering + streaming remain future slices.)
 
 Port Comet's standalone syntax crate (tree-sitter based) into the helper,
 wire into markdown code blocks. No protocol changes - highlighting is
@@ -492,6 +494,9 @@ entirely helper-side (fence tag already parsed into Block::CodeBlock).
       extended for syntax.rs + builtins.rs palette, minified-lines perf test
       re-ported.
 - [x] VERIFY: bun 96/96 · tsc ×3 · cargo all suites green · clippy · fmt ·
-      node smoke. Pending: reviewer r2 on the fixes.
+      node smoke. Review r2 (mt8grjo3-4bd4) verdict **CLEAN**: blocker fix
+      verified end-to-end (resolver threading, clamp edges, cache lifecycle),
+      minors/notes confirmed addressed; 3 non-blocking notes only. S13e
+      CLOSED.
 
 Cross-ref: TODO.md#2026-08-25---s13-rich-text--markdowncodediff-ported-from-comet-mit

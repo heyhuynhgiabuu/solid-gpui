@@ -340,3 +340,29 @@
   start/resume request" even when operation=start; long prompts (>~6KB)
   also fail — put the full brief in a file (.pi/review-tmp/) and reference
   it from a short prompt.
+
+## S13e syntax highlighting learnings (2026-08-25)
+
+- tree-sitter grammar crates rename constants between releases
+  (tree_sitter_python::HIGHLIGHTS_QUERY vs HIGHLIGHT_QUERY) — pin grammar
+  versions EXACTLY like upstream Comet's "=0.26.11" style or the port
+  breaks at compile time.
+- gpui StyledText::with_runs panics on over-length runs in DEBUG AND
+  RELEASE (the cfg only changes the message; trailing assert is
+  unconditional). Any pipeline feeding spans→runs must clamp to the text
+  length defensively — a resolver bug must degrade to wrong colors, never
+  panic.
+- The r1 Blocker was MY simplification: comment said "content-keyed" but
+  the code matched language-only (first-match wins). Two same-language
+  fences with different code then shared one document. Lesson: when a
+  comment names an invariant ("content-keyed"), make the TYPE carry it —
+  the resolver signature taking only &str let the bug compile. The fixed
+  signature takes (lang, code).
+- Edit-script hygiene bit again: a python replace with an unconditional
+  success print silently no-op'd on an unmatched anchor and I marked the
+  TODO done. Always assert the anchor matched AND verify on disk before
+  ticking a checkbox.
+- Reviewer-launch contract that works: literal "Goal:", "Parent context:",
+  "Proposed changes:", "Write/read policy:", "Acceptance criteria and stop
+  condition:" sections in the prompt; full brief in .pi/review-tmp/*.md,
+  short prompt references it.

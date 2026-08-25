@@ -727,5 +727,30 @@
     "rawStatus": "failure",
     "resultValid": true,
     "completedAt": 1787649759274
+  },
+  {
+    "id": "mt8grjo3-4bd4",
+    "agentType": "reviewer",
+    "description": "Re-review S13e fixes round 2",
+    "sessionName": "task-mt8grjo3-4bd4",
+    "startedAt": 1787650190955,
+    "paneId": "w3:pET",
+    "handle": {
+      "backend": "herdr",
+      "resourceId": "w3:pET",
+      "socketPath": "/Users/huynhgiabuu/.config/herdr/herdr.sock",
+      "terminalId": "term_659dbbe57b1d049",
+      "agentName": "reviewer-mt8grjo3",
+      "foregroundProcessGroupId": 88676
+    },
+    "piDir": "/Users/huynhgiabuu/dev/projects/solid-gpui/.pi",
+    "dir": "/Users/huynhgiabuu/dev/projects/solid-gpui/.pi/artifacts/tasks",
+    "cwd": "/Users/huynhgiabuu/dev/projects/solid-gpui",
+    "status": "done",
+    "background": true,
+    "reportedStatus": "success",
+    "rawStatus": "success",
+    "resultValid": true,
+    "completedAt": 1787650409344
   }
 ]
