@@ -60,7 +60,9 @@ function tree(h: Parameters<RenderHandle["update"]>[0]) {
         },
         placeholder: "Type here (IME/native caret)",
         value: text(),
-        onChange: (e) => setText((e as { value?: string }).value ?? ""),
+        // P2 split: onInput fires per keystroke; onChange would only commit
+        // on blur (DOM semantics).
+        onInput: (e) => setText((e as { value?: string }).value ?? ""),
       },
     ),
     h("div", { style: { fontSize: 12, color: "#6c7086" } }, "solid-gpui demo — input is live"),
