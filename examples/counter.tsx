@@ -36,6 +36,13 @@ function Tree() {
           color: "#1e1e2e",
           cursor: "pointer",
         }}
+        hoverStyle={{
+          backgroundColor: "rgba(137, 180, 250, 0.35)",
+          borderRadius: 12,
+        }}
+        activeStyle={{
+          backgroundColor: "hsl(220, 50%, 40%)",
+        }}
         onClick={() => setCount((c) => c + 1)}
         onMouseDown={() => setPressed(true)}
         onMouseUp={() => setPressed(false)}

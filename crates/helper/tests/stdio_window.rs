@@ -934,3 +934,35 @@ fn window_mode_renders_markdown_element() {
     let status = child.wait().expect("wait");
     assert_eq!(status.code(), Some(0), "EOF must exit 0");
 }
+
+#[test]
+fn window_mode_renders_state_layer_styles_without_apply_errors() {
+    if skip() {
+        return;
+    }
+    let _lock = window_lock();
+    let bin = env!("CARGO_BIN_EXE_solid-gpui-helper");
+    let mut child = Command::new(bin)
+        .arg("--stdio-window")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .spawn()
+        .expect("helper spawns");
+
+    let mut stdin = child.stdin.take().expect("stdin piped");
+    let reader = BufReader::new(child.stdout.take().expect("stdout piped"));
+    let mut lines = reader.lines();
+
+    // Base + hover + active layers through a real window render: an ack (not
+    // an apply error) proves the hover/active refinement path doesn't panic
+    // or reject during element build (P1-c smoke).
+    let batch = r#"{"v":1,"seq":1,"mutations":[{"op":"createElement","id":1,"elementType":"div"},{"op":"setStyle","id":1,"style":{"backgroundColor":"rgb(69, 71, 90)","borderRadius":8,"padding":"10px 18px"}},{"op":"setStyle","id":1,"style":{"backgroundColor":"rgba(137, 180, 250, 0.5)","cursor":"pointer"},"state":"hover"},{"op":"setStyle","id":1,"style":{"backgroundColor":"hsl(220, 50%, 45%)"},"state":"active"},{"op":"setRoot","id":1}]}"#;
+    writeln!(stdin, "{batch}").unwrap();
+    stdin.flush().unwrap();
+    let ack = lines.next().unwrap().expect("ack line");
+    assert_eq!(ack, r#"{"type":"ack","seq":1,"applied":5}"#);
+
+    drop(stdin);
+    let status = child.wait().expect("wait");
+    assert_eq!(status.code(), Some(0), "EOF must exit 0");
+}

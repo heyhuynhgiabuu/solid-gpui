@@ -299,3 +299,59 @@ describe("markdown element (S13d)", () => {
     dispose()
   })
 })
+
+describe("state-layer styles (hoverStyle/activeStyle)", () => {
+  test("setProperty routes hoverStyle/activeStyle to state-layered setStyle", async () => {
+    const rec = recording()
+    const { renderer: R, render, flush } = createSolidRenderer(rec.send)
+    const container = R.createElement("#root")
+    let node: ReturnType<typeof R.createElement> | null = null
+    const dispose = render(() => {
+      const root = R.createElement("div")
+      node = root
+      return root
+    }, container)
+    await flush()
+
+    R.setProp(node!, "style", { backgroundColor: "#45475a", borderRadius: 8 })
+    R.setProp(node!, "hoverStyle", { backgroundColor: "#89b4fa" })
+    R.setProp(node!, "activeStyle", { backgroundColor: "rgba(137, 180, 250, 0.5)" })
+    await flush()
+    dispose()
+
+    const styles = rec.batches
+      .flatMap((b) => b.mutations)
+      .filter((m): m is Extract<Mutation, { op: "setStyle" }> => m.op === "setStyle")
+    const base = styles.find((m) => m.state === undefined)
+    const hover = styles.find((m) => m.state === "hover")
+    const active = styles.find((m) => m.state === "active")
+    expect(base?.style).toEqual({ backgroundColor: "#45475a", borderRadius: 8 })
+    expect(hover?.style).toEqual({ backgroundColor: "#89b4fa" })
+    expect(active?.style).toEqual({ backgroundColor: "rgba(137, 180, 250, 0.5)" })
+    // Exactly three layers: base + hover + active, no duplicates.
+    expect(styles.length).toBe(3)
+  })
+
+  test("markdown refuses state layers (validation/rendering agree; emitting would poison)", async () => {
+    const rec = recording()
+    const { renderer: R, render, flush } = createSolidRenderer(rec.send)
+    const container = R.createElement("#root")
+    let node: ReturnType<typeof R.createElement> | null = null
+    const dispose = render(() => {
+      const md = R.createElement("markdown")
+      node = md
+      return md
+    }, container)
+    await flush()
+
+    R.setProp(node!, "source", "# hi")
+    R.setProp(node!, "hoverStyle", { backgroundColor: "#ff0000" })
+    await flush()
+    dispose()
+
+    const stateStyles = rec.batches
+      .flatMap((b) => b.mutations)
+      .filter((m): m is Extract<Mutation, { op: "setStyle" }> => m.op === "setStyle" && m.state !== undefined)
+    expect(stateStyles).toEqual([])
+  })
+})

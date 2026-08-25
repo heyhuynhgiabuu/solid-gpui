@@ -3,8 +3,8 @@
 //! precise errors. Pure data — no gpui, no IO.
 
 use solid_gpui_protocol::{
-    ApplyError, ElementId, ElementType, EventType, Mutation, RetainedTree, StyleMap, StyleValue,
-    from_json,
+    ApplyError, ElementId, ElementType, EventType, Mutation, RetainedTree, StyleMap, StyleState,
+    StyleValue, from_json,
 };
 use std::fs;
 
@@ -471,6 +471,7 @@ fn mutations_on_missing_elements_fail() {
         Mutation::SetStyle {
             id: 5.into(),
             style: Default::default(),
+            state: None,
         },
         Mutation::SetText {
             id: 5.into(),
@@ -624,6 +625,7 @@ fn animated_tree() -> RetainedTree {
                     ("width".to_string(), StyleValue::Number(200u32.into())),
                     ("opacity".to_string(), StyleValue::Number(1u32.into())),
                 ]),
+                state: None,
             },
         ],
     )
@@ -803,6 +805,7 @@ fn markdown_element_rejects_set_animation() {
     tree.apply(&Mutation::SetStyle {
         id: ElementId(1),
         style: StyleMap::from([("fontSize".to_string(), StyleValue::Number(14u32.into()))]),
+        state: None,
     })
     .unwrap();
     let err = tree
@@ -814,4 +817,80 @@ fn markdown_element_rejects_set_animation() {
         })
         .unwrap_err();
     assert!(err.to_string().contains("markdown"), "got: {err}");
+}
+
+#[test]
+fn state_styles_layer_and_markdown_rejects_them() {
+    let mut tree = RetainedTree::new();
+    tree.apply(&Mutation::CreateElement {
+        id: ElementId(1),
+        element_type: ElementType::Div,
+    })
+    .unwrap();
+    tree.apply(&Mutation::CreateElement {
+        id: ElementId(2),
+        element_type: ElementType::Markdown,
+    })
+    .unwrap();
+
+    // State layer lands in state_styles, not the base map.
+    tree.apply(&Mutation::SetStyle {
+        id: ElementId(1),
+        style: StyleMap::from([(
+            "backgroundColor".to_string(),
+            StyleValue::Text("#ff0000".into()),
+        )]),
+        state: Some(StyleState::Hover),
+    })
+    .unwrap();
+    let node = tree.get(ElementId(1)).unwrap();
+    assert!(
+        node.style.is_empty(),
+        "hover layer must not touch base style"
+    );
+    assert_eq!(
+        node.state_styles.get(&StyleState::Hover).unwrap()["backgroundColor"],
+        StyleValue::Text("#ff0000".into())
+    );
+
+    // Re-setting the same state replaces (idempotent per-state).
+    tree.apply(&Mutation::SetStyle {
+        id: ElementId(1),
+        style: StyleMap::from([(
+            "backgroundColor".to_string(),
+            StyleValue::Text("#00ff00".into()),
+        )]),
+        state: Some(StyleState::Hover),
+    })
+    .unwrap();
+    assert_eq!(
+        tree.get(ElementId(1)).unwrap().state_styles[&StyleState::Hover]["backgroundColor"],
+        StyleValue::Text("#00ff00".into())
+    );
+
+    // Markdown: validation and rendering agree — base styles only.
+    let err = tree
+        .apply(&Mutation::SetStyle {
+            id: ElementId(2),
+            style: StyleMap::from([(
+                "backgroundColor".to_string(),
+                StyleValue::Text("#ff0000".into()),
+            )]),
+            state: Some(StyleState::Hover),
+        })
+        .unwrap_err();
+    assert!(
+        err.to_string().contains("markdown"),
+        "markdown state style must be rejected: {err}"
+    );
+    // ...while base styles on markdown remain valid.
+    tree.apply(&Mutation::SetStyle {
+        id: ElementId(2),
+        style: StyleMap::from([(
+            "backgroundColor".to_string(),
+            StyleValue::Text("#ff0000".into()),
+        )]),
+        state: None,
+    })
+    .unwrap();
 }

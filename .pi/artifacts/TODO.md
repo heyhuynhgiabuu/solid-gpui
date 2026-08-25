@@ -629,3 +629,27 @@ h()/JSX APIs unchanged.
       credential in repo settings, tag v0.1.0.
 
 Cross-ref: DECISIONS.md#adr-005
+
+### 2026-08-25 - P1: styling depth (hoverStyle/activeStyle, shorthands, colors, text props)
+status: active
+
+Goal: styling reaches CSS-familiar depth per Phase 2 roadmap P1: state
+styles (hover/active + group states if gpui supports), shorthand keys
+(paddingX, margin*, inset, size, border* singles), full color formats
+(rgb()/rgba()/hsl()/hsla()/named), text props (boxShadow, lineClamp,
+whiteSpace, textOverflow). Wire protocol changes must keep the
+cross-language contract discipline (TS+Rust lockstep, fixtures regenerated).
+
+- [ ] P1-a recon: current style surface both sides (style.ts keys,
+      renderer setProperty, host.rs parse_color + style application) +
+      pinned gpui capabilities (hover/active/group, shadow, line_clamp,
+      whitespace, text_overflow) — cited path:line
+- [ ] P1-b colors: extend parse_color to rgb()/rgba()/hsl()/hsla()/named
+      (Rust-side, single source of truth); TDD both-suites fixture parity
+- [ ] P1-c state styles: hoverStyle/activeStyle props routing to gpui
+      style-state methods (helper-side); eventType surface unchanged
+- [ ] P1-d shorthands: JS-side normalization (paddingX→paddingLeft/Right
+      etc.) in the solid package; unknown-keys rule preserved
+- [ ] P1-e text/shadow props: boxShadow, lineClamp, whiteSpace,
+      textOverflow where gpui supports them; rejected loudly otherwise
+- [ ] VERIFY: gates + independent review

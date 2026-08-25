@@ -428,6 +428,7 @@ fn run_stdio_window() {
                                         if let solid_gpui_protocol::Mutation::SetStyle {
                                             id,
                                             style,
+                                            ..
                                         } = m
                                         {
                                             view.ensure_scroll_handle(*id);

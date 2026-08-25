@@ -5,10 +5,12 @@ import {
   ELEMENT_TYPES,
   EVENT_TYPES,
   MUTATION_OPS,
+  STYLE_STATES,
   type ElementType,
   type EventType,
   type Mutation,
   type MutationOp,
+  type StyleState,
 } from "./mutation"
 import type { StyleMap } from "./style"
 
@@ -133,7 +135,19 @@ function decodeMutation(m: Dict, p: string): Result<Mutation, ProtocolError> {
       }
       // Boundary cast: values validated; unknown keys are intentionally kept
       // (forward compatibility — see StyleMap).
-      return { ok: true, value: { op, id: idR.value, style: style as unknown as StyleMap } }
+      let state: StyleState | undefined
+      if (m.state !== undefined) {
+        const raw = m.state as unknown
+        if (typeof raw === "string" && STYLE_STATES.includes(raw as StyleState)) {
+          state = raw as StyleState
+        } else {
+          return { ok: false, error: shape(`${p}.state`, "unknown style state") }
+        }
+      }
+      return {
+        ok: true,
+        value: { op, id: idR.value, style: style as unknown as StyleMap, ...(state ? { state } : {}) },
+      }
     }
     case "setAnimation": {
       const idR = id()

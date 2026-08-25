@@ -244,6 +244,17 @@ export function createSolidRenderer(send: Send): SolidGpuiRenderer {
             : undefined
         return
       }
+      if (name === "hoverStyle" || name === "activeStyle") {
+        // State layer (P1-c): value is a style map applied on top of the
+        // base when gpui reports hover/active. Markdown renders helper-side
+        // and rejects state layers — emitting would ack-fail and poison the
+        // session (validation and rendering agree), so drop it here instead.
+        if (node.tag === "markdown") return
+        const state = name === "hoverStyle" ? "hover" : "active"
+        const layer = (value ?? {}) as StyleMap
+        push({ op: "setStyle", id, style: layer, state })
+        return
+      }
       if (name === "style") {
         const next = (value ?? {}) as StyleMap
         const prev = node.lastStyle

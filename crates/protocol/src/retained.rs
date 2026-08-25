@@ -23,7 +23,9 @@
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 
-use crate::{ApplyError, ElementId, ElementType, EventType, Mutation, StyleMap, StyleValue};
+use crate::{
+    ApplyError, ElementId, ElementType, EventType, Mutation, StyleMap, StyleState, StyleValue,
+};
 
 pub const MAX_DEPTH: usize = 256;
 
@@ -32,6 +34,11 @@ pub const MAX_DEPTH: usize = 256;
 pub struct Node {
     pub element_type: ElementType,
     pub style: StyleMap,
+    /// State-layer styles (hover/active) layered on top of `style` when the
+    /// helper reports the matching interaction state. Markdown nodes reject
+    /// state layers entirely — their render path is helper-owned and would
+    /// silently drop them (validation and rendering agree).
+    pub state_styles: BTreeMap<StyleState, StyleMap>,
     pub text: Option<String>,
     /// Input/textarea document value (setValue). Present only on
     /// input/textarea elements; validation and rendering agree.
@@ -46,6 +53,7 @@ impl Node {
         Node {
             element_type,
             style: BTreeMap::new(),
+            state_styles: BTreeMap::new(),
             text: None,
             value: None,
             children: Vec::new(),
@@ -119,9 +127,21 @@ impl RetainedTree {
                 child_id,
                 before_id,
             } => self.attach(*parent_id, *child_id, Some(*before_id)),
-            Mutation::SetStyle { id, style } => {
+            Mutation::SetStyle { id, style, state } => {
                 let node = self.mut_node(*id, "setStyle")?;
-                node.style = style.clone();
+                match state {
+                    None => node.style = style.clone(),
+                    Some(state) => {
+                        if node.element_type == ElementType::Markdown {
+                            return Err(ApplyError::InvalidMutation {
+                                message: format!(
+                                    "setStyle: markdown elements render base styles only ({id:?})"
+                                ),
+                            });
+                        }
+                        node.state_styles.insert(*state, style.clone());
+                    }
+                }
                 Ok(())
             }
             Mutation::SetAnimation {

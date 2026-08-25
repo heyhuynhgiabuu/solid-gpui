@@ -491,3 +491,30 @@ fn animation_batch_fixture_parses_both_ways() {
     // Round-trips byte-identically after compaction.
     assert_eq!(to_json(&batch), raw);
 }
+
+#[test]
+fn style_state_batch_fixture_parses_both_ways() {
+    let raw = fs::read_to_string(fixture_path("batch-style-state-01.json"))
+        .expect("fixture readable")
+        .trim()
+        .to_string();
+    let batch = from_json(&raw).expect("batch parses");
+    // Base style has no state; the two state layers carry hover/active.
+    let mut state_layers = 0;
+    for m in &batch.mutations {
+        if let Mutation::SetStyle { state: Some(s), .. } = m {
+            state_layers += 1;
+            assert!(
+                matches!(s, solid_gpui_protocol::StyleState::Hover)
+                    || matches!(s, solid_gpui_protocol::StyleState::Active),
+                "unexpected state {s:?}"
+            );
+        }
+    }
+    assert_eq!(
+        state_layers, 2,
+        "fixture carries exactly hover+active layers"
+    );
+    // Re-encode is byte-identical (canonical compact form).
+    assert_eq!(to_json(&batch), raw);
+}

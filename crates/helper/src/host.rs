@@ -10,6 +10,7 @@ use gpui::{
 use solid_gpui_protocol::EventType;
 use solid_gpui_protocol::Mutation;
 use solid_gpui_protocol::StyleMap;
+use solid_gpui_protocol::StyleState;
 use solid_gpui_protocol::{ElementId, ElementType, Event, RetainedTree, StyleValue};
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
@@ -1343,6 +1344,9 @@ fn apply_interactive(
         });
         el = el.on_click(listener);
     }
+    // State layers last: they are style refinements over whatever the base
+    // style + interactivity produced, and need the stateful element id.
+    el = apply_state_styles(el, node);
     el
 }
 
@@ -1610,6 +1614,80 @@ fn build_list_element(
     el.into_any_element()
 }
 
+/// Layer hover/active state styles onto an element (P1-c). gpui owns the
+/// interaction detection; we hand it StyleRefinements built from the wire's
+/// state-layer style maps. Applied after the base loop so layers stack on
+/// whatever the base set (gpui merges refinements over the base style).
+fn apply_state_styles(
+    mut el: gpui::Stateful<Div>,
+    node: &solid_gpui_protocol::Node,
+) -> gpui::Stateful<Div> {
+    if let Some(hover) = node.state_styles.get(&StyleState::Hover) {
+        el = el.hover(|s| apply_refinement(s, hover));
+    }
+    if let Some(active) = node.state_styles.get(&StyleState::Active) {
+        el = el.active(|s| apply_refinement(s, active));
+    }
+    el
+}
+
+/// State-layer subset of apply_style, operating on a StyleRefinement (which
+/// implements Styled, so the same fluent methods apply). Unknown keys are
+/// ignored exactly like base styles.
+fn apply_refinement(mut s: gpui::StyleRefinement, map: &StyleMap) -> gpui::StyleRefinement {
+    for (key, value) in map {
+        let key: &str = key;
+        let num = match value {
+            StyleValue::Number(n) => n.as_f64(),
+            StyleValue::Text(t) => parse_px(t),
+        };
+        match key {
+            "backgroundColor" => {
+                if let Some(c) = parse_color(value) {
+                    s = s.bg(c);
+                }
+            }
+            "color" => {
+                if let Some(c) = parse_color(value) {
+                    s = s.text_color(c);
+                }
+            }
+            "opacity" => {
+                if let Some(n) = num {
+                    s = s.opacity(n as f32);
+                }
+            }
+            "borderRadius" => {
+                if let Some(n) = num {
+                    s = s.rounded(px(n as f32));
+                }
+            }
+            "padding" => {
+                if let Some(n) = num {
+                    s = s.p(px(n as f32));
+                }
+            }
+            "width" => {
+                if let Some(n) = num {
+                    s = s.w(px(n as f32));
+                }
+            }
+            "height" => {
+                if let Some(n) = num {
+                    s = s.h(px(n as f32));
+                }
+            }
+            "gap" => {
+                if let Some(n) = num {
+                    s = s.gap(px(n as f32));
+                }
+            }
+            _ => {}
+        }
+    }
+    s
+}
+
 /// v1 style subset; unknown keys and unparsable values are ignored by design.
 fn apply_style(mut el: Div, key: &str, value: &StyleValue) -> Div {
     let num = match value {
@@ -1736,7 +1814,7 @@ fn parse_color(value: &StyleValue) -> Option<Rgba> {
         return Some(rgb(((r as u32) << 16) | ((g as u32) << 8) | b as u32));
     }
     if let Some(rest) = s.strip_prefix("rgba(").and_then(|r| r.strip_suffix(')')) {
-        let [r, g, b] = css_ints(&rest.rsplit_once(',')?.0, 255)?;
+        let [r, g, b] = css_ints(rest.rsplit_once(',')?.0, 255)?;
         let a = css_alpha(rest)?;
         let a8 = (a * 255.0).round() as u32;
         return Some(rgba(
@@ -1748,7 +1826,7 @@ fn parse_color(value: &StyleValue) -> Option<Rgba> {
     }
     if let Some(rest) = s.strip_prefix("hsla(").and_then(|r| r.strip_suffix(')')) {
         let a = css_alpha(rest)?;
-        return hsl_to_rgba(&rest.rsplit_once(',')?.0, a);
+        return hsl_to_rgba(rest.rsplit_once(',')?.0, a);
     }
     named_color(s).or_else(|| {
         s.eq_ignore_ascii_case("transparent")
@@ -2025,6 +2103,7 @@ mod tests {
                     ("width".to_string(), StyleValue::Number(200u32.into())),
                     ("opacity".to_string(), StyleValue::Number(1u32.into())),
                 ]),
+                state: None,
             })
             .unwrap();
 

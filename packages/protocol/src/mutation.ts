@@ -28,6 +28,14 @@ export type EventType =
   | "change"
   | "submit"
 
+/**
+ * Closed set of style-STATE layers: the helper must know every state to wire
+ * gpui interactivity (same asymmetry as EVENT_TYPES — style KEYS stay open).
+ */
+export type StyleState = "hover" | "active"
+
+export const STYLE_STATES: readonly StyleState[] = ["hover", "active"]
+
 export const EVENT_TYPES: readonly EventType[] = [
   "click",
   "mouseDown",
@@ -58,7 +66,14 @@ export type Mutation =
   | { readonly op: "appendChild"; readonly parentId: ElementId; readonly childId: ElementId }
   | { readonly op: "removeChild"; readonly parentId: ElementId; readonly childId: ElementId }
   | { readonly op: "insertBefore"; readonly parentId: ElementId; readonly childId: ElementId; readonly beforeId: ElementId }
-  | { readonly op: "setStyle"; readonly id: ElementId; readonly style: StyleMap }
+  | {
+      readonly op: "setStyle"
+      readonly id: ElementId
+      readonly style: StyleMap
+      /** Interaction layer ("hover" | "active") — omitted = base style.
+       * Closed set like eventType: the helper must know every state. */
+      readonly state?: StyleState
+    }
   | { readonly op: "setText"; readonly id: ElementId; readonly text: string }
   | { readonly op: "setValue"; readonly id: ElementId; readonly value: string }
   | {

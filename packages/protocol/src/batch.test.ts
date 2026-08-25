@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test"
 import fixture from "../fixtures/batch-01.json"
 import rustEmitted from "../fixtures/rust-emitted-batch-01.json"
 import listFixture from "../fixtures/batch-list-01.json"
+import stateFixture from "../fixtures/batch-style-state-01.json"
 import animationFixture from "../fixtures/batch-animation-01.json"
 import markdownFixture from "../fixtures/batch-markdown-01.json"
 import { elementId } from "./ids"
@@ -275,5 +276,63 @@ describe("decodeBatch rejects malformed input", () => {
       expect(r.error.kind).toBe("invalidShape")
       if (r.error.kind === "invalidShape") expect(r.error.path).toBe("mutations[0].style.gap")
     }
+  })
+})
+
+describe("setStyle state layer", () => {
+  test("valid state decodes and round-trips; absent state stays absent", () => {
+    const r = decodeBatch(
+      JSON.stringify({
+        v: 1,
+        seq: 1,
+        mutations: [
+          { op: "createElement", id: 1, elementType: "div" },
+          { op: "setStyle", id: 1, style: { backgroundColor: "#ff0000" }, state: "hover" },
+          { op: "setStyle", id: 1, style: { opacity: 1 } },
+        ],
+      }),
+    )
+    expect(r.ok).toBe(true)
+    if (r.ok) {
+      expect(r.value.mutations[1]).toEqual({
+        op: "setStyle",
+        id: elementId(1),
+        style: { backgroundColor: "#ff0000" },
+        state: "hover",
+      })
+      expect(r.value.mutations[2]).toEqual({
+        op: "setStyle",
+        id: elementId(1),
+        style: { opacity: 1 },
+      })
+      // Re-encode carries the state through.
+      const enc = JSON.parse(encodeBatch(r.value))
+      expect(enc.mutations[1].state).toBe("hover")
+      expect(enc.mutations[2].state).toBeUndefined()
+    }
+  })
+
+  test("unknown style state is a decode error (closed set)", () => {
+    const r = decodeBatch(
+      JSON.stringify({
+        v: 1,
+        seq: 1,
+        mutations: [{ op: "setStyle", id: 1, style: {}, state: "focusVisible" }],
+      }),
+    )
+    expect(r.ok).toBe(false)
+    if (!r.ok) {
+      expect(r.error.kind).toBe("invalidShape")
+      if (r.error.kind === "invalidShape") expect(r.error.path).toBe("mutations[0].state")
+    }
+  })
+})
+
+describe("style-state fixture parity", () => {
+  test("batch-style-state-01 parses and re-encodes losslessly", () => {
+    const raw = JSON.stringify(stateFixture)
+    const r = decodeBatch(raw)
+    expect(r.ok).toBe(true)
+    if (r.ok) expect(JSON.parse(encodeBatch(r.value))).toEqual(stateFixture)
   })
 })

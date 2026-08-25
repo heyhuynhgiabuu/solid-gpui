@@ -58,6 +58,16 @@ pub enum ElementType {
     Markdown,
 }
 
+/// Interaction state a state-layer style applies under. Closed set (the
+/// helper must know every state to wire gpui interactivity); mirrors the
+/// EventType asymmetry: unknown style KEYS stay open, unknown STATES error.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum StyleState {
+    Hover,
+    Active,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum EventType {
@@ -171,6 +181,12 @@ pub enum Mutation {
     SetStyle {
         id: ElementId,
         style: StyleMap,
+        /// Style-STATE layer ("hover"/"active") applied on top of the base
+        /// style when gpui reports the matching interaction state. None =
+        /// base style (backward compatible: absent field decodes as None).
+        /// Closed set like EventType — the helper must know every state.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        state: Option<StyleState>,
     },
     SetText {
         id: ElementId,
