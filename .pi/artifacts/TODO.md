@@ -640,14 +640,21 @@ styles (hover/active + group states if gpui supports), shorthand keys
 whiteSpace, textOverflow). Wire protocol changes must keep the
 cross-language contract discipline (TS+Rust lockstep, fixtures regenerated).
 
-- [ ] P1-a recon: current style surface both sides (style.ts keys,
+- [x] P1-a recon: current style surface both sides (style.ts keys,
       renderer setProperty, host.rs parse_color + style application) +
       pinned gpui capabilities (hover/active/group, shadow, line_clamp,
       whitespace, text_overflow) — cited path:line
-- [ ] P1-b colors: extend parse_color to rgb()/rgba()/hsl()/hsla()/named
-      (Rust-side, single source of truth); TDD both-suites fixture parity
-- [ ] P1-c state styles: hoverStyle/activeStyle props routing to gpui
-      style-state methods (helper-side); eventType surface unchanged
+- [x] P1-b colors: parse_color (host.rs) — rgb()/rgba() (0-255 + 0-1
+      alpha), hsl()/hsla() (wrapping hue, % required), named subset +
+      transparent, case-insensitive, whitespace-tolerant; commit d43239c
+- [x] P1-c state styles: setStyle optional closed-set state field (TS+Rust
+      lockstep, fixture batch-style-state-01.json both sides);
+      Node.state_styles; markdown rejects layers (validation/rendering
+      agree); helper layers via gpui hover()/active() refinements inside
+      apply_interactive (active needs Stateful); renderer routes
+      hoverStyle/activeStyle props, markdown drops pre-wire; GUI smoke
+      acked applied=5; counter.tsx demos hover+active live; commit a7f74f7.
+      Group states (group/groupHover) DEFERRED to a follow-up slice.
 - [ ] P1-d shorthands: JS-side normalization (paddingX→paddingLeft/Right
       etc.) in the solid package; unknown-keys rule preserved
 - [ ] P1-e text/shadow props: boxShadow, lineClamp, whiteSpace,
