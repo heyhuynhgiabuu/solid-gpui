@@ -802,5 +802,30 @@
     "rawStatus": "success",
     "resultValid": true,
     "completedAt": 1787653939599
+  },
+  {
+    "id": "mt8t1zyj-488d",
+    "agentType": "reviewer",
+    "description": "S15 JSX pipeline review r1",
+    "sessionName": "task-mt8t1zyj-488d",
+    "startedAt": 1787670837567,
+    "paneId": "w3:pEX",
+    "handle": {
+      "backend": "herdr",
+      "resourceId": "w3:pEX",
+      "socketPath": "/Users/huynhgiabuu/.config/herdr/herdr.sock",
+      "terminalId": "term_659e08cc434624c",
+      "agentName": "reviewer-mt8t1zyj",
+      "foregroundProcessGroupId": 11547
+    },
+    "piDir": "/Users/huynhgiabuu/dev/projects/solid-gpui/.pi",
+    "dir": "/Users/huynhgiabuu/dev/projects/solid-gpui/.pi/artifacts/tasks",
+    "cwd": "/Users/huynhgiabuu/dev/projects/solid-gpui",
+    "status": "done",
+    "background": true,
+    "reportedStatus": "success",
+    "rawStatus": "success",
+    "resultValid": true,
+    "completedAt": 1787672172211
   }
 ]
