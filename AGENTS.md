@@ -21,12 +21,12 @@ into an in-process addon.
 
 ## Clean-room rules (legal, non-negotiable)
 
-- [lxsmnsyc/solid-gpui] is OFF LIMITS: do not fetch, read, reference, or
-  depend on it (user directive 2026-08-25, revoking earlier per-topic
-  permission). Our design choices cite general industry precedent only
-  (esbuild/swc/biome-style binary distribution, etc.) and are re-derived
-  from first principles in this repo's ADRs. Ideas we reinvented that
-  happen to overlap upstream are fine; nothing is taken from there.
+- [lxsmnsyc/solid-gpui] (MIT since ~2026-08) may be referenced for
+  research and learning (user re-authorized 2026-08-25 after an earlier
+  off-limits period). Default discipline: read docs/README/workflows for
+  architecture and roadmap insight; porting actual source code requires
+  attribution headers + THIRD_PARTY_NOTICES.md entry like any MIT source.
+  Never present their code as ours; cite when a design is taken from there.
 - Rich text/markdown/diff rendering is ported from [Comet] (MIT) with
   attribution headers — that is the legal source for those subsystems.
 
