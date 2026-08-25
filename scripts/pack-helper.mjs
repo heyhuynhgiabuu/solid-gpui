@@ -30,6 +30,15 @@ if (!values.target || !values.binary) {
 const target = values.target
 const os = target.startsWith("darwin") ? "darwin" : target.split("-")[0]
 const cpu = target.endsWith("arm64") ? "arm64" : "x64"
+// Whitelist: an unknown target must fail loudly, not silently publish a
+// wrong-cpu package (a typo'd or future matrix row).
+if (!/^(darwin)-(arm64|x64)$/.test(target)) {
+  console.error(
+    `pack-helper: unsupported target "${target}". Known: darwin-arm64, darwin-x64. ` +
+      `Add the target to PLATFORM_PACKAGES-style whitelists deliberately (helper os/cpu here, client optionalDependencies, check-release).`,
+  )
+  process.exit(2)
+}
 // Single-file Mach-O: the binary IS the payload; gzip saved <40% on a
 // release build and cost us a runtime decompress step.
 const version = values.version ?? "0.1.0"

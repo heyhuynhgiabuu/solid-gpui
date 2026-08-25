@@ -610,6 +610,20 @@ h()/JSX APIs unchanged.
       FIRST then TS packages (ADR 005 invariant), no-token path validates
       only. README gained an npm Install section; root scripts build /
       pack:all / check:release.
-- [ ] VERIFY: gates + independent review
+- [ ] VERIFY: gates + independent review — r1 (mt8uho4p-b100) verdict
+      **NOT MERGEABLE**: B1 release.yml could not auth npm publish
+      (NODE_AUTH_TOKEN is read only via an .npmrc that setup-node's
+      registry-url writes; npm itself never reads the env var) → added
+      setup-node registry-url + secrets-context conditions; M1 dist/dist
+      duplicate in every TS tarball — root cause: BSD cp -R nests the source
+      dir into an existing destination under BOTH "dir" and "dir/."
+      spellings (verified live) → replaced shell cp with Node fs.cpSync +
+      rmSync-clean stage, tarballs re-audited flat, re-pack idempotent;
+      M2 README falsely claimed Bun resolves solid-js correctly by default
+      (measured: default conditions → server.js SSR stubs, 0 effect
+      re-runs) → reworded to always pass --conditions=browser; m3
+      pack-helper silently mapped unknown targets to x64 → whitelist with
+      loud error. E2E re-run from fixed tarballs (v5): ack/exit OK.
+      Awaiting r2 confirmation.
 
 Cross-ref: DECISIONS.md#adr-005

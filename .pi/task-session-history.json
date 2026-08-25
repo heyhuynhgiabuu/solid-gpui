@@ -827,5 +827,30 @@
     "rawStatus": "success",
     "resultValid": true,
     "completedAt": 1787672172211
+  },
+  {
+    "id": "mt8uho4p-b100",
+    "agentType": "reviewer",
+    "description": "S16 packaging review r1",
+    "sessionName": "task-mt8uho4p-b100",
+    "startedAt": 1787673245431,
+    "paneId": "w3:pEY",
+    "handle": {
+      "backend": "herdr",
+      "resourceId": "w3:pEY",
+      "socketPath": "/Users/huynhgiabuu/.config/herdr/herdr.sock",
+      "terminalId": "term_659e11c75a9d34d",
+      "agentName": "reviewer-mt8uho4p",
+      "foregroundProcessGroupId": 16738
+    },
+    "piDir": "/Users/huynhgiabuu/dev/projects/solid-gpui/.pi",
+    "dir": "/Users/huynhgiabuu/dev/projects/solid-gpui/.pi/artifacts/tasks",
+    "cwd": "/Users/huynhgiabuu/dev/projects/solid-gpui",
+    "status": "done",
+    "background": true,
+    "reportedStatus": "failure",
+    "rawStatus": "failure",
+    "resultValid": true,
+    "completedAt": 1787674162390
   }
 ]

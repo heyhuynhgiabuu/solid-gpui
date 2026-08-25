@@ -64,7 +64,14 @@ jobs:
       - uses: oven-sh/setup-bun@v2
       - run: bun install --frozen-lockfile
       - name: Version consistency (packages ↔ tag ↔ helper pins)
-        run: node scripts/check-release.mjs --tag ${GITHUB_REF_NAME:-v0.0.0}
+        run: node scripts/check-release.mjs --tag ${GITHUB_REF_NAME}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+        # setup-node writes the .npmrc that maps NODE_AUTH_TOKEN onto the
+        # registry — npm itself never reads that variable natively, so
+        # without this line every publish below fails ENEEDAUTH.
       - name: Build TS packages
         run: |
           (cd packages/protocol && bunx tsdown)
@@ -84,23 +91,21 @@ jobs:
         env:
           SOLID_GPUI_HELPER: ${{ github.workspace }}/dist/pack/helper-darwin-arm64/solid-gpui-helper
       - name: Publish platform packages (must precede the TS packages)
-        if: env.NPM_TOKEN != ''
+        if: ${{ secrets.NPM_TOKEN != '' }}
         run: |
           for d in dist/pack/helper-*; do
             (cd "$d" && npm publish --access public)
           done
         env:
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
       - name: Publish TS packages
-        if: env.NPM_TOKEN != ''
+        if: ${{ secrets.NPM_TOKEN != '' }}
         run: |
           npm publish dist/pack/solid-gpui-protocol --access public
           npm publish dist/pack/solid-gpui-client --access public
           npm publish dist/pack/solid-gpui-solid --access public
         env:
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
       - name: No NPM_TOKEN — validation-only
-        if: env.NPM_TOKEN == ''
+        if: ${{ secrets.NPM_TOKEN == '' }}
         run: echo "NPM_TOKEN absent; everything built and validated, nothing published."

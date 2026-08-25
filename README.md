@@ -38,10 +38,11 @@ import { render } from "@solid-gpui/solid"
 await render((h) => h("div", { style: { padding: 24 } }, "hello gpui"))
 ```
 
-Run Node with `--conditions=browser` (see the trap below); Bun users on
-current versions resolve Solid correctly by default, but the flag is always
-safe. macOS 13+ on Apple silicon or Intel — the prebuilt helpers cover
-`darwin-arm64` and `darwin-x64`. Other platforms: build the helper from
+Run every entry point with `--conditions=browser` (Node and Bun alike —
+under the default `node` condition solid-js resolves to non-reactive SSR
+stubs and the UI freezes silently; see the trap below). macOS 13+ on Apple
+silicon or Intel — the prebuilt helpers cover `darwin-arm64` and
+`darwin-x64`. Other platforms: build the helper from
 source (`cargo build -p solid-gpui-helper`) and point `SOLID_GPUI_HELPER`
 at it.
 

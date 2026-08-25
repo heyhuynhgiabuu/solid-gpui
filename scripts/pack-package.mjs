@@ -12,7 +12,7 @@
  *   node scripts/pack-package.mjs packages/solid [--out dist/pack]
  */
 import { parseArgs } from "node:util"
-import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs"
+import { copyFileSync, cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs"
 import { execFileSync } from "node:child_process"
 import { resolve } from "node:path"
 
@@ -31,13 +31,18 @@ const src = resolve(pkgDir)
 const pkg = JSON.parse(readFileSync(resolve(src, "package.json"), "utf8"))
 const outRoot = resolve(parsed.values.out ?? "dist/pack")
 const stage = resolve(outRoot, pkg.name.replace(/^@/, "").replace(/\//, "-"))
+// Start from a clean stage every run: stale trees from earlier invocations
+// (and cp-into-existing-dir nesting) must never leak into a tarball.
+rmSync(stage, { recursive: true, force: true })
 mkdirSync(stage, { recursive: true })
 
 copyFileSync(resolve(src, "package.json"), resolve(stage, "package.json"))
 copyFileSync(resolve(src, "LICENSE"), resolve(stage, "LICENSE"))
 if (existsSync(resolve(src, "README.md"))) copyFileSync(resolve(src, "README.md"), resolve(stage, "README.md"))
-mkdirSync(resolve(stage, "dist"), { recursive: true })
-execFileSync("cp", ["-R", resolve(src, "dist"), resolve(stage)])
+// cpSync (not shell cp): BSD cp -R nests the source dir into an existing
+// destination under BOTH the "dir" and "dir/." spellings — verified live.
+// Node's cpSync with a fresh destination is deterministic everywhere.
+cpSync(resolve(src, "dist"), resolve(stage, "dist"), { recursive: true })
 
 // Rewrite resolution to built output (entries mirror the src exports map).
 const published = { ...pkg }
