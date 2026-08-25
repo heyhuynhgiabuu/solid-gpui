@@ -667,4 +667,13 @@ cross-language contract discipline (TS+Rust lockstep, fixtures regenerated).
       apply_style refactored generic over Styled (refinements share the
       table; overflow excluded by design); GUI smoke applied=3; commit
       39f5d7f.
-- [ ] VERIFY: gates + independent review
+- [ ] VERIFY: gates + independent review — gates xanh (bun 126/126, tsc ×3,
+      cargo 68+30+14, clippy, fmt, smoke). r1 (mt8y1v7h-75ef) NOT CLEAN:
+      M1 state layers acked-but-never-rendered trên div phi tương tác
+      (early-return bỏ .id()+apply_interactive) → element_needs_stateful
+      predicate + regression test; M2 transitionMs+padding chết sau khi
+      shorthand expansion (ANIMATABLE_STYLE_KEYS chỉ liệt kê 'padding' không
+      bao giờ phát) → thêm paddingTop/Right/Bottom/Left HAI phía + test;
+      M3 chuỗi TRBL nhiều giá trị bị copy nguyên chuỗi rồi drop → fan-out
+      1/2/3/4 giá trị đúng ngữ nghĩa CSS + 6 unit tests. Fixes trong 81645d4
+      + follow-up tuple-type. r2 (mt8yf9r5-afcf) đang chờ verdict.
