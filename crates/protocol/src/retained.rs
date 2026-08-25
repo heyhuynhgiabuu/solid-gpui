@@ -16,7 +16,8 @@
 //!   destroyed subtree contains the current root, the root is cleared.
 //! - `setRoot` requires an existing element and may replace a previous root
 //!   (the `bun --hot` remount pattern swaps roots on a live window).
-//! - `setText` is only valid on text-type elements.
+//! - `setText` is valid on text elements (plain string) and markdown
+//!   elements (the markdown source the helper parses and renders).
 //! - Destroying the current root clears it; the window shows nothing until a
 //!   new root is set.
 
@@ -130,6 +131,17 @@ impl RetainedTree {
                 easing,
             } => {
                 let node = self.mut_node(*id, "setAnimation")?;
+                if node.element_type == ElementType::Markdown {
+                    // Validation and rendering agree: markdown reads only the
+                    // static color/backgroundColor/fontSize style — there is no
+                    // interpolation path, so animation must fail honestly
+                    // instead of acking and silently doing nothing.
+                    return Err(ApplyError::InvalidMutation {
+                        message: format!(
+                            "setAnimation: markdown elements render static styles only ({id:?})"
+                        ),
+                    });
+                }
                 let easing_name = easing.as_deref().unwrap_or("easeOut");
                 if crate::Easing::parse(easing_name).is_none() {
                     return Err(ApplyError::InvalidMutation {
@@ -215,6 +227,16 @@ impl RetainedTree {
                 enabled,
             } => {
                 let node = self.mut_node(*id, "setEventListener")?;
+                if node.element_type == ElementType::Markdown {
+                    // Validation and rendering agree: markdown renders a
+                    // helper-owned subtree and never wires listeners, so an
+                    // acked listener would silently never fire.
+                    return Err(ApplyError::InvalidMutation {
+                        message: format!(
+                            "setEventListener: markdown elements do not fire events ({id:?})"
+                        ),
+                    });
+                }
                 if *enabled {
                     node.listeners.insert(*event_type);
                 } else {

@@ -1166,9 +1166,10 @@ fn build_element(
 }
 
 /// Markdown element: parse the node's text (markdown source) and render the
-/// block tree. The parse runs per render call — renders happen on retained
-/// mutations (not per frame), matching the rebuild-everything cost model of
-/// every other element type; a parse cache is a measured-optimization away.
+/// block tree. NOTE: gpui calls render() per FRAME (hover refreshes,
+/// animations, resize), so parse_full re-runs per frame — O(doc) per frame
+/// for active windows, like every other element rebuild here. Fine for v1
+/// document sizes; a source-keyed parse cache is the measured follow-up.
 /// Element styles: `color` overrides body text, `backgroundColor` washes the
 /// wrapper, `fontSize` (14 = 1.0×) scales every metric linearly.
 fn build_markdown_element(tree: &RetainedTree, id: ElementId, window: &mut Window) -> AnyElement {

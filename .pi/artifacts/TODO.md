@@ -431,13 +431,19 @@ rich text is the PLAN-ordered slice, perf idea stays parked.
       demo examples/markdown.ts mounts + swaps + theme-toggles (mounted
       verified; SIGINT teardown hang is pre-existing, affects counter too;
       user visual check pending). Commit f44d03d.
-- [~] VERIFY: bun 91/91 · tsc ×3 OK · cargo 7 suites green (incl. 12/12
-      window GUI) · clippy clean (only pre-existing zed-tree `block` note) ·
-      fmt clean · NODE SMOKE OK · demo mounts (examples/markdown.ts).
-      BLOCKED on: independent review — task tool rejects reviewer launches
-      ("expected a start/resume request" ×5, harness issue; scout launches
-      worked earlier). Retry next session. User visual check of the demo
-      pending. Slice stays open until review verdict.
+- [x] Review r1 (mt8dt6vq-068b): FINDINGS-SHOULD-FIX — 2 Majors + 3 Minors,
+      ALL fixed with regression tests (RED observed via stash/mutation):
+      M1 gpui id collisions (render ix schemes → pre-order Ids counter;
+      table_cell_ix(top_ix) port regression → counter-allocated cell ids),
+      M2 insertNode refusal (shadow bookkeeping + refusedChildren set;
+      shadow-only removeNode; destroySubtree frees refused ids; sentinel/
+      dispose/move-out tests RED→GREEN), m3 setEventListener/setAnimation
+      rejected on markdown BOTH sides (retained.rs + client guards),
+      m4 stale module doc, m5 TODO state, n6 per-frame comment honest.
+- [~] VERIFY: bun 96/96 · tsc ×3 · cargo 7 suites (window 12/12; one
+      macOS parallel flake re-verified green in isolation — known issue,
+      MEMORY) · clippy · fmt · node smoke. Pending: reviewer round 2 on the
+      fixes, user visual check of the demo.
 
 Not in this session (later slices): syntax highlighting (tree-sitter), diff
 (changes.rs), streaming (mend/veil), text selection.

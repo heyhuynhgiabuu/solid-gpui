@@ -126,6 +126,11 @@ export function createSolidRenderer(send: Send): SolidGpuiRenderer {
   let seq = 0
   const queue: Mutation[] = []
   const shadow = new Map<number, { parent: HostNode | null; children: HostNode[] }>()
+  /** Element ids created on the wire but never attached (markdown children
+   *  refused by insertNode). They exist helper-side, so subtree teardown must
+   *  destroy each one explicitly — the helper's destroy of an ancestor walks
+   * WIRE children only and would leak them forever. */
+  const refusedChildren = new Set<number>()
   const handlers = new Map<string, (event: SolidGpuiEvent) => void>()
   let topNode: HostNode | null = null
   let poisoned: string | null = null
@@ -143,6 +148,22 @@ export function createSolidRenderer(send: Send): SolidGpuiRenderer {
   }
 
   const removeNodeImpl = (parent: HostNode, node: HostNode): void => {
+    if (parent.kind === "element" && parent.tag === "markdown") {
+      // Children refused by insertNode live ONLY in the shadow bookkeeping
+      // (no wire attach ever happened), so removal is shadow-only — emitting
+      // removeChild would fail helper-side validation (not a child) and
+      // poison the session. universal's reconcileArrays calls removeNode
+      // unconditionally for leftovers, so this path is NOT theoretical.
+      const entry = shadow.get(parent.id)
+      if (entry) {
+        for (let i = entry.children.indexOf(node); i >= 0; i = entry.children.indexOf(node)) {
+          entry.children.splice(i, 1)
+        }
+      }
+      shadow.get(node.id)!.parent = null
+      refusedChildren.delete(node.id)
+      return
+    }
     if (parent.kind !== "container") {
       push({
         op: "removeChild",
@@ -218,7 +239,15 @@ export function createSolidRenderer(send: Send): SolidGpuiRenderer {
         const next = (value ?? {}) as StyleMap
         const prev = node.lastStyle
         node.lastStyle = next
-        if (node.transitionMs && prev) {
+        if (node.transitionMs && prev && node.tag === "markdown") {
+          // Helper rejects setAnimation on markdown (static styles only);
+          // emitting it would poison the session. Static setStyle below.
+          if (typeof console !== "undefined") {
+            console.warn(
+              "[solid-gpui] <markdown> ignores transitionMs — it renders a static markdown document.",
+            )
+          }
+        } else if (node.transitionMs && prev) {
           // A key animates only when BOTH ends are numeric and it changed —
           // mirroring the wire's numeric-start rule (animating an absent or
           // non-numeric start is an applyFailed on the helper and poisons
@@ -266,6 +295,20 @@ export function createSolidRenderer(send: Send): SolidGpuiRenderer {
         push({ op: "setStyle", id, style: next })
         return
       }
+      if (node.tag === "markdown") {
+        // Mirror the helper's honest contract: markdown accepts only
+        // style/source. Listeners never fire and animation never
+        // interpolates helper-side, so emitting either would be acked-rejected
+        // (applyFailed) and poison the session. Warn instead.
+        if (EVENT_NAMES[name] || name === "transitionMs" || name === "transitionEasing") {
+          if (typeof console !== "undefined") {
+            console.warn(
+              `[solid-gpui] <markdown> ignores ${String(name)} — it renders a static markdown document (style/source only).`,
+            )
+          }
+          return
+        }
+      }
       const event = EVENT_NAMES[name]
       if (event) {
         if (typeof value === "function") {
@@ -302,11 +345,27 @@ export function createSolidRenderer(send: Send): SolidGpuiRenderer {
         // The helper owns the markdown element's rendered subtree and the
         // wire rejects attach on it (applyFailed poisons the session). Refuse
         // children client-side instead of emitting an op we know is invalid.
+        // The node is still recorded in the shadow bookkeeping: dispose walks
+        // the shadow tree and destroys these ids (they exist helper-side via
+        // their createElement), so refusing must not leak elements, and
+        // removeNode/getFirstChild/nextSibling stay consistent with what
+        // universal believes about the tree.
         if (typeof console !== "undefined") {
           console.warn(
             "[solid-gpui] <markdown> takes a `source` prop; children are not rendered and were dropped.",
           )
         }
+        const entry = shadow.get(parent.id)!
+        const prior = entry.children.indexOf(node)
+        if (prior >= 0) entry.children.splice(prior, 1)
+        const anchorIndex = anchor ? entry.children.indexOf(anchor) : -1
+        if (anchor && anchorIndex >= 0) {
+          entry.children.splice(anchorIndex, 0, node)
+        } else {
+          entry.children.push(node)
+        }
+        shadow.get(node.id)!.parent = parent
+        refusedChildren.add(node.id)
         return
       }
       if (parent.kind === "container") {
@@ -314,8 +373,7 @@ export function createSolidRenderer(send: Send): SolidGpuiRenderer {
         // Remount without dispose: free the previous root on the wire —
         // setRoot alone would leave the old subtree allocated forever.
         if (topNode && topNode !== node && shadow.has(topNode.id)) {
-          for (const id of collectSubtreeIds(topNode)) shadow.delete(id)
-          push({ op: "destroyElement", id: elementId(topNode.id) })
+          destroySubtree(topNode)
         }
         topNode = node
         entry.children = [node]
@@ -355,6 +413,7 @@ export function createSolidRenderer(send: Send): SolidGpuiRenderer {
       for (const n of nodes) {
         if (n.kind === "container") continue
         push({ op: "destroyElement", id: elementId(n.id) })
+        refusedChildren.delete(n.id)
         shadow.delete(n.id)
       }
     },
@@ -376,6 +435,21 @@ export function createSolidRenderer(send: Send): SolidGpuiRenderer {
   })
 
   /** DFS-collect a subtree's ids from the shadow tree (dispose cleanup). */
+  /** Tear down a mounted subtree: destroy the root (the helper cascades
+   *  over WIRE children) plus every refused child in its shadow subtree —
+   *  those were never attached, so only an explicit destroyElement frees
+   *  them. Purges the shadow map so a prod double-dispose is a no-op. */
+  function destroySubtree(root: HostNode): void {
+    const ids = collectSubtreeIds(root)
+    for (const id of ids) {
+      shadow.delete(id)
+      if (refusedChildren.delete(id)) {
+        push({ op: "destroyElement", id: elementId(id) })
+      }
+    }
+    push({ op: "destroyElement", id: elementId(root.id) })
+  }
+
   function collectSubtreeIds(node: HostNode, out: number[] = []): number[] {
     out.push(node.id)
     for (const child of shadow.get(node.id)?.children ?? []) {
@@ -399,8 +473,7 @@ export function createSolidRenderer(send: Send): SolidGpuiRenderer {
       // dispose; the prod build does. Destroy the mounted root ourselves,
       // guarded by the shadow map so a prod double-call is a no-op.
       if (topNode && shadow.has(topNode.id)) {
-        for (const id of collectSubtreeIds(topNode)) shadow.delete(id)
-        push({ op: "destroyElement", id: elementId(topNode.id) })
+        destroySubtree(topNode)
         handlers.clear()
         topNode = null
       }

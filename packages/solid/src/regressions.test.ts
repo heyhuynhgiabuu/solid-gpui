@@ -174,3 +174,136 @@ describe("markdown via h() (S13d)", () => {
     }
   })
 })
+
+describe("markdown refusal bookkeeping (review Major 2)", () => {
+  test("sentinel flow: refused child then removeNode emits NO removeChild (poison path)", async () => {
+    const rec = recording()
+    const { renderer: R, render, flush, removeNode } = createSolidRenderer(rec.send)
+    const container = R.createElement("#root")
+
+    // Mirror universal's sentinel flow: a text node inserted into markdown
+    // (refused) and then removed unconditionally by reconcileArrays.
+    const dispose = render(() => {
+      const md = R.createElement("markdown")
+      R.setProp(md, "source", "hi")
+      const sentinel = R.createTextNode("")
+      R.insertNode(md, sentinel)
+      removeNode(md, sentinel)
+      return md
+    }, container)
+    await flush()
+
+    const ops = rec.batches.flatMap((b) => b.mutations.map((m) => m.op))
+    expect(ops).not.toContain("removeChild")
+    expect(ops).not.toContain("appendChild")
+    expect(ops).not.toContain("insertBefore")
+    dispose()
+  })
+
+  test("dispose destroys refused children (no helper-side element leak)", async () => {
+    const rec = recording()
+    const { renderer: R, render, flush } = createSolidRenderer(rec.send)
+    const container = R.createElement("#root")
+
+    let sentinelId = 0
+    const dispose = render(() => {
+      const md = R.createElement("markdown")
+      R.setProp(md, "source", "hi")
+      const sentinel = R.createTextNode("stray")
+      sentinelId = sentinel.id
+      R.insertNode(md, sentinel)
+      return md
+    }, container)
+    await flush()
+    dispose()
+    await flush()
+
+    const destroys = rec.batches
+      .flatMap((b) => b.mutations)
+      .filter((m) => m.op === "destroyElement")
+    // The markdown root AND the refused-but-created sentinel are freed.
+    expect(destroys.length).toBe(2)
+    expect(destroys).toContainEqual(expect.objectContaining({ id: sentinelId }))
+  })
+
+  test("a node moved OUT of markdown into a div attaches normally", async () => {
+    const rec = recording()
+    const { renderer: R, render, flush, removeNode } = createSolidRenderer(rec.send)
+    const container = R.createElement("#root")
+
+    let stray: ReturnType<typeof R.createElement> | undefined
+    const dispose = render(() => {
+      const root = R.createElement("div")
+      const md = R.createElement("markdown")
+      R.setProp(md, "source", "hi")
+      R.insertNode(root, md)
+      stray = R.createElement("div")
+      R.insertNode(md, stray) // refused
+      removeNode(md, stray!) // shadow-only detach
+      R.insertNode(root, stray!) // legitimate wire attach
+      return root
+    }, container)
+    await flush()
+
+    const attaches = rec.batches
+      .flatMap((b) => b.mutations)
+      .filter((m) => m.op === "appendChild" && "childId" in m && m.childId === stray!.id)
+    expect(attaches.length).toBe(1)
+    dispose()
+  })
+})
+
+describe("markdown listener/animation guards (review Minor 3)", () => {
+  test("onClick on markdown warns and emits NO setEventListener", async () => {
+    const rec = recording()
+    const { renderer: R, render, flush } = createSolidRenderer(rec.send)
+    const container = R.createElement("#root")
+    const warnings: string[] = []
+    const orig = console.warn
+    console.warn = (m?: string) => warnings.push(String(m))
+    try {
+      const dispose = render(() => {
+        const md = R.createElement("markdown")
+        R.setProp(md, "source", "hi")
+        R.setProp(md, "onClick", () => {})
+        return md
+      }, container)
+      await flush()
+      const listeners = rec.batches
+        .flatMap((b) => b.mutations)
+        .filter((m) => m.op === "setEventListener")
+      expect(listeners).toEqual([])
+      expect(warnings.some((w) => w.includes("markdown"))).toBe(true)
+      dispose()
+    } finally {
+      console.warn = orig
+    }
+  })
+
+  test("transitionMs on markdown warns and emits NO setAnimation", async () => {
+    const rec = recording()
+    const { renderer: R, render, flush } = createSolidRenderer(rec.send)
+    const container = R.createElement("#root")
+    const warnings: string[] = []
+    const orig = console.warn
+    console.warn = (m?: string) => warnings.push(String(m))
+    try {
+      const dispose = render(() => {
+        const md = R.createElement("markdown")
+        R.setProp(md, "style", { fontSize: 14 })
+        R.setProp(md, "transitionMs", 200)
+        R.setProp(md, "style", { fontSize: 28 })
+        return md
+      }, container)
+      await flush()
+      const anims = rec.batches
+        .flatMap((b) => b.mutations)
+        .filter((m) => m.op === "setAnimation")
+      expect(anims).toEqual([])
+      expect(warnings.some((w) => w.includes("transitionMs"))).toBe(true)
+      dispose()
+    } finally {
+      console.warn = orig
+    }
+  })
+})

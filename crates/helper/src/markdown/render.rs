@@ -84,6 +84,28 @@ impl Default for MdTheme {
     }
 }
 
+/// Monotonic id allocator for one render pass. Ids key gpui element state
+/// (InteractiveText hover/click, code/table scroll handles), so they must be
+/// UNIQUE within the rendered tree. Upstream derives them arithmetically
+/// (`ix*100 + ci`, `ix*100 + item_ix*10 + ci`) — schemes that collide for
+/// ordinary documents (a quote's second child at top-level block 0 reuses
+/// the id of top-level block 1; two tables under one quote share every cell
+/// id), and gpui silently SHARES state between colliding ids (no uniqueness
+/// assert in 35aab21 — observed as scrollers scrolling in lockstep). A
+/// pre-order counter is injective by construction and — because parse_full
+/// and the traversal are deterministic — stable across re-renders of the
+/// same source, and prefix-stable under appends.
+#[derive(Default)]
+pub struct Ids(usize);
+
+impl Ids {
+    fn next(&mut self) -> usize {
+        let n = self.0;
+        self.0 += 1;
+        n
+    }
+}
+
 /// Render a whole tree stacked with the md block gap. `row` prefixes element
 /// ids (gpui needs stable ids for InteractiveText/stateful scrollers).
 /// `theme.text` may be overridden by the caller from the element's `color`
@@ -95,30 +117,29 @@ pub fn render_tree(
     scale: f32,
     window: &Window,
 ) -> AnyElement {
+    let mut ids = Ids::default();
     div()
         .flex()
         .flex_col()
         .gap(px(MD_BLOCK_GAP * scale))
-        .children(
-            tree.blocks
-                .iter()
-                .enumerate()
-                .map(|(ix, top)| render_block(row, &top.block, ix, ix, theme, scale, window)),
-        )
+        .children(tree.blocks.iter().map(|top| {
+            let ix = ids.next();
+            render_block(row, &top.block, ix, theme, scale, window, &mut ids)
+        }))
         .into_any_element()
 }
 
-/// Render one block (top-level or nested). `top_ix` is the enclosing
-/// top-level block index; `ix` the per-element discriminator.
+/// Render one block (top-level or nested). `ix` is this block's id (already
+/// allocated by the caller, pre-order); `ids` allocates for children.
 #[allow(clippy::too_many_arguments)]
 pub fn render_block(
     row: &str,
     block: &Block,
-    top_ix: usize,
     ix: usize,
     theme: &MdTheme,
     scale: f32,
     window: &Window,
+    ids: &mut Ids,
 ) -> AnyElement {
     match block {
         Block::Paragraph { runs } => text_element(
@@ -127,14 +148,13 @@ pub fn render_block(
             MD_TEXT_SIZE,
             MD_LINE_HEIGHT,
             false,
-            top_ix,
             ix,
             theme,
             scale,
         ),
         Block::Heading { level, runs } => {
             let (size, line) = heading_metrics(*level);
-            text_element(row, runs, size, line, true, top_ix, ix, theme, scale)
+            text_element(row, runs, size, line, true, ix, theme, scale)
         }
         Block::CodeBlock { language, code } => {
             render_code_block(row, language.as_deref(), code, ix, theme, scale)
@@ -153,8 +173,9 @@ pub fn render_block(
             .flex_col()
             .gap(px(8.0))
             .text_color(theme.text_muted)
-            .children(children.iter().enumerate().map(|(ci, child)| {
-                render_block(row, child, top_ix, ix * 100 + ci, theme, scale, window)
+            .children(children.iter().map(|child| {
+                let cix = ids.next();
+                render_block(row, child, cix, theme, scale, window, ids)
             }))
             .into_any_element(),
         Block::List {
@@ -200,16 +221,9 @@ pub fn render_block(
                         .flex()
                         .flex_col()
                         .gap(px(4.0))
-                        .children(item.iter().enumerate().map(|(ci, child)| {
-                            render_block(
-                                row,
-                                child,
-                                top_ix,
-                                ix * 100 + item_ix * 10 + ci,
-                                theme,
-                                scale,
-                                window,
-                            )
+                        .children(item.iter().map(|child| {
+                            let cix = ids.next();
+                            render_block(row, child, cix, theme, scale, window, ids)
                         })),
                 )
             }))
@@ -218,7 +232,7 @@ pub fn render_block(
             header,
             rows,
             align,
-        } => render_table(row, header, rows, align, top_ix, ix, theme, scale, window),
+        } => render_table(row, header, rows, align, ix, theme, scale, window, ids),
         Block::Rule => div()
             .h(px(1.0))
             .w_full()
@@ -267,11 +281,6 @@ pub fn table_columns(content_widths: &[f32]) -> TableColumns {
     }
 }
 
-/// Element discriminator for a table cell (row-major under the block ix).
-fn table_cell_ix(ix: usize, r: usize, c: usize) -> usize {
-    ix * 100_000 + r * 100 + c
-}
-
 /// A GFM table — a port of mugen-markdown's `TableBlock` (via Comet) under a
 /// frameless hairline theme (see the `TABLE_*` constants). Column widths
 /// resolve exactly the way the source's CSS does: each cell is
@@ -285,11 +294,11 @@ fn render_table(
     header: &[Vec<InlineRun>],
     rows: &[Vec<Vec<InlineRun>>],
     align: &[TableAlign],
-    top_ix: usize,
     ix: usize,
     theme: &MdTheme,
     scale: f32,
     window: &Window,
+    ids: &mut Ids,
 ) -> AnyElement {
     // Header row first (rows may be ragged).
     let all: Vec<&[Vec<InlineRun>]> = std::iter::once(header)
@@ -371,7 +380,8 @@ fn render_table(
                 TableAlign::Right => cell.text_right(),
             };
             if let Some(flat) = cell_flat {
-                cell = cell.child(flat_text_element(row, flat, table_cell_ix(top_ix, r, c)));
+                let cell_ix = ids.next();
+                cell = cell.child(flat_text_element(row, flat, cell_ix));
             }
             row_el = row_el.child(cell);
         }
@@ -506,14 +516,12 @@ fn text_element(
     size: f32,
     line_height: f32,
     bold_default: bool,
-    top_ix: usize,
     ix: usize,
     theme: &MdTheme,
     scale: f32,
 ) -> AnyElement {
     let flat = flatten_runs(runs, theme, bold_default);
     let inner = flat_text_element(row, &flat, ix);
-    let _ = top_ix;
     div()
         .text_size(px(size * scale))
         .line_height(px(line_height * scale))

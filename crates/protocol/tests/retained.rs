@@ -769,3 +769,49 @@ fn markdown_element_rejects_set_value() {
         .unwrap_err();
     assert!(err.to_string().contains("input/textarea"), "got: {err}");
 }
+
+/// Listeners on markdown are rejected: the renderer never wires them, so an
+/// ack would be a lie (validation/rendering agreement).
+#[test]
+fn markdown_element_rejects_set_event_listener() {
+    let mut tree = RetainedTree::new();
+    tree.apply(&Mutation::CreateElement {
+        id: ElementId(1),
+        element_type: ElementType::Markdown,
+    })
+    .unwrap();
+    let err = tree
+        .apply(&Mutation::SetEventListener {
+            id: ElementId(1),
+            event_type: EventType::Click,
+            enabled: true,
+        })
+        .unwrap_err();
+    assert!(err.to_string().contains("markdown"), "got: {err}");
+}
+
+/// Animation on markdown is rejected: only static color/backgroundColor/
+/// fontSize are read, so interpolation would silently no-op.
+#[test]
+fn markdown_element_rejects_set_animation() {
+    let mut tree = RetainedTree::new();
+    tree.apply(&Mutation::CreateElement {
+        id: ElementId(1),
+        element_type: ElementType::Markdown,
+    })
+    .unwrap();
+    tree.apply(&Mutation::SetStyle {
+        id: ElementId(1),
+        style: StyleMap::from([("fontSize".to_string(), StyleValue::Number(14u32.into()))]),
+    })
+    .unwrap();
+    let err = tree
+        .apply(&Mutation::SetAnimation {
+            id: ElementId(1),
+            target: StyleMap::from([("fontSize".to_string(), StyleValue::Number(28u32.into()))]),
+            transition_ms: 100,
+            easing: None,
+        })
+        .unwrap_err();
+    assert!(err.to_string().contains("markdown"), "got: {err}");
+}
