@@ -21,12 +21,16 @@ into an in-process addon.
 
 ## Clean-room rules (legal, non-negotiable)
 
-- This project was inspired by the *idea* of an existing unlicensed JS↔GPUI
-  bridge. Ideas and architecture are fair game; that project's code, files,
-  diffs, and commits are NOT — it has no license, so everything in it is all-
-  rights-reserved. Never copy from it, never depend on its packages.
-- Rich text/markdown/diff rendering will be ported from [Comet] (MIT) with
+- [lxsmnsyc/solid-gpui] is OFF LIMITS: do not fetch, read, reference, or
+  depend on it (user directive 2026-08-25, revoking earlier per-topic
+  permission). Our design choices cite general industry precedent only
+  (esbuild/swc/biome-style binary distribution, etc.) and are re-derived
+  from first principles in this repo's ADRs. Ideas we reinvented that
+  happen to overlap upstream are fine; nothing is taken from there.
+- Rich text/markdown/diff rendering is ported from [Comet] (MIT) with
   attribution headers — that is the legal source for those subsystems.
+
+[lxsmnsyc/solid-gpui]: https://github.com/lxsmnsyc/solid-gpui
 
 [Comet]: https://github.com/zeronsh/comet
 

@@ -1,0 +1,91 @@
+/**
+ * Helper binary resolution chain tests (S16): env override → dev target →
+ * per-platform npm package, with actionable guidance when nothing resolves.
+ */
+import { describe, expect, test } from "bun:test"
+import { resolveHelperBinary } from "./binary"
+
+const fakeDeps = (over: Partial<Parameters<typeof resolveHelperBinary>[0]> = {}) => ({
+  env: {} as Record<string, string | undefined>,
+  exists: (_p: string) => false,
+  resolve: (_spec: string, _from: string) => {
+    throw new Error("not found")
+  },
+  platform: "darwin",
+  arch: "arm64",
+  moduleDir: "/repo/packages/client/src",
+  ...over,
+})
+
+describe("resolveHelperBinary", () => {
+  test("SOLID_GPUI_HELPER env override wins over everything", () => {
+    const r = resolveHelperBinary(
+      fakeDeps({
+        env: { SOLID_GPUI_HELPER: "/custom/helper" },
+        exists: (p) => p === "/repo/target/debug/solid-gpui-helper",
+      }),
+    )
+    expect(r).toEqual({ path: "/custom/helper", source: "env" })
+  })
+
+  test("dev target/debug wins when present (monorepo dev flow, no npm needed)", () => {
+    const r = resolveHelperBinary(
+      fakeDeps({
+        exists: (p) => p === "/repo/target/debug/solid-gpui-helper",
+      }),
+    )
+    expect(r).toEqual({ path: "/repo/target/debug/solid-gpui-helper", source: "dev-target" })
+  })
+
+  test("platform package is used when dev target is absent (end-user flow)", () => {
+    const r = resolveHelperBinary(
+      fakeDeps({
+        exists: (p) => p === "/npm/@solid-gpui/helper-darwin-arm64/solid-gpui-helper",
+        resolve: (spec, from) => {
+          expect(spec).toBe("@solid-gpui/helper-darwin-arm64/package.json")
+          expect(from).toBe("/repo/packages/client/src")
+          return "/npm/@solid-gpui/helper-darwin-arm64/package.json"
+        },
+      }),
+    )
+    expect(r).toEqual({
+      path: "/npm/@solid-gpui/helper-darwin-arm64/solid-gpui-helper",
+      source: "platform-package",
+    })
+  })
+
+  test("platform package resolution failure falls through to guidance error", () => {
+    try {
+      resolveHelperBinary(fakeDeps())
+      throw new Error("should have thrown")
+    } catch (e) {
+      const msg = (e as Error).message
+      expect(msg).toContain("solid-gpui helper binary not found")
+      expect(msg).toContain("SOLID_GPUI_HELPER")
+      expect(msg).toContain("cargo build -p solid-gpui-helper")
+      expect(msg).toContain("darwin-arm64")
+    }
+  })
+
+  test("unsupported platform (no prebuilt package) still allows env/dev flows", () => {
+    const r = resolveHelperBinary(
+      fakeDeps({
+        platform: "linux",
+        arch: "x64",
+        env: { SOLID_GPUI_HELPER: "/built/from/source" },
+      }),
+    )
+    expect(r).toEqual({ path: "/built/from/source", source: "env" })
+
+    const err = (() => {
+      try {
+        resolveHelperBinary(fakeDeps({ platform: "linux", arch: "x64" }))
+        return null
+      } catch (e) {
+        return e as Error
+      }
+    })()
+    expect(err?.message).toContain("linux-x64")
+    expect(err?.message).toContain("no prebuilt helper")
+  })
+})

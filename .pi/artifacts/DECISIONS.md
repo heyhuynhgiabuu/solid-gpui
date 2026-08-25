@@ -38,3 +38,36 @@ Decision: `solid-gpui` for repo, packages `@solid-gpui/*`, helper binary `solid-
 Why: says exactly what it is; distinct from `the prior-art bridge` (avoids clone perception); npm scope free to take.
 Consequences: local dir rename pending (user runs `mv` outside a live session); check npm scope
 availability before first publish.
+
+#### ADR 005: Helper binary distribution — per-platform npm packages (decided 2026-08-25)
+
+**Decision.** Ship the helper binary inside per-platform npm packages
+(`@solid-gpui/helper-darwin-arm64`, `-darwin-x64`, …) declared as
+`optionalDependencies` of `@solid-gpui/client` (the esbuild/swc model). The
+client resolves the binary via `require.resolve` at spawn time. No runtime
+downloads, no postinstall scripts. Publish order is a hard invariant:
+platform packages first, then the packages that pin them.
+
+**Alternatives rejected.**
+- *Runtime download from GitHub Releases (checksummed, cached)* — first
+  design this session. Rejected: runtime network dependency (corporate
+  proxies/firewalls), download+gunzip+chmod+cache machinery in the zero-dep
+  client, and no precedent among major binary distributors.
+- *cargo build on install / postinstall* — pnpm and Bun block lifecycle
+  scripts by default; multi-minute Rust+Zed dependency builds for end users.
+
+**Precedent.** The per-platform optionalDependencies model is standard
+industry practice (esbuild, swc, biome, lightningcss): binaries ship inside
+npm packages selected by os/cpu fields, no network at runtime, offline
+installs work, and lockfiles pin exact binary versions. Publish order
+(platform packages before the packages that pin them) is the esbuild
+invariant, re-derived here from npm's install-time resolution.
+
+**Constraints.** macOS-only for 0.1.0 (helper GUI paths need Metal; Linux
+gpui build is untested here — defer). TS packages publish as built dist
+(source-only `exports` pointing at `.ts` is Bun-only). The npm scope
+`@solid-gpui/*` is unclaimed (checked 2026-08-25).
+
+**Consequence.** Dev flows keep using `target/debug` via the existing
+resolution order (env override → dev target → platform package), so the
+monorepo needs no installed platform packages of its own.

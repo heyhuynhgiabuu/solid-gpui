@@ -577,3 +577,31 @@ examples/counter.tsx behaves identically to counter.ts.
       documented as accepted (h() remains multi-window). S15 CLOSED.
 
 Cross-ref: TODO.md#2026-08-25---s13-rich-text--markdowncodediff-ported-from-comet-mit
+
+### 2026-08-25 - S16: npm packaging + prebuilt-helper distribution
+status: active
+updated: 2026-08-25 (model revised to the esbuild-style per-platform
+package distribution — see ADR 005; prior-art repo is off limits per user
+directive, design re-derived from industry precedent)
+
+Goal: `npm i @solid-gpui/solid` (or bun add) works in a fresh project with
+no cargo toolchain. Helper binary ships in per-platform npm packages
+(esbuild model) selected via optionalDependencies; no runtime downloads.
+h()/JSX APIs unchanged.
+
+- [ ] S16-a ADR 005: per-platform npm packages + optionalDependencies over
+      runtime download (esbuild/swc precedent; offline-friendly; no client
+      fetch code); publish order platform → main; macOS arm64+x64 for 0.1.0
+- [ ] S16-b client binary resolution chain (env override → dev target/debug
+      → platform package via require.resolve), TDD with fixture platform
+      package; helpful error when no binary found
+- [ ] S16-c build + pack: tsdown (or tsc) dist build for the 3 TS packages;
+      pack script assembling @solid-gpui/helper-darwin-{arm64,x64} from a
+      built binary (package.json with os/cpu/files, no deps); npm pack
+      tarball audit; temp-project E2E from local tarballs via bun
+- [ ] S16-d release workflow yml (tag v* → release build → package →
+      artifacts; publish job platform-first then main, gated on NPM_TOKEN)
+      + version-consistency check script + README install section
+- [ ] VERIFY: gates + independent review
+
+Cross-ref: DECISIONS.md#adr-005

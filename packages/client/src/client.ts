@@ -1,7 +1,6 @@
 import { spawn, type ChildProcess } from "node:child_process"
+import { defaultBinaryDeps, resolveHelperBinary } from "./binary"
 import { createInterface } from "node:readline"
-import { resolve } from "node:path"
-import { fileURLToPath } from "node:url"
 import {
   decodeCommand,
   decodeEvent,
@@ -69,9 +68,9 @@ export interface HelperOptions {
   readonly onUnmatchedReply?: (reply: ErrorReply) => void
 }
 function defaultBinary(): string {
-  // Runtime-agnostic equivalent of import.meta.dir (works in Bun and Node).
-  const here = fileURLToPath(new URL(".", import.meta.url))
-  return resolve(here, "../../../target/debug/solid-gpui-helper")
+  // Chain (ADR 005): SOLID_GPUI_HELPER env → monorepo dev target →
+  // prebuilt platform npm package; throws actionable guidance otherwise.
+  return resolveHelperBinary(defaultBinaryDeps()).path
 }
 
 type EventListener = (event: SolidGpuiEvent) => void
