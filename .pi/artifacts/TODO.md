@@ -579,10 +579,7 @@ examples/counter.tsx behaves identically to counter.ts.
 Cross-ref: TODO.md#2026-08-25---s13-rich-text--markdowncodediff-ported-from-comet-mit
 
 ### 2026-08-25 - S16: npm packaging + prebuilt-helper distribution
-status: active
-updated: 2026-08-25 (model revised to the esbuild-style per-platform
-package distribution — see ADR 005; prior-art repo is off limits per user
-directive, design re-derived from industry precedent)
+status: CLOSED 2026-08-25 (r1 NOT MERGEABLE, fixes in 497965d, r2 CLEAN)
 
 Goal: `npm i @solid-gpui/solid` (or bun add) works in a fresh project with
 no cargo toolchain. Helper binary ships in per-platform npm packages
@@ -610,7 +607,7 @@ h()/JSX APIs unchanged.
       FIRST then TS packages (ADR 005 invariant), no-token path validates
       only. README gained an npm Install section; root scripts build /
       pack:all / check:release.
-- [ ] VERIFY: gates + independent review — r1 (mt8uho4p-b100) verdict
+- [x] VERIFY: gates + independent review — r1 (mt8uho4p-b100) verdict
       **NOT MERGEABLE**: B1 release.yml could not auth npm publish
       (NODE_AUTH_TOKEN is read only via an .npmrc that setup-node's
       registry-url writes; npm itself never reads the env var) → added
@@ -624,6 +621,11 @@ h()/JSX APIs unchanged.
       re-runs) → reworded to always pass --conditions=browser; m3
       pack-helper silently mapped unknown targets to x64 → whitelist with
       loud error. E2E re-run from fixed tarballs (v5): ack/exit OK.
-      Awaiting r2 confirmation.
+      Awaiting r2 confirmation → r2 (mt8v4na1-1ec8) verdict CLEAN/mergeable:
+      all four findings verified fixed with live evidence (tarball listings
+      flat, pack idempotent, setup-node auth mechanism present, README claim
+      gone, bogus target exit 2), invariants A/B/C re-confirmed. S16 CLOSED.
+      Remaining user actions for a real release: push branch, add the publish
+      credential in repo settings, tag v0.1.0.
 
 Cross-ref: DECISIONS.md#adr-005
