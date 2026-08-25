@@ -699,9 +699,12 @@ fn set_animation_requires_a_numeric_start_on_the_element() {
     let mut tree = animated_tree();
     // Interpolation needs a well-defined start: the key must already hold a
     // number (you can only animate what is set).
+    // P1-d note: "padding" left the animatable list (the renderer expands
+    // it to physical keys pre-wire), so this test animates paddingTop — the
+    // key a real batch would now carry.
     let err = tree
         .apply(&set_animation(
-            StyleMap::from([("padding".to_string(), StyleValue::Number(8u32.into()))]),
+            StyleMap::from([("paddingTop".to_string(), StyleValue::Number(8u32.into()))]),
             None,
         ))
         .unwrap_err();
