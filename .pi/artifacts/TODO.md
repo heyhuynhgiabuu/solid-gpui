@@ -532,3 +532,39 @@ line kind coloring instead of tree-sitter. NOT the 5248-LOC Changes viewer
       24→0). S13f CLOSED.
 
 Cross-ref: TODO.md#2026-08-25---s13-rich-text--markdowncodediff-ported-from-comet-mit
+
+### 2026-08-25 - S15: JSX pipeline (universal preset track)
+status: implementation complete 2026-08-25 — independent review pending
+
+Goal: author components in JSX (.tsx) against the existing renderer -
+h() stays additive, no breaking changes. Success criterion:
+examples/counter.tsx behaves identically to counter.ts.
+
+- [x] S15-a recon: babel-preset-solid 2.0.0-rc.2 (wraps
+      @dom-expressions/babel-plugin-jsx 0.50.0-next.44) `generate: "universal"`
+      emits module-level imports (setProp, effect, createComponent, insert,
+      insertNode, createElement, createTextNode + flow components) from
+      moduleName; static props → createElement(tag, props), dynamic → two-arg
+      effect(() => ({...}), ({...}, _p$) => ...) with prev-diffing. Universal
+      rc.1 echoes a default two-arg effect that handles object-returning
+      computes (verified empirically, .pi/effect-probe.ts, since deleted).
+- [x] S15-b module-level runtime: packages/solid/src/jsx.ts (initJsxRuntime /
+      resetJsxRuntime test seam, mountJsx app entry, bindings over the shared
+      mount() from render.ts — seam NOT bypassed). 7 tests incl. numeric-text
+      stringification and a compile-surface meta-test (babel-compiles a
+      fixture, asserts every emitted import resolves to a jsx.ts export).
+- [x] S15-c bun plugin: scripts/solid-jsx-preload.ts (Bun.plugin onLoad,
+      .tsx → babel-preset-solid universal, moduleName @solid-gpui/solid/jsx);
+      exports map entry "./jsx" in packages/solid/package.json; root devDep
+      workspace link so examples resolve the specifier.
+- [x] S15-d examples/counter.tsx (JSX twin of counter.ts: style objects,
+      onClick/onMouseDown/onMouseUp, expression children) + script
+      example/counter:tsx. User clicking verified live (events stream in
+      log); two bug fixes fell out: renderer text coercion at the wire
+      boundary (setText is a string op — {count()} passes raw numbers) and
+      client seq-less error replies now reject the oldest pending instead
+      of hanging flush forever (helper cannot echo a seq for a batch that
+      never decoded).
+- [ ] VERIFY: gates + independent review
+
+Cross-ref: TODO.md#2026-08-25---s13-rich-text--markdowncodediff-ported-from-comet-mit

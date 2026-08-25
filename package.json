@@ -12,13 +12,17 @@
     "smoke:node": "tsx scripts/node-smoke.ts",
     "demo": "bun scripts/demo.ts",
     "example/counter": "bun --conditions=browser run examples/counter.ts",
+    "example/counter:tsx": "bun --conditions=browser --preload ./scripts/solid-jsx-preload.ts examples/counter.tsx",
     "example/counter:hot": "bun --conditions=browser --hot run examples/counter.ts",
     "example/markdown": "bun --conditions=browser run examples/markdown.ts",
     "example/markdown:hot": "bun --conditions=browser --hot run examples/markdown.ts"
   },
   "devDependencies": {
+    "@babel/core": "^7",
+    "@solid-gpui/solid": "workspace:*",
     "@solidjs/universal": "^2.0.0-rc.1",
     "@solidjs/web": "^2.0.0-rc.1",
+    "babel-preset-solid": "2.0.0-rc.2",
     "bun-types": "^1.4.0",
     "solid-js": "^2.0.0-rc.1",
     "tsx": "^4.23.12",

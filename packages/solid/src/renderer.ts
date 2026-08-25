@@ -90,6 +90,12 @@ export interface SolidGpuiRenderer {
  * flushes them as protocol batches. `send` is the transport seam: a recording
  * function in tests, the real helper connection in production.
  */
+/** setText is a string op on the wire; compiled JSX hands raw expression
+ *  values ({count()} can be a number, null renders as empty). */
+function textOf(value: unknown): string {
+  return value == null ? "" : String(value)
+}
+
 export function createSolidRenderer(send: Send): SolidGpuiRenderer {
   // Reactivity liveness probe: under the solid-js SSR stubs (node condition,
   // see README), effects never re-run and updates silently no-op. Warn once
@@ -200,15 +206,18 @@ export function createSolidRenderer(send: Send): SolidGpuiRenderer {
       return node
     },
 
-    createTextNode(value: string) {
+    // Compiled JSX hands raw expression values here ({count()} can be a
+    // number); setText is a string op on the wire, so coerce at the boundary.
+    createTextNode(value: unknown) {
       const node = alloc("text", "#text")
+      const text = textOf(value)
       push({ op: "createElement", id: elementId(node.id), elementType: "text" })
-      push({ op: "setText", id: elementId(node.id), text: value })
+      push({ op: "setText", id: elementId(node.id), text })
       return node
     },
 
-    replaceText(textNode: HostNode, value: string) {
-      push({ op: "setText", id: elementId(textNode.id), text: value })
+    replaceText(textNode: HostNode, value: unknown) {
+      push({ op: "setText", id: elementId(textNode.id), text: textOf(value) })
     },
 
     isTextNode(node: HostNode) {

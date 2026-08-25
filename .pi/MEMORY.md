@@ -389,3 +389,37 @@
   24px inflation before verifying the fix.
 - GFM fence info strings are case-insensitive; match language tags with
   eq_ignore_ascii_case.
+
+## S15 — JSX pipeline (2026-08-25)
+
+- **Compiled JSX passes RAW expression values to text nodes.** `{count()}` with a
+  number signal reaches createTextNode/replaceText as `0` (number). `setText`
+  is a string op on the wire — Rust serde rejects `"text":0` and the batch
+  never decodes. Coerce at the boundary (`textOf`: null/undefined → "",
+  else String(v)) in renderer.ts AND jsx.ts; universal's Renderer types lie
+  (say `string`), runtime disagrees.
+- **A batch the helper cannot decode answers with `seq: null`** — it never
+  parsed, so there is no seq to echo. The client used to route that to
+  `onUnmatchedReply` (usually unset) and the pending flush hung FOREVER,
+  silently. Now: reject the OLDEST pending (strict line ordering makes it the
+  culprit). Debugging signature: helper alive, one `[wire>>>]` line, no ack,
+  no stdin close.
+- **Universal rc.1's echoed `effect` supports the two-arg object-returning
+  form correctly** (createRenderEffect(fn, effectFn)) — the S12
+  [REACTIVITY_HALTED] cleanup-slot landmine applies to importing solid-js
+  primitives BESIDE universal, not to universal's own wrapper. Empirically
+  verified with a probe before trusting it. Do not re-add emulation.
+- **Universal rc.1 does NOT echo `setProperty`** — it is consumed internally by
+  the echoed `setProp` dispatcher. Bind createElement/setProp to
+  `raw().setProp`, which forwards to our config setProperty.
+- **Bun preload plugins DO transform the entry file** (onLoad applies to the
+  main entry too). Plugin gotchas: `targets: { esnext: true }` is invalid in
+  @babel/core transformSync (use no targets); module specifier resolution
+  needs the package exports map (`"./jsx"`) AND a root workspace devDep link
+  for examples/ to resolve `@solid-gpui/solid/jsx`.
+- **bun run script chain**: `bun --conditions=browser --preload X.ts FILE`
+  works, but inserting the subcommand `run` after flags prints usage —
+  scripts encode the direct form.
+- Tests that assert wire mutations MUST `await suite.flush()` — ops queue
+  until then; and register effects AFTER creating the elements they reference
+  (TDZ applies to commit closures too).

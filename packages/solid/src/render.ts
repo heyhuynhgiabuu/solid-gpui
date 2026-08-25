@@ -38,11 +38,36 @@ export async function render(
   opts: RenderOptions = {},
 ): Promise<RenderHandle> {
   const connection = opts.connection ?? spawnHelper({ mode: "window" })
+  return mount(connection, {}, code)
+}
+
+/**
+ * Shared mount path for every entry point (render(), the JSX runtime).
+ * Everything that wires a suite to a live helper — event routing included —
+ * happens HERE; hand-rolling this outside has silently broken event routing
+ * twice (see MEMORY "BYPASSED-SEAM BUG"). `onSuite` lets alternative
+ * authoring surfaces bind their module-level bindings before user code runs.
+ */
+export async function mount(
+  connection: HelperConnection,
+  options: { onSuite?: (suite: SolidGpuiRenderer) => void },
+  code: (h: H) => HostNode,
+): Promise<RenderHandle> {
   const { renderer, render, flush, handler, removeNode, firstChild, nextSibling } =
     createSolidRenderer(async (batch) => {
       // Route through the client's per-seq correlation; ReplyError propagates.
       return connection.sendBatch(batch)
     })
+  const suite: SolidGpuiRenderer = {
+    renderer,
+    render,
+    flush,
+    handler,
+    removeNode,
+    firstChild,
+    nextSibling,
+  }
+  options.onSuite?.(suite)
   const h = makeH(renderer)
   const container = renderer.createElement("#root")
   let activeDispose = render(() => code(h), container)
