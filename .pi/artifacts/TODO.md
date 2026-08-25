@@ -391,6 +391,15 @@ Design sketch:
       at the target) (17c7b06). Bonus S12c solid binding: transitionMs/
       transitionEasing props diff the style bag, changed numeric animatable
       keys emit setAnimation + companion setStyle omits them (4246191).
-- [ ] VERIFY: suites green; commit per sub-slice; independent review
+- [x] VERIFY S12: r1 (partial) exposed the h() eager-props gap -> reactive
+      function style prop (c74efb6); r2 NOT MERGEABLE — B1 companion setStyle
+      deleted numeric starts (poison on every animated change), B2 absent-
+      prev keys animated, M1 second setAnimation dropped in-flight keys ->
+      all fixed in 8930c2a; r3 verified fixes but timed out on a window
+      flake -> root-caused (fresh ListState's first prepaint wipes height
+      hints with no settle frame; poisoned lock cascade) and fixed in
+      dcd25cb (settle frame, suite now 2x faster and stable 10x11/11); r4:
+      MERGEABLE at dcd25cb. bun 85/85, tsc x3, cargo 93/93 (window 11/11),
+      clippy, fmt. Closed 2026-08-25.
 
 Cross-ref: PLAN.md Phase 2 roadmap (S12 entry)
