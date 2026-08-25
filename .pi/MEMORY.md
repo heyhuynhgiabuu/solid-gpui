@@ -423,3 +423,31 @@
 - Tests that assert wire mutations MUST `await suite.flush()` — ops queue
   until then; and register effects AFTER creating the elements they reference
   (TDZ applies to commit closures too).
+
+## S16 - npm packaging (2026-08-25)
+
+- **npm pack does NOT apply publishConfig** - the tarball manifest keeps the
+  dev exports (./src/index.ts). Staging-rewrite in scripts/pack-package.mjs
+  (copy files, rewrite exports to dist, pin workspace:* to version) is the
+  explicit, testable alternative.
+- **Node 24 parseArgs**: positionals are parsed.positionals, NOT values._
+  (values._ is undefined). Bites every .mjs script written from memory.
+- **tsdown CLI has no build subcommand** - bunx tsdown directly (a positional
+  is treated as the ENTRY -> confusing UNRESOLVED_ENTRY errors). Per-package
+  tsdown.config.ts in each package dir resolves relative to that package
+  (root-level config resolved entry paths from ITS location - outDir landed
+  under scripts/ the first time).
+- **Recursive copy pitfall**: copying dist contents into a pre-made dist dir
+  nested dist/dist. Copy the whole dir onto a clean parent instead.
+- **E2E local-tarball installs**: bun add fails on inter-package version pins
+  (no registry has them). Use npm + overrides mapping every @solid-gpui/*
+  dep to a file: tarball - simulates the published registry state.
+- **ESM-only packages can require.resolve through exports maps only via**
+  import.meta.resolve + fileURLToPath in Node scripts.
+- **Safety filter**: blocks destructive shell cleanup touching node_modules
+  and /tmp paths. Use fresh versioned scratch dirs under ~/dev/scratch.
+- Release invariant kept structural: platform helper packages publish FIRST
+  (client optionalDeps pin exact versions; a client published before its
+  helpers installs broken for everyone at that version).
+- Helper binary in tarball stays UNCOMPRESSED: npm preserves the exec bit;
+  gzip saved <40 percent and would cost a runtime decompress step.
