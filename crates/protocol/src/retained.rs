@@ -174,9 +174,7 @@ impl RetainedTree {
                     // animation running.
                     let to_number = serde_json::Number::from_f64(to).ok_or_else(|| {
                         ApplyError::InvalidMutation {
-                            message: format!(
-                                "setAnimation: target {key:?} is not a finite number"
-                            ),
+                            message: format!("setAnimation: target {key:?} is not a finite number"),
                         }
                     })?;
                     node.style

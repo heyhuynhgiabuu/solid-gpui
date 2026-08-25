@@ -1,7 +1,8 @@
 use solid_gpui_protocol::{
     ApplyError, Command, ElementId, Event, EventType, Mutation, MutationBatch, MutationHandler,
-    ProtocolError, Reply, ReplyCode, command_from_json, command_to_json, event_from_json,
-    event_to_json, from_json, reply_from_json, reply_to_json, to_json, RetainedTree};
+    ProtocolError, Reply, ReplyCode, RetainedTree, command_from_json, command_to_json,
+    event_from_json, event_to_json, from_json, reply_from_json, reply_to_json, to_json,
+};
 use std::fs;
 
 fn fixture() -> String {

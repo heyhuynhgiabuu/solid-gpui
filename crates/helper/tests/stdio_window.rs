@@ -805,3 +805,61 @@ fn window_mode_animation_frames_flow_and_settle() {
     drop(stdin);
     child.wait().ok();
 }
+
+/// Review B1 regression: the Solid renderer's animated-style emission is a
+/// companion setStyle (animated keys restated at their PREVIOUS values — the
+/// numeric starts) followed by setAnimation in the SAME batch. Applying that
+/// exact shape through the real helper must ack, not applyFailed-poison (the
+/// pre-fix omission of the starts from the companion deleted them, since
+/// helper-side setStyle REPLACES the style map).
+#[test]
+fn window_mode_renderer_shaped_animation_pair_applies() {
+    if skip() {
+        return;
+    }
+    let _lock = WINDOW_TEST_LOCK.lock().unwrap();
+    let bin = env!("CARGO_BIN_EXE_solid-gpui-helper");
+    let mut child = Command::new(bin)
+        .arg("--stdio-window")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .spawn()
+        .expect("helper spawns");
+    let mut stdin = child.stdin.take().expect("stdin piped");
+    let reader = BufReader::new(child.stdout.take().expect("stdout piped"));
+    let mut lines = reader.lines();
+
+    let mount = r#"{"v":1,"seq":130,"mutations":[{"op":"createElement","id":1,"elementType":"div"},{"op":"setRoot","id":1},{"op":"setStyle","id":1,"style":{"height":40,"opacity":1,"width":200}}]}"#;
+    writeln!(stdin, "{mount}").unwrap();
+    stdin.flush().unwrap();
+    assert_eq!(
+        lines.next().unwrap().unwrap(),
+        r#"{"type":"ack","seq":130,"applied":3}"#
+    );
+
+    // Exactly what renderer.ts emits for `style: () => ({opacity: 1, width:
+    // flip() ? 300 : 200})` with transitionMs 400 when the key flips: the
+    // companion carries the previous width (the start), then the animation.
+    let pair = r#"{"v":1,"seq":131,"mutations":[{"op":"setStyle","id":1,"style":{"opacity":1,"width":200}},{"op":"setAnimation","id":1,"target":{"width":300},"transitionMs":400,"easing":"linear"}]}"#;
+    writeln!(stdin, "{pair}").unwrap();
+    stdin.flush().unwrap();
+    let ack = lines.next().unwrap().unwrap();
+    assert_eq!(
+        ack, r#"{"type":"ack","seq":131,"applied":2}"#,
+        "renderer-shaped pair must apply"
+    );
+
+    // A second, staggered setAnimation for a DIFFERENT key must also apply
+    // (review M1: it merges into the in-flight entry, keeping width's clock).
+    let second = r#"{"v":1,"seq":132,"mutations":[{"op":"setAnimation","id":1,"target":{"opacity":0.5},"transitionMs":100,"easing":"linear"}]}"#;
+    writeln!(stdin, "{second}").unwrap();
+    stdin.flush().unwrap();
+    let ack2 = lines.next().unwrap().unwrap();
+    assert_eq!(
+        ack2, r#"{"type":"ack","seq":132,"applied":1}"#,
+        "staggered second key must apply"
+    );
+
+    drop(stdin);
+    child.wait().ok();
+}

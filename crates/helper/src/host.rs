@@ -418,20 +418,34 @@ impl HostView {
                 key: key.clone(),
                 from,
                 to,
+                started: now,
+                duration_ms: *transition_ms,
+                easing,
             });
         }
         if transitions.is_empty() {
             return None;
         }
-        Some((
-            *id,
-            ActiveAnimation {
-                transitions,
-                started: now,
-                duration_ms: *transition_ms,
-                easing,
-            },
-        ))
+        Some((*id, ActiveAnimation { transitions }))
+    }
+
+    /// Merge a freshly prepared entry into the runtime map WITHOUT dropping
+    /// the element's other in-flight transitions: a second setAnimation for a
+    /// different key mid-flight must not snap the first (review M1). Same-key
+    /// transitions are replaced (retarget).
+    pub(crate) fn upsert_animation(&mut self, id: ElementId, entry: ActiveAnimation) {
+        let existing = self
+            .animations
+            .entry(id)
+            .or_insert_with(|| ActiveAnimation {
+                transitions: Vec::new(),
+            });
+        for tr in entry.transitions {
+            match existing.transitions.iter_mut().find(|t| t.key == tr.key) {
+                Some(slot) => *slot = tr,
+                None => existing.transitions.push(tr),
+            }
+        }
     }
 
     pub fn ensure_list_state(&mut self, id: ElementId) {
@@ -601,6 +615,12 @@ struct AnimationTransition {
     key: String,
     from: f64,
     to: f64,
+    /// Per-key timing: a second setAnimation for a DIFFERENT key mid-flight
+    /// upserts into the same entry without disturbing the first key's clock
+    /// (entry-level timing snapped the older key to its target; review M1).
+    started: std::time::Instant,
+    duration_ms: u32,
+    easing: solid_gpui_protocol::Easing,
 }
 
 /// Runtime state for one element's active setAnimation. Created at apply
@@ -609,28 +629,29 @@ struct AnimationTransition {
 /// or by reduce-motion (the static style already holds the target).
 pub(crate) struct ActiveAnimation {
     transitions: Vec<AnimationTransition>,
-    started: std::time::Instant,
-    duration_ms: u32,
-    easing: solid_gpui_protocol::Easing,
 }
 
 impl ActiveAnimation {
-    fn progress_at(&self, now: std::time::Instant) -> f64 {
-        if self.duration_ms == 0 {
-            return 1.0;
-        }
-        let elapsed = now.duration_since(self.started).as_millis() as f64;
-        (elapsed / f64::from(self.duration_ms)).clamp(0.0, 1.0)
+    /// Current numeric value for `key`, or None when this animation does not
+    /// touch it. Each transition runs on its own clock (M1).
+    fn value_at(&self, key: &str, now: std::time::Instant) -> Option<f64> {
+        self.transitions.iter().find(|tr| tr.key == key).map(|tr| {
+            let progress = if tr.duration_ms == 0 {
+                1.0
+            } else {
+                let elapsed = now.duration_since(tr.started).as_millis() as f64;
+                (elapsed / f64::from(tr.duration_ms)).clamp(0.0, 1.0)
+            };
+            let t = ease(tr.easing, progress);
+            tr.from + (tr.to - tr.from) * t
+        })
     }
 
-    /// Current numeric value for `key`, or None when this animation does not
-    /// touch it.
-    fn value_at(&self, key: &str, now: std::time::Instant) -> Option<f64> {
-        let t = ease(self.easing, self.progress_at(now));
+    /// True once every transition has clamped past its end.
+    fn is_complete(&self, now: std::time::Instant) -> bool {
         self.transitions
             .iter()
-            .find(|tr| tr.key == key)
-            .map(|tr| tr.from + (tr.to - tr.from) * t)
+            .all(|tr| now.duration_since(tr.started).as_millis() >= u128::from(tr.duration_ms))
     }
 }
 
@@ -986,9 +1007,8 @@ impl Render for HostView {
         // so the element jumps straight to the end state.
         let now = std::time::Instant::now();
         let reduce_motion = cx.reduce_motion();
-        self.animations.retain(|_, a| {
-            !reduce_motion && now.duration_since(a.started).as_millis() < u128::from(a.duration_ms)
-        });
+        self.animations
+            .retain(|id, a| !reduce_motion && self.tree.get(*id).is_some() && !a.is_complete(now));
         let animating = !self.animations.is_empty();
         let mut ctx = RenderCtx {
             scroll_handles: &self.scroll_handles,
@@ -1293,7 +1313,10 @@ fn build_input_element(
     }
     // Textarea autosize: rows = line count clamped to [minRows, maxRows],
     // height = rows * line height + vertical padding. v1 measures the logical
-    // line count, not wrapped lines (no reflow-aware measurement).
+    // line count, not wrapped lines (no reflow-aware measurement). v1
+    // limitation: the height computation reads the STATIC fontSize/padding,
+    // so animating those keys snaps the outer height to its end state at t=0
+    // while the values themselves interpolate (documented; review Minor 1).
     if multiline {
         let min_rows = style_num(&node.style, "minRows").unwrap_or(1.0).max(1.0) as usize;
         let max_rows = style_num(&node.style, "maxRows")
@@ -1648,21 +1671,25 @@ mod tests {
         assert!(e(Easing::EaseIn, 0.5) < 0.5);
     }
 
+    fn transition(key: &str, from: f64, to: f64, duration_ms: u32) -> AnimationTransition {
+        AnimationTransition {
+            key: key.into(),
+            from,
+            to,
+            started: std::time::Instant::now(),
+            duration_ms,
+            easing: solid_gpui_protocol::Easing::Linear,
+        }
+    }
+
     #[test]
     fn animation_interpolates_lerped_values_and_clamps_past_end() {
         let anim = ActiveAnimation {
-            transitions: vec![AnimationTransition {
-                key: "width".into(),
-                from: 200.0,
-                to: 300.0,
-            }],
-            started: std::time::Instant::now(),
-            duration_ms: 100,
-            easing: solid_gpui_protocol::Easing::Linear,
+            transitions: vec![transition("width", 200.0, 300.0, 100)],
         };
         // The 0ms instant is captured at creation; a slightly later `now`
         // must yield the exact linear interpolation.
-        let start = anim.started;
+        let start = anim.transitions[0].started;
         let t25 = start + std::time::Duration::from_millis(25);
         assert_eq!(anim.value_at("width", t25), Some(225.0));
         // Untouched keys are None.
@@ -1670,22 +1697,17 @@ mod tests {
         // Past the end clamps to the target (render drops it right after).
         let past = start + std::time::Duration::from_millis(500);
         assert_eq!(anim.value_at("width", past), Some(300.0));
+        assert!(anim.is_complete(past));
+        assert!(!anim.is_complete(t25));
     }
 
     #[test]
     fn retarget_start_comes_from_the_inflight_value_not_the_old_target() {
         // First animation: 200 -> 300 over 100ms, linear.
         let inflight = ActiveAnimation {
-            transitions: vec![AnimationTransition {
-                key: "width".into(),
-                from: 200.0,
-                to: 300.0,
-            }],
-            started: std::time::Instant::now(),
-            duration_ms: 100,
-            easing: solid_gpui_protocol::Easing::Linear,
+            transitions: vec![transition("width", 200.0, 300.0, 100)],
         };
-        let now = inflight.started + std::time::Duration::from_millis(50);
+        let now = inflight.transitions[0].started + std::time::Duration::from_millis(50);
         // The static style ALREADY holds the old target (apply merged it).
         let static_value = StyleValue::Number(300u32.into());
         // Retargeting at the halfway point must start at the CURRENT
@@ -1706,16 +1728,75 @@ mod tests {
     #[test]
     fn zero_duration_animation_jumps_to_target() {
         let anim = ActiveAnimation {
-            transitions: vec![AnimationTransition {
-                key: "opacity".into(),
-                from: 1.0,
-                to: 0.0,
-            }],
-            started: std::time::Instant::now(),
-            duration_ms: 0,
-            easing: solid_gpui_protocol::Easing::Linear,
+            transitions: vec![transition("opacity", 1.0, 0.0, 0)],
         };
-        assert_eq!(anim.value_at("opacity", anim.started), Some(0.0));
+        assert_eq!(
+            anim.value_at("opacity", anim.transitions[0].started),
+            Some(0.0)
+        );
+    }
+
+    #[test]
+    fn staggered_second_animation_keeps_the_first_keys_clock() {
+        // Review M1 regression: flip width (400ms), then 300ms later flip
+        // opacity (100ms). The upsert must keep BOTH transitions running on
+        // their own clocks — width at 75% when the second lands, and the
+        // entry must not read complete until the OLDER key finishes.
+        let mut view = HostView::new();
+        view.tree
+            .apply(&solid_gpui_protocol::Mutation::CreateElement {
+                id: 1.into(),
+                element_type: ElementType::Div,
+            })
+            .unwrap();
+        view.tree
+            .apply(&solid_gpui_protocol::Mutation::SetStyle {
+                id: 1.into(),
+                style: StyleMap::from([
+                    ("width".to_string(), StyleValue::Number(200u32.into())),
+                    ("opacity".to_string(), StyleValue::Number(1u32.into())),
+                ]),
+            })
+            .unwrap();
+
+        let first = view
+            .prepare_animation(&solid_gpui_protocol::Mutation::SetAnimation {
+                id: 1.into(),
+                target: StyleMap::from([("width".to_string(), StyleValue::Number(300u32.into()))]),
+                transition_ms: 400,
+                easing: Some("linear".to_string()),
+            })
+            .expect("first prepares");
+        let t0 = first.1.transitions[0].started;
+        view.upsert_animation(first.0, first.1);
+
+        std::thread::sleep(std::time::Duration::from_millis(300));
+        let second = view
+            .prepare_animation(&solid_gpui_protocol::Mutation::SetAnimation {
+                id: 1.into(),
+                target: StyleMap::from([(
+                    "opacity".to_string(),
+                    StyleValue::Number(serde_json::Number::from_f64(0.5).unwrap()),
+                )]),
+                transition_ms: 100,
+                easing: Some("linear".to_string()),
+            })
+            .expect("second prepares");
+        let t1 = second.1.transitions[0].started;
+        view.upsert_animation(second.0, second.1);
+
+        let entry = view.animations.get(&1.into()).unwrap();
+        // Width still animates on its OWN clock (300ms into 400ms = 75%):
+        // the pre-fix insert() would have dropped it entirely.
+        assert_eq!(
+            entry.value_at("width", t0 + std::time::Duration::from_millis(300)),
+            Some(275.0)
+        );
+        // Opacity runs on the second clock (starts now).
+        assert_eq!(entry.value_at("opacity", t1), Some(1.0));
+        // Entry completes only when the OLDER transition completes.
+        assert!(!entry.is_complete(t0 + std::time::Duration::from_millis(350)));
+        assert!(entry.is_complete(t0 + std::time::Duration::from_millis(450)));
     }
 
     #[test]

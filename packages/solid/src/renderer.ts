@@ -8,6 +8,7 @@ import {
 import {
   elementId,
   ANIMATABLE_STYLE_KEYS,
+  EASING_NAMES,
   type ElementType,
   type EasingName,
   type EventType,
@@ -196,11 +197,20 @@ export function createSolidRenderer(send: Send): SolidGpuiRenderer {
       if (node.kind === "container") return
       const id = elementId(node.id)
       if (name === "transitionMs") {
-        node.transitionMs = typeof value === "number" ? value : undefined
+        // Validate at the boundary: an invalid value emitted on the wire is
+        // a decode error there and would poison the renderer (review B2).
+        node.transitionMs =
+          typeof value === "number" && Number.isInteger(value) && value >= 0
+            ? value
+            : undefined
         return
       }
       if (name === "transitionEasing") {
-        node.transitionEasing = value as EasingName | undefined
+        node.transitionEasing =
+          typeof value === "string" &&
+          (EASING_NAMES as readonly string[]).includes(value)
+            ? (value as EasingName)
+            : undefined
         return
       }
       if (name === "style") {
@@ -208,27 +218,37 @@ export function createSolidRenderer(send: Send): SolidGpuiRenderer {
         const prev = node.lastStyle
         node.lastStyle = next
         if (node.transitionMs && prev) {
-          // Numeric animatable keys that CHANGED transition; everything else
-          // (including the animated keys' old values) flows statically — the
-          // companion setStyle omits the animated keys so it does not snap
-          // them to the target before the helper starts interpolating.
+          // A key animates only when BOTH ends are numeric and it changed —
+          // mirroring the wire's numeric-start rule (animating an absent or
+          // non-numeric start is an applyFailed on the helper and poisons
+          // the renderer; review B2). Everything else flows statically.
           const targets: Record<string, number> = {}
           for (const k of Object.keys(next) as StyleKey[]) {
             const v = next[k]
-            const changed = prev[k] !== v
+            const p = prev[k]
             if (
-              changed &&
               typeof v === "number" &&
+              typeof p === "number" &&
+              v !== p &&
               (ANIMATABLE_STYLE_KEYS as readonly string[]).includes(k)
             ) {
               targets[k] = v
             }
           }
+          // The companion setStyle REPLACES the helper-side style map, so it
+          // must carry the animated keys' PREVIOUS numeric values — omitting
+          // them deletes the numeric start before setAnimation applies in
+          // the same batch (applyFailed -> poison; review B1). Restating the
+          // starts cannot snap: the setAnimation merge in the same batch
+          // lands the targets before any render observes the style.
           const targetKeys = new Set(Object.keys(targets))
-          const statics = Object.fromEntries(
-            Object.entries(next).filter(([k]) => !targetKeys.has(k)),
+          const companion = Object.fromEntries(
+            (Object.keys(next) as StyleKey[]).map((k) => [
+              k,
+              targetKeys.has(k) ? (prev[k] as number) : next[k],
+            ]),
           ) as StyleMap
-          push({ op: "setStyle", id, style: statics })
+          push({ op: "setStyle", id, style: companion })
           if (Object.keys(targets).length > 0) {
             push({
               op: "setAnimation",

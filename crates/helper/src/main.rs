@@ -444,7 +444,7 @@ fn run_stdio_window() {
                                         // no jump); render substitutes them
                                         // per frame until complete.
                                         if let Some((id, entry)) = pending_animation {
-                                            view.animations.insert(id, entry);
+                                            view.upsert_animation(id, entry);
                                         }
                                         if let solid_gpui_protocol::Mutation::SetEventListener {
                                             id,

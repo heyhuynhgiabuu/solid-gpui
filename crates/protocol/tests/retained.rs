@@ -655,10 +655,12 @@ fn set_animation_merges_target_so_end_state_sticks() {
     // (or without animation support at all) the element rests at the target.
     // Compare numerically: the merge stores f64 (serde_json numbers
     // distinguish 300 from 300.0).
-    let merged = |key: &str| style.get(key).and_then(|v| match v {
-        StyleValue::Number(n) => n.as_f64(),
-        _ => None,
-    });
+    let merged = |key: &str| {
+        style.get(key).and_then(|v| match v {
+            StyleValue::Number(n) => n.as_f64(),
+            _ => None,
+        })
+    };
     assert_eq!(merged("width"), Some(300.0));
     assert_eq!(merged("opacity"), Some(0.5));
 }

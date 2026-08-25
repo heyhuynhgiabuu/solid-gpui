@@ -23,7 +23,9 @@ export interface H {
 }
 
 export function makeH(R: Renderer<HostNode>): H {
-  return ((tag: string, props: Record<string, unknown> = {}, ...children: unknown[]) => {
+  return ((tag: string, rawProps?: Record<string, unknown> | null, ...children: unknown[]) => {
+    // `= {}` alone does not cover an explicit null (Object.entries throws).
+    const props: Record<string, unknown> = rawProps ?? {}
     const el = R.createElement(tag)
     for (const [name, value] of Object.entries(props)) {
       if (name === "style" && typeof value === "function") {
