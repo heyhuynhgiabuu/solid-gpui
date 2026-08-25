@@ -8,6 +8,7 @@ use gpui::{
     UTF16Selection, WeakEntity, Window, div, list, px, rgb, rgba, size,
 };
 use solid_gpui_protocol::EventType;
+use solid_gpui_protocol::Mutation;
 use solid_gpui_protocol::StyleMap;
 use solid_gpui_protocol::{ElementId, ElementType, Event, RetainedTree, StyleValue};
 use std::cell::RefCell;
@@ -202,6 +203,7 @@ pub struct HostView {
     list_follow_armed: HashSet<ElementId>,
     /// Children each list rendered last frame (see RenderCtx).
     list_children: HashMap<ElementId, Vec<ElementId>>,
+    pub(crate) animations: HashMap<ElementId, ActiveAnimation>,
 }
 
 impl HostView {
@@ -222,6 +224,7 @@ impl HostView {
             list_alignment: HashMap::new(),
             list_follow_armed: HashSet::new(),
             list_children: HashMap::new(),
+            animations: HashMap::new(),
         }
     }
 
@@ -380,6 +383,57 @@ impl HostView {
     /// first paint (render-population is lazy, same pattern as scroll/focus
     /// handles). Idempotent with the render-time get-or-create.
     ///
+    /// Capture a setAnimation's runtime entry BEFORE the mutation applies
+    /// (apply merges the targets into the static style, overwriting the old
+    /// values the starts must come from). Retargeting mid-flight starts from
+    /// the CURRENT interpolated value, not the old target — no jump. Returns
+    /// None when apply will reject anyway (missing element / numeric start);
+    /// the caller only inserts on apply success.
+    pub fn prepare_animation(&self, m: &Mutation) -> Option<(ElementId, ActiveAnimation)> {
+        let Mutation::SetAnimation {
+            id,
+            target,
+            transition_ms,
+            easing,
+        } = m
+        else {
+            return None;
+        };
+        let node = self.tree.get(*id)?;
+        let easing = easing
+            .as_deref()
+            .and_then(solid_gpui_protocol::Easing::parse)
+            .unwrap_or(solid_gpui_protocol::Easing::EaseOut);
+        let now = std::time::Instant::now();
+        let mut transitions = Vec::with_capacity(target.len());
+        for (key, value) in target {
+            let StyleValue::Number(n) = value else {
+                continue; // apply rejects non-numeric targets; entry discarded
+            };
+            let Some(to) = n.as_f64() else {
+                continue;
+            };
+            let from = resolve_start(self.animations.get(id), node.style.get(key), key, now)?;
+            transitions.push(AnimationTransition {
+                key: key.clone(),
+                from,
+                to,
+            });
+        }
+        if transitions.is_empty() {
+            return None;
+        }
+        Some((
+            *id,
+            ActiveAnimation {
+                transitions,
+                started: now,
+                duration_ms: *transition_ms,
+                easing,
+            },
+        ))
+    }
+
     pub fn ensure_list_state(&mut self, id: ElementId) {
         let Some(node) = self.tree.get(id) else {
             return;
@@ -542,6 +596,78 @@ fn key_event(id: ElementId, event_type: EventType, keystroke: &gpui::Keystroke) 
 /// Shared render-time context threaded through build_element: the handle
 /// maps (scroll/focus/input), focus subscription bookkeeping, the event sink
 /// and the owning view handle (for repaint requests after IME edits).
+/// One interpolating key: numeric start -> target.
+struct AnimationTransition {
+    key: String,
+    from: f64,
+    to: f64,
+}
+
+/// Runtime state for one element's active setAnimation. Created at apply
+/// time (starts captured from the element's current interpolated values, so
+/// retargeting mid-flight does not jump); dropped by render once complete
+/// or by reduce-motion (the static style already holds the target).
+pub(crate) struct ActiveAnimation {
+    transitions: Vec<AnimationTransition>,
+    started: std::time::Instant,
+    duration_ms: u32,
+    easing: solid_gpui_protocol::Easing,
+}
+
+impl ActiveAnimation {
+    fn progress_at(&self, now: std::time::Instant) -> f64 {
+        if self.duration_ms == 0 {
+            return 1.0;
+        }
+        let elapsed = now.duration_since(self.started).as_millis() as f64;
+        (elapsed / f64::from(self.duration_ms)).clamp(0.0, 1.0)
+    }
+
+    /// Current numeric value for `key`, or None when this animation does not
+    /// touch it.
+    fn value_at(&self, key: &str, now: std::time::Instant) -> Option<f64> {
+        let t = ease(self.easing, self.progress_at(now));
+        self.transitions
+            .iter()
+            .find(|tr| tr.key == key)
+            .map(|tr| tr.from + (tr.to - tr.from) * t)
+    }
+}
+
+/// Cubic curves; t is clamped progress in [0,1]. No overshoot (springs are
+/// deliberately out of scope for v1 wire semantics).
+fn ease(easing: solid_gpui_protocol::Easing, t: f64) -> f64 {
+    match easing {
+        solid_gpui_protocol::Easing::Linear => t,
+        solid_gpui_protocol::Easing::EaseIn => t * t * t,
+        solid_gpui_protocol::Easing::EaseOut => 1.0 - (1.0 - t).powi(3),
+        solid_gpui_protocol::Easing::EaseInOut => {
+            if t < 0.5 {
+                4.0 * t * t * t
+            } else {
+                1.0 - (-2.0 * t + 2.0).powi(3) / 2.0
+            }
+        }
+    }
+}
+
+/// Start value for a transition: the in-flight animation's CURRENT
+/// interpolated value when retargeting (no jump), else the element's static
+/// numeric value (None → apply will reject).
+fn resolve_start(
+    inflight: Option<&ActiveAnimation>,
+    static_value: Option<&StyleValue>,
+    key: &str,
+    now: std::time::Instant,
+) -> Option<f64> {
+    inflight
+        .and_then(|a| a.value_at(key, now))
+        .or_else(|| match static_value {
+            Some(StyleValue::Number(n)) => n.as_f64(),
+            _ => None,
+        })
+}
+
 struct RenderCtx<'a> {
     scroll_handles: &'a ScrollHandles,
     focus_handles: &'a FocusHandles,
@@ -562,6 +688,29 @@ struct RenderCtx<'a> {
     /// Children each list rendered last frame — the splice diff baseline
     /// (prefix/suffix diff keeps append/remove from resetting the scroll).
     list_children: &'a mut HashMap<ElementId, Vec<ElementId>>,
+    /// In-flight setAnimation states; render substitutes interpolated values
+    /// for the touched keys (the static style already holds the target).
+    animations: &'a HashMap<ElementId, ActiveAnimation>,
+    /// Snapshot taken at render start so every substitution in the frame
+    /// interpolates against the same instant.
+    now: std::time::Instant,
+}
+
+/// The style value a build loop should apply for `key`: the interpolated
+/// number while an animation is in flight, otherwise the static value.
+fn effective_value(
+    ctx: &RenderCtx,
+    id: ElementId,
+    key: &str,
+    static_value: &StyleValue,
+) -> StyleValue {
+    if let Some(anim) = ctx.animations.get(&id)
+        && let Some(v) = anim.value_at(key, ctx.now)
+        && let Some(n) = serde_json::Number::from_f64(v)
+    {
+        return StyleValue::Number(n);
+    }
+    static_value.clone()
 }
 
 /// The per-frame gpui InputHandler registered for a focused input/textarea.
@@ -831,6 +980,16 @@ impl Render for HostView {
         for counter in self.list_render_counts.values() {
             counter.set(0);
         }
+        // Animation clock: drop entries whose element is gone and entries
+        // that finished (the static style already rests at the target).
+        // reduce-motion skips interpolation entirely — entries are dropped
+        // so the element jumps straight to the end state.
+        let now = std::time::Instant::now();
+        let reduce_motion = cx.reduce_motion();
+        self.animations.retain(|_, a| {
+            !reduce_motion && now.duration_since(a.started).as_millis() < u128::from(a.duration_ms)
+        });
+        let animating = !self.animations.is_empty();
         let mut ctx = RenderCtx {
             scroll_handles: &self.scroll_handles,
             focus_handles: &self.focus_handles,
@@ -844,6 +1003,8 @@ impl Render for HostView {
             list_alignment: &mut self.list_alignment,
             list_follow_armed: &mut self.list_follow_armed,
             list_children: &mut self.list_children,
+            animations: &self.animations,
+            now,
         };
         let mut content = match self.tree.root() {
             Some(root) => build_element(&self.tree, root, window, cx, &mut ctx),
@@ -851,6 +1012,12 @@ impl Render for HostView {
             None => div().size_full().bg(rgb(0x1e1e2e)).into_any_element(),
         };
         self.stats.push(started.elapsed());
+
+        // While any transition is in flight, keep the frame loop alive so
+        // interpolation advances (settles on its own once all complete).
+        if animating {
+            window.request_animation_frame();
+        }
 
         // Focus the autoFocus target after this frame's deferred callbacks:
         // the on_focus_in subscription (registered during build_element,
@@ -935,7 +1102,7 @@ fn build_element(
     }
     let mut el = div();
     for (key, value) in &node.style {
-        el = apply_style(el, key, value);
+        el = apply_style(el, key, &effective_value(ctx, id, key, value));
     }
     for child in &node.children {
         el = el.child(build_element(tree, *child, window, cx, ctx));
@@ -1122,7 +1289,7 @@ fn build_input_element(
 
     let mut el = div();
     for (key, value) in &node.style {
-        el = apply_style(el, key, value);
+        el = apply_style(el, key, &effective_value(ctx, id, key, value));
     }
     // Textarea autosize: rows = line count clamped to [minRows, maxRows],
     // height = rows * line height + vertical padding. v1 measures the logical
@@ -1266,6 +1433,10 @@ fn build_list_element(
 
     let list_id = id;
     let state_el = state.clone();
+    // Frame-start clock snapshot: items interpolate against the same instant
+    // as the rest of the frame even though the List builds them later in
+    // layout.
+    let frame_now = ctx.now;
     let render_item = move |ix: usize, window: &mut Window, cx: &mut App| {
         counter.set(counter.get() + 1);
         entity.update(cx, |view, vcx| {
@@ -1290,6 +1461,8 @@ fn build_list_element(
                 list_alignment: &mut view.list_alignment,
                 list_follow_armed: &mut view.list_follow_armed,
                 list_children: &mut view.list_children,
+                animations: &view.animations,
+                now: frame_now,
             };
             build_element(&view.tree, cid, window, vcx, &mut ctx)
         })
@@ -1314,7 +1487,7 @@ fn build_list_element(
     };
     let mut el = wrapper.flex().child(list(state_el, render_item));
     for (key, value) in &node.style {
-        el = apply_style(el, key, value);
+        el = apply_style(el, key, &effective_value(ctx, id, key, value));
     }
     let el = el.id(id.0 as usize);
     let el = apply_interactive(el, tree, id, window, cx, ctx, None, false);
@@ -1446,6 +1619,104 @@ fn parse_color(value: &StyleValue) -> Option<Rgba> {
 mod tests {
     use super::*;
     use gpui::Rgba;
+
+    #[test]
+    fn easing_curves_hit_their_endpoints_and_midpoints() {
+        use solid_gpui_protocol::Easing;
+        let e = |c: Easing, t: f64| ease(c, t);
+        for c in [
+            Easing::Linear,
+            Easing::EaseIn,
+            Easing::EaseOut,
+            Easing::EaseInOut,
+        ] {
+            assert!((e(c, 0.0) - 0.0).abs() < 1e-9, "{c:?} at 0");
+            assert!((e(c, 1.0) - 1.0).abs() < 1e-9, "{c:?} at 1");
+            // Monotonic on a coarse grid: progress never runs backwards.
+            let mut prev = 0.0;
+            for i in 1..=10 {
+                let t = f64::from(i) / 10.0;
+                let v = e(c, t);
+                assert!(v >= prev - 1e-9, "{c:?} not monotonic at {t}");
+                prev = v;
+            }
+        }
+        assert!((e(Easing::Linear, 0.25) - 0.25).abs() < 1e-9);
+        assert!((e(Easing::EaseInOut, 0.5) - 0.5).abs() < 1e-9);
+        // easeOut front-loads: more than half the distance at t=0.5.
+        assert!(e(Easing::EaseOut, 0.5) > 0.5);
+        assert!(e(Easing::EaseIn, 0.5) < 0.5);
+    }
+
+    #[test]
+    fn animation_interpolates_lerped_values_and_clamps_past_end() {
+        let anim = ActiveAnimation {
+            transitions: vec![AnimationTransition {
+                key: "width".into(),
+                from: 200.0,
+                to: 300.0,
+            }],
+            started: std::time::Instant::now(),
+            duration_ms: 100,
+            easing: solid_gpui_protocol::Easing::Linear,
+        };
+        // The 0ms instant is captured at creation; a slightly later `now`
+        // must yield the exact linear interpolation.
+        let start = anim.started;
+        let t25 = start + std::time::Duration::from_millis(25);
+        assert_eq!(anim.value_at("width", t25), Some(225.0));
+        // Untouched keys are None.
+        assert_eq!(anim.value_at("opacity", t25), None);
+        // Past the end clamps to the target (render drops it right after).
+        let past = start + std::time::Duration::from_millis(500);
+        assert_eq!(anim.value_at("width", past), Some(300.0));
+    }
+
+    #[test]
+    fn retarget_start_comes_from_the_inflight_value_not_the_old_target() {
+        // First animation: 200 -> 300 over 100ms, linear.
+        let inflight = ActiveAnimation {
+            transitions: vec![AnimationTransition {
+                key: "width".into(),
+                from: 200.0,
+                to: 300.0,
+            }],
+            started: std::time::Instant::now(),
+            duration_ms: 100,
+            easing: solid_gpui_protocol::Easing::Linear,
+        };
+        let now = inflight.started + std::time::Duration::from_millis(50);
+        // The static style ALREADY holds the old target (apply merged it).
+        let static_value = StyleValue::Number(300u32.into());
+        // Retargeting at the halfway point must start at the CURRENT
+        // interpolated 250, not jump from the merged 300.
+        assert_eq!(
+            resolve_start(Some(&inflight), Some(&static_value), "width", now),
+            Some(250.0)
+        );
+        // With no animation running, the static value is the start.
+        assert_eq!(
+            resolve_start(None, Some(&static_value), "width", now),
+            Some(300.0)
+        );
+        // No numeric static value → None (apply rejects).
+        assert_eq!(resolve_start(None, None, "width", now), None);
+    }
+
+    #[test]
+    fn zero_duration_animation_jumps_to_target() {
+        let anim = ActiveAnimation {
+            transitions: vec![AnimationTransition {
+                key: "opacity".into(),
+                from: 1.0,
+                to: 0.0,
+            }],
+            started: std::time::Instant::now(),
+            duration_ms: 0,
+            easing: solid_gpui_protocol::Easing::Linear,
+        };
+        assert_eq!(anim.value_at("opacity", anim.started), Some(0.0));
+    }
 
     #[test]
     fn six_digit_hex_is_opaque_rgb() {

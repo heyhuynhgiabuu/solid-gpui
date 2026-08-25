@@ -728,3 +728,80 @@ fn window_mode_follow_tail_toggle_keeps_items() {
     let status = child.wait().expect("wait");
     assert_eq!(status.code(), Some(0), "EOF must exit 0");
 }
+
+/// setAnimation must drive continuous frames while the transition runs and
+/// settle (no idle frame churn) once complete. Observable via getStats
+/// frame counts — no pixel capture needed.
+#[test]
+fn window_mode_animation_frames_flow_and_settle() {
+    if skip() {
+        return;
+    }
+    let _lock = WINDOW_TEST_LOCK.lock().unwrap();
+    let bin = env!("CARGO_BIN_EXE_solid-gpui-helper");
+    let mut child = Command::new(bin)
+        .arg("--stdio-window")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .spawn()
+        .expect("helper spawns");
+    let mut stdin = child.stdin.take().expect("stdin piped");
+    let reader = BufReader::new(child.stdout.take().expect("stdout piped"));
+    let mut lines = reader.lines();
+
+    let mount = r#"{"v":1,"seq":120,"mutations":[{"op":"createElement","id":1,"elementType":"div"},{"op":"setRoot","id":1},{"op":"setStyle","id":1,"style":{"height":40,"opacity":1,"width":200}}]}"#;
+    writeln!(stdin, "{mount}").unwrap();
+    stdin.flush().unwrap();
+    assert_eq!(
+        lines.next().unwrap().unwrap(),
+        r#"{"type":"ack","seq":120,"applied":3}"#
+    );
+
+    fn stats(
+        seq: u32,
+        stdin: &mut std::process::ChildStdin,
+        lines: &mut dyn Iterator<Item = std::io::Result<String>>,
+    ) -> serde_json::Value {
+        writeln!(stdin, r#"{{"type":"getStats","seq":{seq}}}"#).unwrap();
+        stdin.flush().unwrap();
+        serde_json::from_str(&lines.next().unwrap().unwrap()).unwrap()
+    }
+
+    // Let the mount frame land, then snapshot the frame count.
+    std::thread::sleep(std::time::Duration::from_millis(300));
+    let before = stats(121, &mut stdin, &mut lines);
+    let frames0 = before["value"]["frames"].as_u64().expect("frames");
+
+    // 400ms linear transition: while running, each render requests the next
+    // frame, so the count must climb well past the mount baseline.
+    let anim = r#"{"v":1,"seq":122,"mutations":[{"op":"setAnimation","id":1,"target":{"opacity":0.5,"width":300},"transitionMs":400,"easing":"linear"}]}"#;
+    writeln!(stdin, "{anim}").unwrap();
+    stdin.flush().unwrap();
+    assert_eq!(
+        lines.next().unwrap().unwrap(),
+        r#"{"type":"ack","seq":122,"applied":1}"#
+    );
+    std::thread::sleep(std::time::Duration::from_millis(150));
+    let mid = stats(123, &mut stdin, &mut lines);
+    let frames1 = mid["value"]["frames"].as_u64().expect("frames");
+    assert!(
+        frames1 >= frames0 + 3,
+        "animation must drive frames: {frames0} -> {frames1}"
+    );
+
+    // Past the transition end the frame source stops: two snapshots 300ms
+    // apart must agree (±1 for a stray system frame).
+    std::thread::sleep(std::time::Duration::from_millis(500));
+    let done = stats(124, &mut stdin, &mut lines);
+    let frames2 = done["value"]["frames"].as_u64().expect("frames");
+    std::thread::sleep(std::time::Duration::from_millis(300));
+    let settled = stats(125, &mut stdin, &mut lines);
+    let frames3 = settled["value"]["frames"].as_u64().expect("frames");
+    assert!(
+        frames3 <= frames2 + 1,
+        "animation must settle: {frames2} -> {frames3}"
+    );
+
+    drop(stdin);
+    child.wait().ok();
+}

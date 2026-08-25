@@ -413,6 +413,10 @@ fn run_stdio_window() {
                         let mut autofocus_target: Option<solid_gpui_protocol::ElementId> = None;
                         let update_result = window.update(cx, |view, _window, cx| {
                             for m in &batch.mutations {
+                                // setAnimation starts must be captured BEFORE
+                                // apply (apply merges the targets into the
+                                // static style, destroying the old values).
+                                let pending_animation = view.prepare_animation(m);
                                 match view.tree.apply(m) {
                                     Ok(()) => {
                                         applied += 1;
@@ -433,6 +437,14 @@ fn run_stdio_window() {
                                             if style.contains_key("autoFocus") {
                                                 autofocus_target.get_or_insert(*id);
                                             }
+                                        }
+                                        // Runtime animation entry: starts were
+                                        // captured pre-apply (interpolated
+                                        // current values when retargeting —
+                                        // no jump); render substitutes them
+                                        // per frame until complete.
+                                        if let Some((id, entry)) = pending_animation {
+                                            view.animations.insert(id, entry);
                                         }
                                         if let solid_gpui_protocol::Mutation::SetEventListener {
                                             id,
