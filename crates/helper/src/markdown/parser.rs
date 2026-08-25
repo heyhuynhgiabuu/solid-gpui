@@ -42,6 +42,9 @@ pub struct InlineRun {
 }
 
 /// A markdown block. Containers nest.
+// Variant names mirror the upstream (Comet) IR on purpose — a faithful port
+// keeps future diffing against upstream cheap.
+#[allow(clippy::enum_variant_names)]
 #[derive(Debug, Clone, PartialEq)]
 pub enum Block {
     Paragraph {
@@ -94,10 +97,14 @@ pub struct BlockTree {
 }
 
 impl BlockTree {
+    // Ported API surface (tests + future slices use these; render iterates
+    // `blocks` directly).
+    #[allow(dead_code)]
     pub fn is_empty(&self) -> bool {
         self.blocks.is_empty()
     }
 
+    #[allow(dead_code)]
     pub fn len(&self) -> usize {
         self.blocks.len()
     }

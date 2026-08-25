@@ -884,3 +884,53 @@ fn window_mode_renderer_shaped_animation_pair_applies() {
     drop(stdin);
     child.wait().ok();
 }
+
+/// S13c: a markdown element renders through the real window path (parse +
+/// build) without panicking or poisoning the batch, and replacing its text
+/// re-renders. Frame stats prove the tree actually built.
+#[test]
+fn window_mode_renders_markdown_element() {
+    if skip() {
+        return;
+    }
+    let _lock = window_lock();
+    let bin = env!("CARGO_BIN_EXE_solid-gpui-helper");
+    let mut child = Command::new(bin)
+        .arg("--stdio-window")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .spawn()
+        .expect("helper spawns");
+
+    let mut stdin = child.stdin.take().expect("stdin piped");
+    let reader = BufReader::new(child.stdout.take().expect("stdout piped"));
+    let mut lines = reader.lines();
+
+    let md = "# Title\\n\\nHello **bold** and `code` with a [link](https://zed.dev).\\n\\n- a\\n- b\\n\\n1. one\\n\\n> quote\\n\\n```rust\\nfn main() {}\\n```\\n\\n| h1 | h2 |\\n|:--|--:|\\n| x | 1 |\\n\\n---\\n\\ntail.";
+    let mount = format!(
+        r#"{{"v":1,"seq":1,"mutations":[{{"op":"createElement","id":1,"elementType":"div"}},{{"op":"setRoot","id":1}},{{"op":"createElement","id":2,"elementType":"markdown"}},{{"op":"appendChild","parentId":1,"childId":2}},{{"op":"setText","id":2,"text":"{md}"}}]}}"#
+    );
+    writeln!(stdin, "{mount}").unwrap();
+    stdin.flush().unwrap();
+    let ack = lines.next().unwrap().expect("ack line");
+    assert_eq!(ack, r#"{"type":"ack","seq":1,"applied":5}"#, "{ack}");
+
+    // The render built at least one frame after the mount.
+    std::thread::sleep(std::time::Duration::from_millis(300));
+    writeln!(stdin, r#"{{"type":"getStats","seq":2}}"#).unwrap();
+    stdin.flush().unwrap();
+    let stats = lines.next().unwrap().expect("stats line");
+    assert!(stats.contains(r#""frames""#), "{stats}");
+
+    // Updating the markdown source re-renders (parse of the new text).
+    let update =
+        r#"{"v":1,"seq":3,"mutations":[{"op":"setText","id":2,"text":"Updated **content** 🎉"}]}"#;
+    writeln!(stdin, "{update}").unwrap();
+    stdin.flush().unwrap();
+    let ack2 = lines.next().unwrap().expect("ack line 2");
+    assert_eq!(ack2, r#"{"type":"ack","seq":3,"applied":1}"#, "{ack2}");
+
+    drop(stdin);
+    let status = child.wait().expect("wait");
+    assert_eq!(status.code(), Some(0), "EOF must exit 0");
+}

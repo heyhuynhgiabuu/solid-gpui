@@ -1132,6 +1132,9 @@ fn build_element(
     if node.element_type == ElementType::List {
         return build_list_element(tree, id, window, cx, ctx);
     }
+    if node.element_type == ElementType::Markdown {
+        return build_markdown_element(tree, id, window);
+    }
     let mut el = div();
     for (key, value) in &node.style {
         el = apply_style(el, key, &effective_value(ctx, id, key, value));
@@ -1159,6 +1162,39 @@ fn build_element(
 
     let el = el.id(id.0 as usize);
     let el = apply_interactive(el, tree, id, window, cx, ctx, tab_index, false);
+    el.into_any_element()
+}
+
+/// Markdown element: parse the node's text (markdown source) and render the
+/// block tree. The parse runs per render call — renders happen on retained
+/// mutations (not per frame), matching the rebuild-everything cost model of
+/// every other element type; a parse cache is a measured-optimization away.
+/// Element styles: `color` overrides body text, `backgroundColor` washes the
+/// wrapper, `fontSize` (14 = 1.0×) scales every metric linearly.
+fn build_markdown_element(tree: &RetainedTree, id: ElementId, window: &mut Window) -> AnyElement {
+    let node = tree.get(id).expect("checked by caller");
+    let source = node.text.clone().unwrap_or_default();
+    let mut theme = crate::markdown::render::MdTheme::default();
+    if let Some(color) = node.style.get("color").and_then(parse_color) {
+        theme.text = color.into();
+    }
+    let scale = style_num(&node.style, "fontSize")
+        .map_or(1.0, |f| {
+            (f / crate::markdown::render::MD_TEXT_SIZE as f64) as f32
+        })
+        .max(0.1);
+    let row = format!("md{}", id.0);
+    let inner = crate::markdown::render::render_tree(
+        &row,
+        &crate::markdown::parser::parse_full(&source),
+        &theme,
+        scale,
+        window,
+    );
+    let mut el = div().flex_col().child(inner);
+    if let Some(bg) = node.style.get("backgroundColor").and_then(parse_color) {
+        el = el.bg(bg);
+    }
     el.into_any_element()
 }
 

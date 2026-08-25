@@ -184,10 +184,7 @@ impl RetainedTree {
             }
             Mutation::SetText { id, text } => {
                 let node = self.mut_node(*id, "setText")?;
-                if !matches!(
-                    node.element_type,
-                    ElementType::Text | ElementType::Markdown
-                ) {
+                if !matches!(node.element_type, ElementType::Text | ElementType::Markdown) {
                     return Err(ApplyError::InvalidMutation {
                         message: format!(
                             "setText: element {id:?} is not a text or markdown element"
@@ -291,10 +288,7 @@ impl RetainedTree {
         // children, so reject them.
         if matches!(
             self.elements.get(&parent_id).unwrap().element_type,
-            ElementType::Text
-                | ElementType::Input
-                | ElementType::Textarea
-                | ElementType::Markdown
+            ElementType::Text | ElementType::Input | ElementType::Textarea | ElementType::Markdown
         ) {
             return Err(ApplyError::InvalidMutation {
                 message: format!(
