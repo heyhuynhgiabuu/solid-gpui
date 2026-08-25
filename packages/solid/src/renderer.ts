@@ -7,11 +7,14 @@ import {
 } from "solid-js"
 import {
   elementId,
+  ANIMATABLE_STYLE_KEYS,
   type ElementType,
+  type EasingName,
   type EventType,
   type SolidGpuiEvent,
   type Mutation,
   type MutationBatch,
+  type StyleKey,
   type StyleMap,
 } from "@solid-gpui/protocol"
 import type { Ack } from "@solid-gpui/client"
@@ -24,6 +27,11 @@ export interface HostNode {
   readonly kind: "element" | "text" | "container"
   id: number
   tag: string
+  /** transitionMs/transitionEasing props (animate future style changes). */
+  transitionMs?: number
+  transitionEasing?: EasingName
+  /** Last style bag sent over the wire (diff base for animations). */
+  lastStyle?: StyleMap
 }
 
 const EVENT_NAMES: Record<string, EventType> = {
@@ -187,8 +195,54 @@ export function createSolidRenderer(send: Send): SolidGpuiRenderer {
     setProperty<T>(node: HostNode, name: string, value: T, prev?: T) {
       if (node.kind === "container") return
       const id = elementId(node.id)
+      if (name === "transitionMs") {
+        node.transitionMs = typeof value === "number" ? value : undefined
+        return
+      }
+      if (name === "transitionEasing") {
+        node.transitionEasing = value as EasingName | undefined
+        return
+      }
       if (name === "style") {
-        push({ op: "setStyle", id, style: (value ?? {}) as StyleMap })
+        const next = (value ?? {}) as StyleMap
+        const prev = node.lastStyle
+        node.lastStyle = next
+        if (node.transitionMs && prev) {
+          // Numeric animatable keys that CHANGED transition; everything else
+          // (including the animated keys' old values) flows statically — the
+          // companion setStyle omits the animated keys so it does not snap
+          // them to the target before the helper starts interpolating.
+          const targets: Record<string, number> = {}
+          for (const k of Object.keys(next) as StyleKey[]) {
+            const v = next[k]
+            const changed = prev[k] !== v
+            if (
+              changed &&
+              typeof v === "number" &&
+              (ANIMATABLE_STYLE_KEYS as readonly string[]).includes(k)
+            ) {
+              targets[k] = v
+            }
+          }
+          const targetKeys = new Set(Object.keys(targets))
+          const statics = Object.fromEntries(
+            Object.entries(next).filter(([k]) => !targetKeys.has(k)),
+          ) as StyleMap
+          push({ op: "setStyle", id, style: statics })
+          if (Object.keys(targets).length > 0) {
+            push({
+              op: "setAnimation",
+              id,
+              target: targets as { [k in (typeof ANIMATABLE_STYLE_KEYS)[number]]?: number },
+              transitionMs: node.transitionMs,
+              ...(node.transitionEasing !== undefined
+                ? { easing: node.transitionEasing }
+                : {}),
+            })
+          }
+          return
+        }
+        push({ op: "setStyle", id, style: next })
         return
       }
       const event = EVENT_NAMES[name]

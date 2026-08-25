@@ -2,11 +2,15 @@ export { elementId, isElementIdValue } from "./ids"
 export type { ElementId } from "./ids"
 export type { StyleKey, StyleMap, StyleValue } from "./style"
 export {
+  ANIMATABLE_STYLE_KEYS,
+  EASING_NAMES,
   ELEMENT_TYPES,
   EVENT_TYPES,
   MUTATION_OPS,
 } from "./mutation"
 export type {
+  AnimatableStyleKey,
+  EasingName,
   ElementType,
   EventType,
   Mutation,
