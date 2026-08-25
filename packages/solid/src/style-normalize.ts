@@ -6,7 +6,8 @@
 import type { StyleMap } from "@solid-gpui/protocol"
 
 type StyleDict = Record<string, string | number>
-type Sides = readonly (string | number)[]
+/** TRBL tuple — length is the perSide contract, so index access is total. */
+type Sides = readonly [string | number, string | number, string | number, string | number]
 
 /** Per-shorthand fan-out, given the CSS TRBL side values [t, r, b, l]. */
 const FANOUTS: Readonly<
@@ -64,15 +65,16 @@ function perSide(value: string | number): Sides | null {
   if (typeof value === "number") return [value, value, value, value]
   const parts = value.trim().split(/\s+/)
   if (parts.some((p) => !/^-?[\d.]+(px|rem|%)?$/.test(p))) return null
+  const [a = "", b = "", c = "", d = ""] = parts
   switch (parts.length) {
     case 1:
-      return [parts[0], parts[0], parts[0], parts[0]]
+      return [a, a, a, a]
     case 2:
-      return [parts[0], parts[1], parts[0], parts[1]]
+      return [a, b, a, b]
     case 3:
-      return [parts[0], parts[1], parts[2], parts[1]]
+      return [a, b, c, b]
     case 4:
-      return parts
+      return [a, b, c, d]
     default:
       return null
   }
