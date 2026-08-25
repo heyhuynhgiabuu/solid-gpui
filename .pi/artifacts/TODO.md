@@ -407,7 +407,9 @@ Design sketch:
 Cross-ref: PLAN.md Phase 2 roadmap (S12 entry)
 
 ### 2026-08-25 - S13: rich text — markdown/code/diff ported from Comet (MIT)
-status: active
+status: done (2026-08-25; markdown core complete. Syntax highlighting,
+diff rendering, streaming = S13e+ future slices. User visual check of
+examples/markdown.ts still welcome but not gating.)
 
 Phase 3 opener per PLAN roadmap order (S7–S12 closed). Legal source: Comet
 (github.com/zeronsh/comet, MIT, Copyright 2026 Wing) — port with attribution
@@ -440,10 +442,15 @@ rich text is the PLAN-ordered slice, perf idea stays parked.
       dispose/move-out tests RED→GREEN), m3 setEventListener/setAnimation
       rejected on markdown BOTH sides (retained.rs + client guards),
       m4 stale module doc, m5 TODO state, n6 per-frame comment honest.
-- [~] VERIFY: bun 96/96 · tsc ×3 · cargo 7 suites (window 12/12; one
-      macOS parallel flake re-verified green in isolation — known issue,
-      MEMORY) · clippy · fmt · node smoke. Pending: reviewer round 2 on the
-      fixes, user visual check of the demo.
+- [x] VERIFY: bun 96/96 · tsc ×3 · cargo 7 suites (window 12/12) · clippy ·
+      fmt · node smoke · demo mounts. Review r1 FINDINGS-SHOULD-FIX (2 Major
+      + 3 Minor) all fixed in 679aa77 with RED-observed regression tests;
+      review r2 (mt8eovd1-ddb1) verdict **CLEAN** — all 6 findings verified
+      fixed, suites independently re-run green. r2 notes addressed: dead
+      guard removed, move-out test strengthened to full op-list assert;
+      Note 2 (mid-session detached nodes never destroyed — pre-existing,
+      ALL element types, universal wrapper property) recorded in MEMORY as
+      a future GC slice.
 
 Not in this session (later slices): syntax highlighting (tree-sitter), diff
 (changes.rs), streaming (mend/veil), text selection.

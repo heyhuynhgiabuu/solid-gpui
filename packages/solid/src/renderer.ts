@@ -295,19 +295,18 @@ export function createSolidRenderer(send: Send): SolidGpuiRenderer {
         push({ op: "setStyle", id, style: next })
         return
       }
-      if (node.tag === "markdown") {
+      if (node.tag === "markdown" && EVENT_NAMES[name]) {
         // Mirror the helper's honest contract: markdown accepts only
-        // style/source. Listeners never fire and animation never
-        // interpolates helper-side, so emitting either would be acked-rejected
-        // (applyFailed) and poison the session. Warn instead.
-        if (EVENT_NAMES[name] || name === "transitionMs" || name === "transitionEasing") {
-          if (typeof console !== "undefined") {
-            console.warn(
-              `[solid-gpui] <markdown> ignores ${String(name)} — it renders a static markdown document (style/source only).`,
-            )
-          }
-          return
+        // style/source; listeners never fire helper-side, so emitting one
+        // would be acked-rejected (applyFailed) and poison the session.
+        // (transitionMs/transitionEasing return before this point; the
+        // animation path is guarded inside the style branch above.)
+        if (typeof console !== "undefined") {
+          console.warn(
+            `[solid-gpui] <markdown> ignores ${String(name)} — it renders a static markdown document (style/source only).`,
+          )
         }
+        return
       }
       const event = EVENT_NAMES[name]
       if (event) {

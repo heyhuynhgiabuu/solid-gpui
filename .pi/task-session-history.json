@@ -652,5 +652,55 @@
     "rawStatus": "success",
     "resultValid": true,
     "completedAt": 1787646046235
+  },
+  {
+    "id": "mt8eo6sh-3b91",
+    "agentType": "explore",
+    "description": "Probe task launch",
+    "sessionName": "task-mt8eo6sh-3b91",
+    "startedAt": 1787646674607,
+    "paneId": "w3:pEP",
+    "handle": {
+      "backend": "herdr",
+      "resourceId": "w3:pEP",
+      "socketPath": "/Users/huynhgiabuu/.config/herdr/herdr.sock",
+      "terminalId": "term_659daecc73f5e45",
+      "agentName": "explore-mt8eo6sh",
+      "foregroundProcessGroupId": 76275
+    },
+    "piDir": "/Users/huynhgiabuu/dev/projects/solid-gpui/.pi",
+    "dir": "/Users/huynhgiabuu/dev/projects/solid-gpui/.pi/artifacts/tasks",
+    "cwd": "/Users/huynhgiabuu/dev/projects/solid-gpui",
+    "status": "done",
+    "background": true,
+    "reportedStatus": "success",
+    "rawStatus": "success",
+    "resultValid": true,
+    "completedAt": 1787646686335
+  },
+  {
+    "id": "mt8eovd1-ddb1",
+    "agentType": "reviewer",
+    "description": "Re-review S13 fixes round 2",
+    "sessionName": "task-mt8eovd1-ddb1",
+    "startedAt": 1787646705822,
+    "paneId": "w3:pEQ",
+    "handle": {
+      "backend": "herdr",
+      "resourceId": "w3:pEQ",
+      "socketPath": "/Users/huynhgiabuu/.config/herdr/herdr.sock",
+      "terminalId": "term_659daeeacec2346",
+      "agentName": "reviewer-mt8eovd1",
+      "foregroundProcessGroupId": 77013
+    },
+    "piDir": "/Users/huynhgiabuu/dev/projects/solid-gpui/.pi",
+    "dir": "/Users/huynhgiabuu/dev/projects/solid-gpui/.pi/artifacts/tasks",
+    "cwd": "/Users/huynhgiabuu/dev/projects/solid-gpui",
+    "status": "done",
+    "background": true,
+    "reportedStatus": "success",
+    "rawStatus": "success",
+    "resultValid": true,
+    "completedAt": 1787647436451
   }
 ]

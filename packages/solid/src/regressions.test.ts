@@ -245,6 +245,12 @@ describe("markdown refusal bookkeeping (review Major 2)", () => {
     }, container)
     await flush()
 
+    // Full final-batch op list: the stray attaches ONCE and NO invalid wire
+    // op is ever emitted (a regression to the pre-fix behavior — removeChild
+    // on the markdown parent — fails here even though the mock send cannot
+    // validate wire ops).
+    const ops = rec.batches[rec.batches.length - 1]!.mutations.map((m) => m.op)
+    expect(ops).not.toContain("removeChild")
     const attaches = rec.batches
       .flatMap((b) => b.mutations)
       .filter((m) => m.op === "appendChild" && "childId" in m && m.childId === stray!.id)

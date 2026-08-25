@@ -311,3 +311,32 @@
 - Window-test mutation-check discipline that works: perl-inject a
   panic!() into the render path under test, observe the GUI test FAIL
   (helper abort kills the ack), revert, observe pass.
+
+## S13 review learnings (2026-08-25)
+
+- Reviewer r1 caught two real Majors the suites could not: (1) upstream
+  Comet's ARITHMETIC ix schemes (ix*100+ci, ix*100+item_ix*10+ci) collide
+  for ordinary documents, and gpui (35aab21) has NO duplicate-id assert —
+  duplicate GlobalElementIds silently SHARE element state (lockstep
+  scrollers, shared hover). Ported id schemes must be INJECTIVE by
+  construction: a pre-order counter is the safe pattern, deterministic ⇒
+  stable across re-renders. My port also regressed table_cell_ix(ix→top_ix)
+  — when porting, diff EVERY id/key derivation against upstream.
+- universal rc.1 sentinel flows: multi-child inserts create text-node
+  sentinels; reconcileArrays then calls removeNode UNCONDITIONALLY for
+  leftovers. Any client-side "refuse this op" policy must also refuse the
+  symmetric removal or the helper rejects it (applyFailed → poison).
+  Pattern that holds: refused insert records shadow bookkeeping + a
+  refused-id set; removal is shadow-only; teardown destroys refused ids
+  explicitly (the root's wire cascade cannot see them).
+- KNOWN GAP (future slice, affects ALL element types, pre-existing):
+  nodes removed from the tree mid-session are never destroyed helper-side
+  until session end — universal's exported render() overrides the base
+  renderer that would call cleanupNodes, so cleanupNodes is unreachable.
+  Candidate: session-level GC of detached element ids. (Review r2 Note 2.)
+- Task tool contract: reviewer prompts REQUIRE literal "Parent context:",
+  "Proposed changes:", "Write/read policy:", "Acceptance criteria and stop
+  condition:" sections — missing labels are rejected as "expected a
+  start/resume request" even when operation=start; long prompts (>~6KB)
+  also fail — put the full brief in a file (.pi/review-tmp/) and reference
+  it from a short prompt.
