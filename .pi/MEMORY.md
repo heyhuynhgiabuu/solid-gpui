@@ -256,3 +256,20 @@
 - h() props are read eagerly; only `style` accepts a function (reactive bag,
   compiled-JSX getter semantics). Signal-driven style updates flow ONLY
   through that path today.
+
+## S12 lessons (2026-08-25)
+- gpui's ListState first prepaint wipes uniform height hints; a steady list
+  never re-renders, so heights stay unknown forever after single-frame
+  mounts. render must request ONE settle frame after any splice
+  (self-terminating). This was the S11 "atEnd null after toggle" mystery's
+  sibling — same wipe, different trigger.
+- A panic while holding a suite Mutex poisons it; every later test then
+  fails instantly with PoisonError. For ordering-only locks use
+  `lock().unwrap_or_else(|p| p.into_inner())`.
+- Emission tests that only RECORD mutations never prove the wire accepts
+  them: the Solid renderer's setStyle/setAnimation pair poisoned the real
+  helper (helper-side setStyle REPLACES the map, deleting numeric starts
+  before the same-batch setAnimation applied). Cross-layer window tests
+  must replay renderer-shaped batches through the real helper.
+- Per-id animation state with entry replace drops in-flight keys; timing
+  belongs per-TRANSITION (key), merged by upsert.
