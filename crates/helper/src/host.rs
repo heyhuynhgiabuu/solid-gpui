@@ -101,6 +101,10 @@ impl InputState {
 
     /// Whether the caret sits before the anchor (a backwards selection) —
     /// the platform asks so shift-arrow keeps extending the right end.
+    /// REVIEW NOTE (P2 r1 M4): set_selection always writes anchor <= caret
+    /// (platform ranges arrive sorted), so reversed is only reachable via
+    /// direct field writes today. If a platform ever delivers anchor-first
+    /// ranges, teach set_selection direction instead of deleting this.
     pub fn selection_reversed(&self) -> bool {
         self.anchor.is_some_and(|a| a > self.caret)
     }
@@ -167,8 +171,8 @@ fn write_event_line(event: &Event) {
     let _ = out.flush();
 }
 
-/// Apply a UTF-16 edit to an input's shared state and emit a `change` event
-/// carrying the new value (the helper→JS direction of controlled sync).
+/// Apply a UTF-16 edit to an input's shared state and emit an `input` event
+/// carrying the new value (per-edit; `change` commits on blur/Enter).
 /// Shared by the platform InputHandler, the Enter-newline path, and the
 /// simulateInput command so every edit crosses the wire identically.
 /// Returns the new value; the caller is responsible for repainting.
@@ -382,13 +386,17 @@ impl HostView {
         let mut s = entry.borrow_mut();
         s.value = value.to_string();
         s.caret = utf16_len(value);
+        // A programmatic value invalidates any live selection: leaving a
+        // stale anchor would make the next None-range edit replace
+        // [anchor..caret] instead of inserting at the caret.
+        s.anchor = None;
         s.marked = None;
         s.dirty = false;
     }
 
-    /// simulateInput command + Enter-newline: apply a text edit at the caret
-    /// through the same path as the platform IME (edit_input), emitting a
-    /// change event. Fails when the id never rendered as input/textarea.
+    /// simulateInput command + Enter-newline: apply a text edit through the
+    /// same path as the platform IME (edit_input), emitting a per-edit input
+    /// event. Fails when the id never rendered as input/textarea.
     pub fn simulate_input(&self, id: ElementId, text: &str) -> Result<(), String> {
         let Some(state) = self.input_states.borrow().get(&id).cloned() else {
             return Err(format!("no input/textarea for id {}", id.0));
@@ -397,8 +405,8 @@ impl HostView {
         Ok(())
     }
 
-    /// Insert text at the caret (textarea Enter-newline path from a keydown
-    /// listener; no selection support in v1).
+    /// Insert text at the active selection (textarea Enter-newline path from
+    /// a keydown listener; selection-aware since P2).
     fn insert_text(&self, id: ElementId, text: &str) {
         if let Some(state) = self.input_states.borrow().get(&id).cloned() {
             edit_input(&state, id, None, text, &self.sink);
@@ -882,12 +890,16 @@ impl InputHandler for InputHandlerState {
         let new_value = {
             let mut s = self.state.borrow_mut();
             let len = utf16_len(&s.value);
-            let sel = range_utf16.unwrap_or(s.caret..s.caret);
+            // Mirror edit_input: None = at the ACTIVE selection, and the
+            // edit collapses any live selection (IME composing replaces what
+            // was selected instead of leaving a stale anchor).
+            let sel = range_utf16.unwrap_or_else(|| s.selection());
             let start = sel.start.min(len).min(sel.end.min(len));
             let end = sel.end.min(len).max(start);
             s.value = edit_utf16(&s.value, start..end, new_text);
             let composed_end = start + utf16_len(new_text);
             s.caret = new_selected_range.map(|ns| ns.end).unwrap_or(composed_end);
+            s.anchor = None;
             s.marked = Some(start..composed_end);
             s.dirty = true;
             s.value.clone()
