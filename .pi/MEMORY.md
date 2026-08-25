@@ -238,11 +238,12 @@
   the IME client — no per-key handling needed for basic editing.
 
 ## Solid 2 rc.1 effect landmines (S12, 2026-08-25)
-- `@solidjs/signals` rc.1's effect runner stores the compute's RETURN VALUE in
-  the effect's cleanup slot and calls it on the next run. A compute returning
-  a plain object (e.g. a style bag) → `E is not a function` → global
-  `[REACTIVITY_HALTED]` on the first re-run. Pattern: compute returns VOID,
-  stashes the value in a closure; the commit reads it from there.
+- `@solidjs/signals` rc.1's effect runner stores a non-function RETURN VALUE
+  (the effectFn's, for the two-arg createRenderEffect form) in the effect's
+  cleanup slot and calls it on the next run. Returning a plain object (e.g. a
+  style bag) → `E is not a function` → global `[REACTIVITY_HALTED]` on the
+  first re-run. Pattern: compute returns VOID and stashes the value in a
+  closure; the commit reads it from there and also returns nothing.
 - Importing `solid-js` from a NEW module (h.ts) resolved a mismatched
   signals build vs what `@solidjs/universal` runs under — effects crashed
   reading owner fields (`t.ft is not a function`). Always use the
