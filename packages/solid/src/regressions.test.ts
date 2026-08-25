@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import { createSignal } from "solid-js"
 import { createSolidRenderer, type Send } from "./renderer"
+import { makeH } from "./h"
 import type { MutationBatch, Mutation } from "@solid-gpui/protocol"
 import type { HostNode } from "./renderer"
 
@@ -124,5 +125,52 @@ describe("container children tracking (review minor)", () => {
     await flush()
     expect(firstChild(container)).toBe(root)
     expect(nextSibling(root)).toBeUndefined()
+  })
+})
+
+describe("markdown via h() (S13d)", () => {
+  test("function source prop re-sends setText when the signal changes", async () => {
+    const rec = recording()
+    const { renderer: R, render, flush } = createSolidRenderer(rec.send)
+    const h = makeH(R)
+    const container = R.createElement("#root")
+    const [src, setSrc] = createSignal("# v1")
+
+    const dispose = render(() => h("markdown", { source: () => src() }), container)
+    await flush()
+    setSrc("# v2 **updated**")
+    await flush()
+
+    const texts = rec.batches
+      .flatMap((b) => b.mutations.filter((m): m is Extract<Mutation, { op: "setText" }> => m.op === "setText"))
+      .map((m) => m.text)
+    expect(texts).toEqual(["# v1", "# v2 **updated**"])
+    dispose()
+  })
+
+  test("h() children into markdown are dropped with a warning, no wire ops", async () => {
+    const rec = recording()
+    const { renderer: R, render, flush } = createSolidRenderer(rec.send)
+    const h = makeH(R)
+    const container = R.createElement("#root")
+    const warnings: string[] = []
+    const origWarn = console.warn
+    console.warn = (msg?: string) => { warnings.push(String(msg)) }
+
+    try {
+      const dispose = render(
+        () => h("markdown", { source: "# hi" }, "stray child" as never),
+        container,
+      )
+      await flush()
+      const attachOps = rec.batches
+        .flatMap((b) => b.mutations)
+        .filter((m) => m.op === "appendChild" || m.op === "insertBefore")
+      expect(attachOps).toEqual([])
+      expect(warnings.some((w) => w.includes("markdown"))).toBe(true)
+      dispose()
+    } finally {
+      console.warn = origWarn
+    }
   })
 })

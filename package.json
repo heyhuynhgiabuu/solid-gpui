@@ -12,7 +12,9 @@
     "smoke:node": "tsx scripts/node-smoke.ts",
     "demo": "bun scripts/demo.ts",
     "example/counter": "bun --conditions=browser run examples/counter.ts",
-    "example/counter:hot": "bun --conditions=browser --hot run examples/counter.ts"
+    "example/counter:hot": "bun --conditions=browser --hot run examples/counter.ts",
+    "example/markdown": "bun --conditions=browser run examples/markdown.ts",
+    "example/markdown:hot": "bun --conditions=browser --hot run examples/markdown.ts"
   },
   "devDependencies": {
     "@solidjs/universal": "^2.0.0-rc.1",

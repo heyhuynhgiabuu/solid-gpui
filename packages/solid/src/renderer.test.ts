@@ -230,3 +230,72 @@ describe("input/textarea", () => {
     await flush()
   })
 })
+
+describe("markdown element (S13d)", () => {
+  test("markdown tag creates a markdown element; source prop emits setText", async () => {
+    const rec = recording()
+    const { renderer: R, render, flush } = createSolidRenderer(rec.send)
+    const container = R.createElement("#root")
+
+    const dispose = render(() => {
+      const root = R.createElement("div")
+      const md = R.createElement("markdown")
+      R.insertNode(root, md)
+      R.setProp(md, "source", "# Title\n\n**bold**")
+      return root
+    }, container)
+    await flush()
+
+    const m = rec.batches[0]!.mutations
+    const create = m.find((x) => x.op === "createElement" && "elementType" in x && x.elementType === "markdown")
+    expect(create).toBeDefined()
+    const sets = findTextSet(rec.batches[0])
+    expect(sets?.length).toBe(1)
+    expect(sets?.[0]?.text).toBe("# Title\n\n**bold**")
+    dispose()
+  })
+
+  test("children of a markdown element are refused client-side (helper rejects attach)", async () => {
+    const rec = recording()
+    const { renderer: R, render, flush } = createSolidRenderer(rec.send)
+    const container = R.createElement("#root")
+
+    const dispose = render(() => {
+      const md = R.createElement("markdown")
+      R.setProp(md, "source", "hi")
+      const stray = R.createTextNode("extra")
+      R.insertNode(md, stray)
+      return md
+    }, container)
+    await flush()
+
+    // No appendChild may be emitted for a markdown parent — the helper
+    // rejects the attach (applyFailed poisons the session).
+    const bad = rec.batches[0]!.mutations.filter(
+      (x) => x.op === "appendChild" || x.op === "insertBefore",
+    )
+    expect(bad).toEqual([])
+    dispose()
+  })
+
+  test("markdown source updates via setProp emit a new setText", async () => {
+    const rec = recording()
+    const { renderer: R, render, flush } = createSolidRenderer(rec.send)
+    const container = R.createElement("#root")
+    let md!: ReturnType<typeof R.createElement>
+    const dispose = render(() => {
+      md = R.createElement("markdown")
+      R.setProp(md, "source", "# v1")
+      return md
+    }, container)
+    await flush()
+    // Direct setProp updates re-send (the reactive path wraps this via a
+    // function `source` prop in makeH — see regressions.test.ts).
+    R.setProp(md, "source", "# v2")
+    await flush()
+
+    const texts = rec.batches.flatMap((b) => findTextSet(b) ?? [])
+    expect(texts.map((t) => t.text)).toEqual(["# v1", "# v2"])
+    dispose()
+  })
+})

@@ -66,6 +66,7 @@ const TAG_ELEMENT_TYPES: Record<string, ElementType> = {
   input: "input",
   textarea: "textarea",
   list: "list",
+  markdown: "markdown",
 }
 
 export interface SolidGpuiRenderer {
@@ -281,6 +282,12 @@ export function createSolidRenderer(send: Send): SolidGpuiRenderer {
         push({ op: "setValue", id, value: String(value ?? "") })
         return
       }
+      if (name === "source" && node.tag === "markdown") {
+        // Markdown content flows as ONE setText — the helper parses and
+        // renders it entirely Rust-side (no per-block traffic).
+        push({ op: "setText", id, text: String(value ?? "") })
+        return
+      }
       if (INPUT_STYLE_PROPS.has(name)) {
         // placeholder/minRows/maxRows render natively on input/textarea.
         push({ op: "setStyle", id, style: { [name]: value } as unknown as StyleMap })
@@ -291,6 +298,17 @@ export function createSolidRenderer(send: Send): SolidGpuiRenderer {
     },
 
     insertNode(parent: HostNode, node: HostNode, anchor?: HostNode) {
+      if (parent.kind === "element" && parent.tag === "markdown") {
+        // The helper owns the markdown element's rendered subtree and the
+        // wire rejects attach on it (applyFailed poisons the session). Refuse
+        // children client-side instead of emitting an op we know is invalid.
+        if (typeof console !== "undefined") {
+          console.warn(
+            "[solid-gpui] <markdown> takes a `source` prop; children are not rendered and were dropped.",
+          )
+        }
+        return
+      }
       if (parent.kind === "container") {
         const entry = shadow.get(parent.id)!
         // Remount without dispose: free the previous root on the wire —
