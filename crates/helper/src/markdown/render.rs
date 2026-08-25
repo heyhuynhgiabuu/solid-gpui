@@ -627,7 +627,9 @@ fn text_element(
 }
 
 fn is_diff_fence(language: Option<&str>) -> bool {
-    matches!(language, Some("diff") | Some("patch"))
+    // GFM fence info strings are case-insensitive.
+    language
+        .is_some_and(|lang| lang.eq_ignore_ascii_case("diff") || lang.eq_ignore_ascii_case("patch"))
 }
 
 /// One line of a ```diff fence: its kind decides both the row wash and the
@@ -699,12 +701,12 @@ fn render_code_block(
                     if is_diff_fence(language) {
                         let (kind, wash, text) = diff_line_paint(line, theme);
                         if let Some(wash) = wash {
-                            // Full-bleed wash inside the padded body: pull
-                            // the row out by the body padding on both axes.
-                            line_el = line_el
-                                .bg(wash)
-                                .mx(px(-(CODE_PADDING_X * scale)))
-                                .px(px(CODE_PADDING_X * scale));
+                            // Taffy's default cross-axis stretch makes each
+                            // row span the body's content width (the widest
+                            // line), so the wash tiles edge-to-edge without
+                            // negative margins — those would inflate gpui's
+                            // children-bounds scroll extent by 2×padding.
+                            line_el = line_el.bg(wash);
                         }
                         let color = match kind {
                             super::diff::DiffLineKind::Context => theme.text,

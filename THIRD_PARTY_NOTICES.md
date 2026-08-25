@@ -23,6 +23,9 @@ Upstream sources of the port:
   (crates/helper/src/markdown/syntax.rs), with a reduced grammar set.
 - `crates/theme/src/builtins.rs` (`syntax()` mapping, zeron-dark palette) —
   token-color table (crates/helper/src/markdown/render.rs `SyntaxPalette`).
+- `crates/ui/src/changes.rs` (`LineKind`) — per-line unified-diff
+  classification only (crates/helper/src/markdown/diff.rs); the Changes-
+  pane machinery around it is NOT ported.
 
 All at version 0.2.28. Adaptations for solid-gpui are marked in each
 file's header (streaming/mend/veil machinery removed; theme narrowed to a

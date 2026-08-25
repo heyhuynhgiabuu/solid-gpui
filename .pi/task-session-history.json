@@ -752,5 +752,30 @@
     "rawStatus": "success",
     "resultValid": true,
     "completedAt": 1787650409344
+  },
+  {
+    "id": "mt8hdejr-d712",
+    "agentType": "reviewer",
+    "description": "Review S13f diff fences",
+    "sessionName": "task-mt8hdejr-d712",
+    "startedAt": 1787651210963,
+    "paneId": "w3:pEV",
+    "handle": {
+      "backend": "herdr",
+      "resourceId": "w3:pEV",
+      "socketPath": "/Users/huynhgiabuu/.config/herdr/herdr.sock",
+      "terminalId": "term_659dbfb20abb34a",
+      "agentName": "reviewer-mt8hdejr",
+      "foregroundProcessGroupId": 91116
+    },
+    "piDir": "/Users/huynhgiabuu/dev/projects/solid-gpui/.pi",
+    "dir": "/Users/huynhgiabuu/dev/projects/solid-gpui/.pi/artifacts/tasks",
+    "cwd": "/Users/huynhgiabuu/dev/projects/solid-gpui",
+    "status": "done",
+    "background": true,
+    "reportedStatus": "success",
+    "rawStatus": "success",
+    "resultValid": true,
+    "completedAt": 1787652669579
   }
 ]

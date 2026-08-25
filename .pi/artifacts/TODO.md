@@ -516,7 +516,14 @@ line kind coloring instead of tree-sitter. NOT the 5248-LOC Changes viewer
       branch precedes syntax; full-bleed row washes via negative mx/px pair
 - [x] S13f-c window test mounts a ```diff fence (ack+frames proof); demo
       DOC_B shows one
-- [~] VERIFY: bun 96/96 · tsc ×3 · cargo all suites · clippy · fmt. Pending:
-      independent review.
+- [x] Review r1 (mt8hdejr-d712): FINDINGS-SHOULD-FIX, both minors fixed:
+      (1) +++/--- space-gate so ADDED content like `+++i;` classifies Add
+      not Meta (+ plumbing lines new file mode/Binary files/rename → Meta;
+      header-shaped content documented as stateless limit); (2) wash rows
+      use taffy default stretch instead of negative mx/px — scroll extent
+      no longer inflated 2×padding; fence tag now case-insensitive;
+      notices add changes.rs source.
+- [~] VERIFY: bun 96/96 · tsc ×3 · cargo all suites green · clippy · fmt.
+      Pending: reviewer r2 on the fixes.
 
 Cross-ref: TODO.md#2026-08-25---s13-rich-text--markdowncodediff-ported-from-comet-mit
