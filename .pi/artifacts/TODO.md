@@ -416,10 +416,12 @@ rich text is the PLAN-ordered slice, perf idea stays parked.
 
 - [x] Recon Comet markdown subsystem (parser/render/syntax/diff) — PLAN.md
       S13 spec block has path:line-verified findings + frozen design
-- [ ] S13a protocol: elementType markdown + setText-on-markdown (validation
+- [x] S13a protocol: elementType markdown + setText-on-markdown (validation
       both sides) + batch-markdown-01.json fixture parsed by BOTH suites
-- [ ] S13b helper: parser port (pulldown-cmark 0.12 → BlockTree; parse_full +
+      (RED observed: TS decode fail + Rust compile fail → GREEN; commit 41b0837)
+- [x] S13b helper: parser port (pulldown-cmark 0.12 → BlockTree; parse_full +
       autolink + merge only) with ported unit tests — pure data, no gpui
+      (9/9 parser tests green; streaming machinery deliberately not ported)
 - [ ] S13c helper: render port (paragraph/headings/inline/code blocks/
       lists/blockquote/rule/table; links via InteractiveText; inline-code
       washes; fixed default theme + style-key overrides) + window smoke test

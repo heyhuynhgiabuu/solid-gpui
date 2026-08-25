@@ -8,6 +8,7 @@
 
 mod frame_stats;
 mod host;
+mod markdown;
 
 use std::io::{BufRead, Write};
 use std::time::Duration;

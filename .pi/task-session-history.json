@@ -602,5 +602,30 @@
     "rawStatus": "success",
     "resultValid": true,
     "completedAt": 1787642340366
+  },
+  {
+    "id": "mt8ck0kq-405e",
+    "agentType": "scout",
+    "description": "Map Comet markdown subsystem",
+    "sessionName": "task-mt8ck0kq-405e",
+    "startedAt": 1787643120831,
+    "paneId": "w3:pEJ",
+    "handle": {
+      "backend": "herdr",
+      "resourceId": "w3:pEJ",
+      "socketPath": "/Users/huynhgiabuu/.config/herdr/herdr.sock",
+      "terminalId": "term_659da18f4be0741",
+      "agentName": "scout-mt8ck0kq",
+      "foregroundProcessGroupId": 61020
+    },
+    "piDir": "/Users/huynhgiabuu/dev/projects/solid-gpui/.pi",
+    "dir": "/Users/huynhgiabuu/dev/projects/solid-gpui/.pi/artifacts/tasks",
+    "cwd": "/Users/huynhgiabuu/dev/projects/solid-gpui",
+    "status": "done",
+    "background": true,
+    "reportedStatus": "unknown",
+    "rawStatus": "unknown",
+    "resultValid": false,
+    "completedAt": 1787643225813
   }
 ]
