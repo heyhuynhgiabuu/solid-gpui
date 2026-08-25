@@ -236,3 +236,22 @@
   rely on this.
 - Backspace/delete/cut arrive as replace_text_in_range (or default paste) via
   the IME client — no per-key handling needed for basic editing.
+
+## Solid 2 rc.1 effect landmines (S12, 2026-08-25)
+- `@solidjs/signals` rc.1's effect runner stores the compute's RETURN VALUE in
+  the effect's cleanup slot and calls it on the next run. A compute returning
+  a plain object (e.g. a style bag) → `E is not a function` → global
+  `[REACTIVITY_HALTED]` on the first re-run. Pattern: compute returns VOID,
+  stashes the value in a closure; the commit reads it from there.
+- Importing `solid-js` from a NEW module (h.ts) resolved a mismatched
+  signals build vs what `@solidjs/universal` runs under — effects crashed
+  reading owner fields (`t.ft is not a function`). Always use the
+  Renderer's own `R.effect` primitive, never import solid-js primitives
+  beside universal.
+- The dev build (`--conditions=browser,development`) silently never re-runs
+  effects created inside the tree code() in some cases where prod does —
+  when debugging reactivity, ALWAYS reproduce with plain
+  `--conditions=browser` (the condition the suites actually run under).
+- h() props are read eagerly; only `style` accepts a function (reactive bag,
+  compiled-JSX getter semantics). Signal-driven style updates flow ONLY
+  through that path today.
