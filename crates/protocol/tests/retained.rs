@@ -2,7 +2,9 @@
 //! shape matches the mutation sequence, and invalid sequences fail with
 //! precise errors. Pure data — no gpui, no IO.
 
-use solid_gpui_protocol::{ApplyError, ElementType, EventType, Mutation, RetainedTree, from_json};
+use solid_gpui_protocol::{
+    ApplyError, ElementType, EventType, Mutation, RetainedTree, StyleMap, StyleValue, from_json,
+};
 use std::fs;
 
 fn fixture_batch() -> Vec<Mutation> {
@@ -598,4 +600,117 @@ fn set_value_on_non_input_element_is_rejected() {
             "id {id} got: {err}"
         );
     }
+}
+
+fn num(v: f64) -> StyleValue {
+    // Test helper: values here are always finite.
+    StyleValue::Number(serde_json::Number::from_f64(v).unwrap())
+}
+
+/// Mount a div with numeric width/opacity so setAnimation has valid starts.
+fn animated_tree() -> RetainedTree {
+    let mut tree = RetainedTree::new();
+    apply_all(
+        &mut tree,
+        &[
+            Mutation::CreateElement {
+                id: 1.into(),
+                element_type: ElementType::Div,
+            },
+            Mutation::SetStyle {
+                id: 1.into(),
+                style: StyleMap::from([
+                    ("width".to_string(), StyleValue::Number(200u32.into())),
+                    ("opacity".to_string(), StyleValue::Number(1u32.into())),
+                ]),
+            },
+        ],
+    )
+    .unwrap();
+    tree
+}
+
+fn set_animation(target: StyleMap, easing: Option<String>) -> Mutation {
+    Mutation::SetAnimation {
+        id: 1.into(),
+        target,
+        transition_ms: 250,
+        easing,
+    }
+}
+
+#[test]
+fn set_animation_merges_target_so_end_state_sticks() {
+    let mut tree = animated_tree();
+    tree.apply(&set_animation(
+        StyleMap::from([
+            ("width".to_string(), StyleValue::Number(300u32.into())),
+            ("opacity".to_string(), num(0.5)),
+        ]),
+        Some("easeOut".to_string()),
+    ))
+    .unwrap();
+    let style = &tree.get(1.into()).unwrap().style;
+    // Targets are merged into the static style: once the animation finishes
+    // (or without animation support at all) the element rests at the target.
+    // Compare numerically: the merge stores f64 (serde_json numbers
+    // distinguish 300 from 300.0).
+    let merged = |key: &str| style.get(key).and_then(|v| match v {
+        StyleValue::Number(n) => n.as_f64(),
+        _ => None,
+    });
+    assert_eq!(merged("width"), Some(300.0));
+    assert_eq!(merged("opacity"), Some(0.5));
+}
+
+#[test]
+fn set_animation_rejects_keys_outside_the_closed_set() {
+    let mut tree = animated_tree();
+    // Style keys are forward-compatible for setStyle, but animation needs a
+    // real numeric render path — the animatable set is CLOSED.
+    let err = tree
+        .apply(&set_animation(
+            StyleMap::from([("display".to_string(), StyleValue::Text("flex".into()))]),
+            None,
+        ))
+        .unwrap_err();
+    assert!(err.to_string().contains("animatable"), "got: {err}");
+}
+
+#[test]
+fn set_animation_rejects_non_numeric_targets() {
+    let mut tree = animated_tree();
+    let err = tree
+        .apply(&set_animation(
+            StyleMap::from([("width".to_string(), StyleValue::Text("200px".into()))]),
+            None,
+        ))
+        .unwrap_err();
+    assert!(err.to_string().contains("numeric"), "got: {err}");
+}
+
+#[test]
+fn set_animation_requires_a_numeric_start_on_the_element() {
+    let mut tree = animated_tree();
+    // Interpolation needs a well-defined start: the key must already hold a
+    // number (you can only animate what is set).
+    let err = tree
+        .apply(&set_animation(
+            StyleMap::from([("padding".to_string(), StyleValue::Number(8u32.into()))]),
+            None,
+        ))
+        .unwrap_err();
+    assert!(err.to_string().contains("start"), "got: {err}");
+}
+
+#[test]
+fn set_animation_rejects_unknown_easing() {
+    let mut tree = animated_tree();
+    let err = tree
+        .apply(&set_animation(
+            StyleMap::from([("width".to_string(), StyleValue::Number(300u32.into()))]),
+            Some("spring".to_string()),
+        ))
+        .unwrap_err();
+    assert!(err.to_string().contains("easing"), "got: {err}");
 }

@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test"
 import fixture from "../fixtures/batch-01.json"
 import rustEmitted from "../fixtures/rust-emitted-batch-01.json"
 import listFixture from "../fixtures/batch-list-01.json"
+import animationFixture from "../fixtures/batch-animation-01.json"
 import { elementId } from "./ids"
 import { decodeBatch, encodeBatch } from "./batch"
 import type { MutationBatch } from "./batch"
@@ -153,6 +154,58 @@ describe("decodeBatch rejects malformed input", () => {
         itemHeight: 24,
       })
     }
+  })
+
+  test("animation batch fixture parses (Rust↔TS parity)", () => {
+    const r = decodeBatch(JSON.stringify(animationFixture))
+    expect(r.ok).toBe(true)
+    if (r.ok) {
+      const anim = r.value.mutations[3]
+      expect(anim && "target" in anim && anim.target).toEqual({
+        opacity: 0.5,
+        width: 300,
+      })
+      expect(anim && "transitionMs" in anim && anim.transitionMs).toBe(250)
+    }
+  })
+
+  test("setAnimation rejects keys outside the closed animatable set", () => {
+    const r = decodeBatch(
+      JSON.stringify({
+        v: 1,
+        seq: 1,
+        mutations: [
+          { op: "setAnimation", id: 1, target: { display: "flex" }, transitionMs: 100 },
+        ],
+      }),
+    )
+    expect(!r.ok && r.error.kind === "invalidShape" && r.error.path.includes("target")).toBe(true)
+  })
+
+  test("setAnimation rejects non-numeric target values", () => {
+    const r = decodeBatch(
+      JSON.stringify({
+        v: 1,
+        seq: 1,
+        mutations: [
+          { op: "setAnimation", id: 1, target: { width: "200px" }, transitionMs: 100 },
+        ],
+      }),
+    )
+    expect(!r.ok && r.error.kind === "invalidShape" && r.error.path.includes("target")).toBe(true)
+  })
+
+  test("setAnimation rejects unknown easing names", () => {
+    const r = decodeBatch(
+      JSON.stringify({
+        v: 1,
+        seq: 1,
+        mutations: [
+          { op: "setAnimation", id: 1, target: { width: 300 }, transitionMs: 100, easing: "spring" },
+        ],
+      }),
+    )
+    expect(!r.ok && r.error.kind === "invalidShape" && r.error.path.includes("easing")).toBe(true)
   })
 
   test("unknown element type", () => {

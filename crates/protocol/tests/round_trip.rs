@@ -1,8 +1,7 @@
 use solid_gpui_protocol::{
     ApplyError, Command, ElementId, Event, EventType, Mutation, MutationBatch, MutationHandler,
     ProtocolError, Reply, ReplyCode, command_from_json, command_to_json, event_from_json,
-    event_to_json, from_json, reply_from_json, reply_to_json, to_json,
-};
+    event_to_json, from_json, reply_from_json, reply_to_json, to_json, RetainedTree};
 use std::fs;
 
 fn fixture() -> String {
@@ -452,5 +451,20 @@ fn list_element_batch_fixture_parses_both_ways() {
         }
         other => panic!("expected createElement, got {other:?}"),
     }
+    assert_eq!(to_json(&batch), raw);
+}
+
+#[test]
+fn animation_batch_fixture_parses_both_ways() {
+    let raw = fs::read_to_string(fixture_path("batch-animation-01.json"))
+        .expect("fixture readable")
+        .trim()
+        .to_string();
+    let batch = from_json(&raw).expect("batch parses");
+    let mut tree = RetainedTree::new();
+    for m in &batch.mutations {
+        tree.apply(m).expect("fixture applies");
+    }
+    // Round-trips byte-identically after compaction.
     assert_eq!(to_json(&batch), raw);
 }

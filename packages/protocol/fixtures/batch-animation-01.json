@@ -1,0 +1,1 @@
+{"v":1,"seq":20,"mutations":[{"op":"createElement","id":1,"elementType":"div"},{"op":"setRoot","id":1},{"op":"setStyle","id":1,"style":{"height":40,"opacity":1,"width":200}},{"op":"setAnimation","id":1,"target":{"opacity":0.5,"width":300},"transitionMs":250,"easing":"easeOut"}]}

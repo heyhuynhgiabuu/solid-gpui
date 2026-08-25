@@ -93,6 +93,50 @@ impl StyleValue {
 
 pub type StyleMap = BTreeMap<String, StyleValue>;
 
+/// Style keys that setAnimation accepts. Closed set (unlike setStyle's
+/// forward-compatible open set): interpolation needs a real numeric render
+/// path on the helper side, so animating an unsupported key must fail
+/// honestly instead of silently doing nothing.
+pub const ANIMATABLE_STYLE_KEYS: &[&str] = &[
+    "width",
+    "height",
+    "minWidth",
+    "minHeight",
+    "padding",
+    "gap",
+    "borderRadius",
+    "fontSize",
+    "flexGrow",
+    "flexShrink",
+    "opacity",
+];
+
+/// Easing curves setAnimation accepts (closed set, camelCase wire names).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum Easing {
+    #[serde(rename = "linear")]
+    Linear,
+    #[serde(rename = "easeIn")]
+    EaseIn,
+    #[serde(rename = "easeOut")]
+    EaseOut,
+    #[serde(rename = "easeInOut")]
+    EaseInOut,
+}
+
+impl Easing {
+    /// Wire name -> curve. `None` for unknown names (rejected upstream).
+    pub fn parse(name: &str) -> Option<Self> {
+        match name {
+            "linear" => Some(Easing::Linear),
+            "easeIn" => Some(Easing::EaseIn),
+            "easeOut" => Some(Easing::EaseOut),
+            "easeInOut" => Some(Easing::EaseInOut),
+            _ => None,
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "op", rename_all = "camelCase")]
 pub enum Mutation {
@@ -127,6 +171,21 @@ pub enum Mutation {
     SetText {
         id: ElementId,
         text: String,
+    },
+    /// Transition the element's current numeric values for `target`'s keys to
+    /// the target values over `transition_ms`. Targets must be numeric and
+    /// confined to [`ANIMATABLE_STYLE_KEYS`]; each key must already hold a
+    /// numeric value on the element (a well-defined start). The target is
+    /// merged into the element's static style at apply time, so the end state
+    /// sticks without any further protocol traffic; the helper substitutes
+    /// interpolated values each frame until the transition completes.
+    #[serde(rename_all = "camelCase")]
+    SetAnimation {
+        id: ElementId,
+        target: StyleMap,
+        transition_ms: u32,
+        /// One of linear|easeIn|easeOut|easeInOut; None means easeOut.
+        easing: Option<String>,
     },
     #[serde(rename_all = "camelCase")]
     SetValue {
@@ -444,6 +503,7 @@ const KNOWN_OPS: &[&str] = &[
     "setStyle",
     "setText",
     "setValue",
+    "setAnimation",
     "setEventListener",
     "setRoot",
 ];
@@ -548,6 +608,7 @@ fn from_value(v: serde_json::Value) -> Result<MutationBatch, ProtocolError> {
             | Mutation::SetStyle { id, .. }
             | Mutation::SetText { id, .. }
             | Mutation::SetValue { id, .. }
+            | Mutation::SetAnimation { id, .. }
             | Mutation::SetEventListener { id, .. }
             | Mutation::SetRoot { id } => (id.0 == 0).then_some("id"),
             Mutation::AppendChild {

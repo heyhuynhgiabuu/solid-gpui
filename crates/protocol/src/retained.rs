@@ -22,7 +22,7 @@
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 
-use crate::{ApplyError, ElementId, ElementType, EventType, Mutation, StyleMap};
+use crate::{ApplyError, ElementId, ElementType, EventType, Mutation, StyleMap, StyleValue};
 
 pub const MAX_DEPTH: usize = 256;
 
@@ -121,6 +121,67 @@ impl RetainedTree {
             Mutation::SetStyle { id, style } => {
                 let node = self.mut_node(*id, "setStyle")?;
                 node.style = style.clone();
+                Ok(())
+            }
+            Mutation::SetAnimation {
+                id,
+                target,
+                transition_ms: _,
+                easing,
+            } => {
+                let node = self.mut_node(*id, "setAnimation")?;
+                let easing_name = easing.as_deref().unwrap_or("easeOut");
+                if crate::Easing::parse(easing_name).is_none() {
+                    return Err(ApplyError::InvalidMutation {
+                        message: format!(
+                            "setAnimation: unknown easing {easing_name:?}; expected linear|easeIn|easeOut|easeInOut"
+                        ),
+                    });
+                }
+                for (key, value) in target {
+                    if !crate::ANIMATABLE_STYLE_KEYS.contains(&key.as_str()) {
+                        return Err(ApplyError::InvalidMutation {
+                            message: format!(
+                                "setAnimation: {key:?} is not animatable; expected one of {}",
+                                crate::ANIMATABLE_STYLE_KEYS.join("|")
+                            ),
+                        });
+                    }
+                    let to = match value {
+                        StyleValue::Number(n) => n.as_f64(),
+                        StyleValue::Text(_) => None,
+                    };
+                    let Some(to) = to else {
+                        return Err(ApplyError::InvalidMutation {
+                            message: format!(
+                                "setAnimation: target {key:?} must be numeric, got {value:?}"
+                            ),
+                        });
+                    };
+                    let from = match node.style.get(key) {
+                        Some(StyleValue::Number(n)) => n.as_f64(),
+                        _ => None,
+                    };
+                    let Some(_from) = from else {
+                        return Err(ApplyError::InvalidMutation {
+                            message: format!(
+                                "setAnimation: element {id:?} has no numeric start for {key:?}; set it via setStyle first"
+                            ),
+                        });
+                    };
+                    // End state sticks: merge the target into the static
+                    // style so the element rests there once (or without)
+                    // animation running.
+                    let to_number = serde_json::Number::from_f64(to).ok_or_else(|| {
+                        ApplyError::InvalidMutation {
+                            message: format!(
+                                "setAnimation: target {key:?} is not a finite number"
+                            ),
+                        }
+                    })?;
+                    node.style
+                        .insert(key.clone(), StyleValue::Number(to_number));
+                }
                 Ok(())
             }
             Mutation::SetText { id, text } => {

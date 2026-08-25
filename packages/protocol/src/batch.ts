@@ -1,5 +1,7 @@
 import { isElementIdValue, type ElementId } from "./ids"
 import {
+  ANIMATABLE_STYLE_KEYS,
+  EASING_NAMES,
   ELEMENT_TYPES,
   EVENT_TYPES,
   MUTATION_OPS,
@@ -132,6 +134,61 @@ function decodeMutation(m: Dict, p: string): Result<Mutation, ProtocolError> {
       // Boundary cast: values validated; unknown keys are intentionally kept
       // (forward compatibility — see StyleMap).
       return { ok: true, value: { op, id: idR.value, style: style as unknown as StyleMap } }
+    }
+    case "setAnimation": {
+      const idR = id()
+      if (!idR.ok) return idR
+      const target = m.target
+      if (!isDict(target)) {
+        return { ok: false, error: shape(`${p}.target`, "expected an object") }
+      }
+      const keys = Object.keys(target)
+      if (keys.length === 0) {
+        return { ok: false, error: shape(`${p}.target`, "expected at least one animatable key") }
+      }
+      for (const k of keys) {
+        if (!(ANIMATABLE_STYLE_KEYS as readonly string[]).includes(k)) {
+          return {
+            ok: false,
+            error: shape(
+              `${p}.target.${k}`,
+              `not animatable; expected one of ${ANIMATABLE_STYLE_KEYS.join("|")}`,
+            ),
+          }
+        }
+        if (typeof target[k] !== "number" || !Number.isFinite(target[k])) {
+          return {
+            ok: false,
+            error: shape(`${p}.target.${k}`, "expected a finite number"),
+          }
+        }
+      }
+      const transitionMs = m.transitionMs
+      if (typeof transitionMs !== "number" || !Number.isInteger(transitionMs) || transitionMs < 0) {
+        return {
+          ok: false,
+          error: shape(`${p}.transitionMs`, "expected a non-negative integer"),
+        }
+      }
+      if (m.easing !== undefined) {
+        if (typeof m.easing !== "string" || !(EASING_NAMES as readonly string[]).includes(m.easing)) {
+          return {
+            ok: false,
+            error: shape(`${p}.easing`, `expected one of ${EASING_NAMES.join("|")}`),
+          }
+        }
+      }
+      // Boundary cast: keys and values validated above.
+      return {
+        ok: true,
+        value: {
+          op,
+          id: idR.value,
+          target: target as { [k in (typeof ANIMATABLE_STYLE_KEYS)[number]]?: number },
+          transitionMs,
+          ...(m.easing !== undefined ? { easing: m.easing as (typeof EASING_NAMES)[number] } : {}),
+        },
+      }
     }
     case "setText": {
       const idR = id()

@@ -48,8 +48,40 @@ export type Mutation =
   | { readonly op: "setStyle"; readonly id: ElementId; readonly style: StyleMap }
   | { readonly op: "setText"; readonly id: ElementId; readonly text: string }
   | { readonly op: "setValue"; readonly id: ElementId; readonly value: string }
+  | {
+      readonly op: "setAnimation"
+      readonly id: ElementId
+      readonly target: { readonly [k in AnimatableStyleKey]?: number }
+      readonly transitionMs: number
+      readonly easing?: EasingName
+    }
   | { readonly op: "setEventListener"; readonly id: ElementId; readonly eventType: EventType; readonly enabled: boolean }
   | { readonly op: "setRoot"; readonly id: ElementId }
+
+/**
+ * Closed set of style keys setAnimation may target (interpolation needs a
+ * numeric render path on the helper). Unlike setStyle's open set, animating
+ * an unsupported key is a decode error.
+ */
+export const ANIMATABLE_STYLE_KEYS = [
+  "width",
+  "height",
+  "minWidth",
+  "minHeight",
+  "padding",
+  "gap",
+  "borderRadius",
+  "fontSize",
+  "flexGrow",
+  "flexShrink",
+  "opacity",
+] as const
+
+export type AnimatableStyleKey = (typeof ANIMATABLE_STYLE_KEYS)[number]
+
+export const EASING_NAMES = ["linear", "easeIn", "easeOut", "easeInOut"] as const
+
+export type EasingName = (typeof EASING_NAMES)[number]
 
 export const MUTATION_OPS = [
   "createElement",
@@ -60,6 +92,7 @@ export const MUTATION_OPS = [
   "setStyle",
   "setText",
   "setValue",
+  "setAnimation",
   "setEventListener",
   "setRoot",
 ] as const
