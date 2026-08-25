@@ -2,7 +2,13 @@ import type { ElementId } from "./ids"
 import type { StyleMap } from "./style"
 
 /** Host element kinds understood by the helper in protocol v1. */
-export type ElementType = "div" | "text" | "input" | "textarea" | "list"
+export type ElementType =
+  | "div"
+  | "text"
+  | "input"
+  | "textarea"
+  | "list"
+  | "markdown"
 
 /**
  * Closed set: the helper must know an event to wire it, so unknown event
@@ -37,7 +43,14 @@ export const EVENT_TYPES: readonly EventType[] = [
   "submit",
 ]
 
-export const ELEMENT_TYPES: readonly ElementType[] = ["div", "text", "input", "textarea", "list"]
+export const ELEMENT_TYPES: readonly ElementType[] = [
+  "div",
+  "text",
+  "input",
+  "textarea",
+  "list",
+  "markdown",
+]
 
 export type Mutation =
   | { readonly op: "createElement"; readonly id: ElementId; readonly elementType: ElementType }

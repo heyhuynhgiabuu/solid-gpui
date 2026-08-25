@@ -29,7 +29,7 @@ pub const EVENT_TYPES: &[&str] = &[
     "submit",
 ];
 
-pub const ELEMENT_TYPES: &[&str] = &["div", "text", "input", "textarea", "list"];
+pub const ELEMENT_TYPES: &[&str] = &["div", "text", "input", "textarea", "list", "markdown"];
 
 /// Numeric id of a host element. 0 is reserved and never valid.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -52,6 +52,10 @@ pub enum ElementType {
     /// Virtualized list: the retained tree holds every item, gpui's List
     /// paints only the visible subset. Children are the items.
     List,
+    /// Rich-text block: the node's `text` holds the markdown source; the
+    /// helper parses and renders it entirely Rust-side. No wire children —
+    /// the rendered subtree is helper-owned (validation rejects attach).
+    Markdown,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]

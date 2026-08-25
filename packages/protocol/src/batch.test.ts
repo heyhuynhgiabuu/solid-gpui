@@ -3,6 +3,7 @@ import fixture from "../fixtures/batch-01.json"
 import rustEmitted from "../fixtures/rust-emitted-batch-01.json"
 import listFixture from "../fixtures/batch-list-01.json"
 import animationFixture from "../fixtures/batch-animation-01.json"
+import markdownFixture from "../fixtures/batch-markdown-01.json"
 import { elementId } from "./ids"
 import { decodeBatch, encodeBatch } from "./batch"
 import type { MutationBatch } from "./batch"
@@ -166,6 +167,19 @@ describe("decodeBatch rejects malformed input", () => {
         width: 300,
       })
       expect(anim && "transitionMs" in anim && anim.transitionMs).toBe(250)
+    }
+  })
+
+  test("markdown batch fixture parses (Rust↔TS parity)", () => {
+    const r = decodeBatch(JSON.stringify(markdownFixture))
+    expect(r.ok).toBe(true)
+    if (r.ok) {
+      const m = r.value.mutations[2]
+      expect(m && "elementType" in m && m.elementType).toBe("markdown")
+      const text = r.value.mutations[5]
+      expect(text && "text" in text && text.text).toContain("# solid-gpui markdown 🎉")
+      const roundTrip = decodeBatch(JSON.stringify(r.value))
+      expect(roundTrip.ok).toBe(true)
     }
   })
 

@@ -405,3 +405,29 @@ Design sketch:
       clippy, fmt. Closed 2026-08-25.
 
 Cross-ref: PLAN.md Phase 2 roadmap (S12 entry)
+
+### 2026-08-25 - S13: rich text — markdown/code/diff ported from Comet (MIT)
+status: active
+
+Phase 3 opener per PLAN roadmap order (S7–S12 closed). Legal source: Comet
+(github.com/zeronsh/comet, MIT, Copyright 2026 Wing) — port with attribution
+headers per ADR 001. User gave choice (rich text OR op-group/batching perf);
+rich text is the PLAN-ordered slice, perf idea stays parked.
+
+- [x] Recon Comet markdown subsystem (parser/render/syntax/diff) — PLAN.md
+      S13 spec block has path:line-verified findings + frozen design
+- [ ] S13a protocol: elementType markdown + setText-on-markdown (validation
+      both sides) + batch-markdown-01.json fixture parsed by BOTH suites
+- [ ] S13b helper: parser port (pulldown-cmark 0.12 → BlockTree; parse_full +
+      autolink + merge only) with ported unit tests — pure data, no gpui
+- [ ] S13c helper: render port (paragraph/headings/inline/code blocks/
+      lists/blockquote/rule/table; links via InteractiveText; inline-code
+      washes; fixed default theme + style-key overrides) + window smoke test
+- [ ] S13d Solid API: h("markdown", {source}) → setText; demo
+      examples/markdown.ts; user visual confirmation
+- [ ] VERIFY: bun, tsc ×3, cargo, clippy, fmt + independent review
+
+Not in this session (later slices): syntax highlighting (tree-sitter), diff
+(changes.rs), streaming (mend/veil), text selection.
+
+Cross-ref: PLAN.md#2026-08-24---phase-2-candidate-roadmap-prior-art-informed

@@ -3,7 +3,8 @@
 //! precise errors. Pure data — no gpui, no IO.
 
 use solid_gpui_protocol::{
-    ApplyError, ElementType, EventType, Mutation, RetainedTree, StyleMap, StyleValue, from_json,
+    ApplyError, ElementId, ElementType, EventType, Mutation, RetainedTree, StyleMap, StyleValue,
+    from_json,
 };
 use std::fs;
 
@@ -715,4 +716,56 @@ fn set_animation_rejects_unknown_easing() {
         ))
         .unwrap_err();
     assert!(err.to_string().contains("easing"), "got: {err}");
+}
+
+// --- S13 markdown elements -------------------------------------------------
+
+/// A markdown element mounts, receives setText (the markdown source), and
+/// refuses children — the helper renders the source into its own subtree, so
+/// wire children would be silently dropped (validation and rendering agree).
+#[test]
+fn markdown_element_accepts_set_text_and_rejects_children() {
+    let mut tree = RetainedTree::new();
+    tree.apply(&Mutation::CreateElement {
+        id: ElementId(1),
+        element_type: solid_gpui_protocol::ElementType::Markdown,
+    })
+    .unwrap();
+    tree.apply(&Mutation::SetText {
+        id: ElementId(1),
+        text: "# hello".into(),
+    })
+    .unwrap();
+
+    tree.apply(&Mutation::CreateElement {
+        id: ElementId(2),
+        element_type: solid_gpui_protocol::ElementType::Div,
+    })
+    .unwrap();
+    let err = tree
+        .apply(&Mutation::AppendChild {
+            parent_id: ElementId(1),
+            child_id: ElementId(2),
+        })
+        .unwrap_err();
+    assert!(err.to_string().contains("no child slots"), "got: {err}");
+}
+
+/// `setValue` stays the controlled-input path: markdown content flows through
+/// setText only.
+#[test]
+fn markdown_element_rejects_set_value() {
+    let mut tree = RetainedTree::new();
+    tree.apply(&Mutation::CreateElement {
+        id: ElementId(1),
+        element_type: solid_gpui_protocol::ElementType::Markdown,
+    })
+    .unwrap();
+    let err = tree
+        .apply(&Mutation::SetValue {
+            id: ElementId(1),
+            value: "nope".into(),
+        })
+        .unwrap_err();
+    assert!(err.to_string().contains("input/textarea"), "got: {err}");
 }

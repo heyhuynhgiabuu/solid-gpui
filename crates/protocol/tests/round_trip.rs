@@ -456,6 +456,28 @@ fn list_element_batch_fixture_parses_both_ways() {
 }
 
 #[test]
+fn markdown_batch_fixture_parses_both_ways() {
+    let raw = fs::read_to_string(fixture_path("batch-markdown-01.json"))
+        .expect("fixture readable")
+        .trim()
+        .to_string();
+    let batch = from_json(&raw).expect("batch parses");
+    match &batch.mutations[2] {
+        Mutation::CreateElement { element_type, .. } => {
+            assert_eq!(*element_type, solid_gpui_protocol::ElementType::Markdown);
+        }
+        other => panic!("expected markdown createElement, got {other:?}"),
+    }
+    let Mutation::SetText { id, text } = &batch.mutations[5] else {
+        panic!("expected setText");
+    };
+    assert_eq!(*id, ElementId(2));
+    assert!(text.contains("# solid-gpui markdown 🎉"));
+    assert!(text.contains("```rust"));
+    assert_eq!(to_json(&batch), raw);
+}
+
+#[test]
 fn animation_batch_fixture_parses_both_ways() {
     let raw = fs::read_to_string(fixture_path("batch-animation-01.json"))
         .expect("fixture readable")

@@ -108,3 +108,45 @@ Proposed slices (order = instrument first, then value):
 
 Explicitly NOT copied: pinned gpui fork + submodule (we track upstream);
 ThreadsafeFunction in-process bridge (ADR 002); per-frame JS frame loop.
+
+### 2026-08-25 - S13: rich text — markdown port from Comet (MIT)
+status: active | input: Comet source read in full (parser.rs 1190, render.rs 1479, syntax, changes.rs skimmed)
+
+Comet recon findings (verified path:line in ~/dev/scratch/comet-s13):
+- Parser is standalone: pulldown-cmark 0.12 → BlockTree IR (Block::{Paragraph,
+  Heading, CodeBlock{language,code}, BlockQuote, List{ordered_start,items},
+  Table{header,rows,align}, Rule}; InlineRun{text, InlineStyle{bold,italic,
+  code,strikethrough,link}}). No app coupling. Includes bare-URL autolink
+  (pulldown lacks GFM autolink) + merge_runs canonicalization.
+- Render maps BlockTree → gpui via StyledText/with_runs + InteractiveText
+  (links) + canvas underlay (inline-code washes). Layout = constants (14/22
+  body, 12.5/18 code, heading scale 19→14). Tables = flex columns with
+  content-proportional widths (shape_line measures, Taffy resolves).
+- NOT ported now (later slices or never): streaming (IncrementalParser/mend/
+  veil — chat-specific), selection.rs, copy button (app state), syntax
+  highlighting (tree-sitter ×25 grammars — heavy, separate slice), changes.rs
+  diff (5248 LOC, `similar` crate — separate slice).
+- Theme coupling is narrow: {font_sans, font_mono, text, text_muted, accent,
+  border, code_text, code_wash} — stub with fixed defaults + element style
+  keys (color/backgroundColor/fontSize) for slice 1.
+
+S13 design (frozen for implementation):
+- Protocol: elementType "markdown" (closed set, both languages, lockstep);
+  content via setText on markdown elements (mirrors text); markdown has NO
+  children (validation rejects attach — validation/rendering agree); setValue
+  stays input/textarea-only. Fixture batch-markdown-01.json parsed by BOTH.
+- Parsing+rendering live entirely Rust-side in crates/helper/src/markdown/
+  (parser.rs + render.rs, Apache-2.0 header + "Ported from Comet (MIT,
+  Copyright 2026 Wing)" attribution; THIRD_PARTY_NOTICES.md entry). One wire
+  op per change — no per-block JS↔Rust traffic (ADR-002-friendly, same
+  principle as setAnimation interpolating Rust-side).
+- pulldown-cmark 0.12 = helper-only dep (Rust protocol crate stays
+  wire-contract-only; TS protocol stays zero-dep).
+- Solid API: h("markdown", { source: "# …" }) — renderer setProperty maps
+  "source" → setText wire op. Children into markdown stay an apply error
+  (honest contract, tested).
+- Slices: S13a protocol+fixture parity → S13b parser port+tests (pure data)
+  → S13c render port + window smoke + user visual → S13d demo + solid API.
+  Syntax/diff/streaming = S13e+ (separate slices, not this session).
+
+Cross-ref: TODO.md#2026-08-25---s13-rich-text--markdowncodediff-ported-from-comet-mit

@@ -184,9 +184,14 @@ impl RetainedTree {
             }
             Mutation::SetText { id, text } => {
                 let node = self.mut_node(*id, "setText")?;
-                if node.element_type != ElementType::Text {
+                if !matches!(
+                    node.element_type,
+                    ElementType::Text | ElementType::Markdown
+                ) {
                     return Err(ApplyError::InvalidMutation {
-                        message: format!("setText: element {id:?} is not a text element"),
+                        message: format!(
+                            "setText: element {id:?} is not a text or markdown element"
+                        ),
                     });
                 }
                 node.text = Some(text.clone());
@@ -279,12 +284,17 @@ impl RetainedTree {
                 message: format!("parent {parent_id:?} does not exist"),
             });
         }
-        // Validation and rendering agree: text renders as a plain string and
-        // input/textarea render as a dedicated element with no child slots, so
-        // the renderer would silently drop any children — reject them.
+        // Validation and rendering agree: text renders as a plain string,
+        // input/textarea render as a dedicated element with no child slots,
+        // and markdown renders the source text into its own helper-owned
+        // subtree — in all cases the renderer would silently drop wire
+        // children, so reject them.
         if matches!(
             self.elements.get(&parent_id).unwrap().element_type,
-            ElementType::Text | ElementType::Input | ElementType::Textarea
+            ElementType::Text
+                | ElementType::Input
+                | ElementType::Textarea
+                | ElementType::Markdown
         ) {
             return Err(ApplyError::InvalidMutation {
                 message: format!(
