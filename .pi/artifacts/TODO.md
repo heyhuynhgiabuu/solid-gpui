@@ -319,18 +319,26 @@ manual scroll up) and track_scroll integration. Item height is uniform
 (pixel-estimated). This is the native building block for chat/tail lists.
 
 Design sketch:
-- [ ] S11a Protocol: elementType "list"; style keys itemHeight (px estimate),
-      followTail ("tail" — chat mode; absent = normal). List element type
-      validated like input/textarea (children allowed, only list items).
-- [ ] S11a Helper: retained List node → gpui UniformList over its children
-      (retain-all in the tree, paint-visible via UniformList). itemHeight
-      default 24px; followTail → FollowState::Tail. Reuse ScrollHandles
-      (scrollTo/getScrollOffset on the list). Selection/click on items still
-      works (per-item interactive wiring unchanged).
-- [ ] S11a Tests: window test — mount N items (e.g. 10k), scrollTo bottom,
-      assert visible paint count via getStats or captureFrame; followTail:
-      append items while at bottom → auto-follows (assert via scrollOffset
-      staying at bottom). Fixture parity for the new element type.
+- [x] S11a Protocol: elementType "list" (children allowed — they ARE the
+      items); style keys itemHeight (uniform height hint seeding unmeasured
+      items) + followTail (chat mode); listInfo command {itemCount,
+      paintedCount, atEnd} where paintedCount = items actually built last
+      frame (virtualization proof). Fixtures batch-list-01.json +
+      command-list-info.json parsed by BOTH suites (9ee5d9e).
+- [x] S11a Helper: retained List node → gpui List (not UniformList — the
+      fuller element: FollowMode::Tail + ListAlignment::Bottom + splice +
+      remeasure) over the retained children (retain-all in the tree,
+      paint-visible by the List, overdraw 500px). followTail → Bottom
+      alignment + Tail armed ONCE (set_follow_mode resets scroll every call);
+      alignment recreate on toggle; count reconcile via precise prefix/suffix
+      splice (81b9d3b + 9d7362b); render_item re-enters the view via
+      Entity::update so clicks/focus work inside items. Layout lesson: gpui
+      divs default to BLOCK (child takes measured content height — List
+      measured ALL items); wrapper must be flex ROW + definite pixel height.
+- [x] S11a Tests: window test — 500 items + followTail → itemCount 500,
+      atEnd true, paintedCount ≈63 < 200 (virtualization); append/remove
+      reconcile + re-engage follow; followTail-toggle keeps items (c047c36);
+      listInfo fixture parity both languages (81b9d3b).
 - [x] S11b remeasure: content mutations (setText/setStyle/setValue) inside an
       item → remeasure_items(range) (gpui re-anchors scroll when the
       remeasured item is at the scroll top); pure list_item_containing() maps
