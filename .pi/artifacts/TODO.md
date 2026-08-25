@@ -677,3 +677,36 @@ cross-language contract discipline (TS+Rust lockstep, fixtures regenerated).
       subject là numeric-start, không phải key). Gates sau fix: bun
       126/126 · tsc ×3 · cargo 68+29+30+14 · clippy · fmt · GUI smokes.
       P1 CLOSED.
+
+### 2026-08-26 - P2: input maturity (IME/selection/caret, onInput/onChange, multiline growth)
+status: active
+
+Goal: inputs behave like real text fields per Phase 2 roadmap P2. The
+buffer/selection/caret must be verifiably host-side (IME queries arrive
+synchronously during layout — round trips cannot answer them); onInput fires
+per edit and onChange commits on blur/enter; multiline grows within
+minRows..maxRows. Audit what exists first — v1 already ships input/textarea
+with change events, setValue, placeholder, minRows/maxRows; this slice
+closes correctness gaps found by adversarial typing tests.
+
+- [x] P2-a recon: input core is MATURE — InputState (value/caret/marked,
+      UTF-16 units, host.rs:62) + full InputHandler impl (text_for_range,
+      replace_text_in_range, replace_and_mark (IME composing), unmark;
+      host.rs:773-860) + edit_input event pipeline + Enter semantics +
+      textarea autosize clamped minRows..maxRows (host.rs:1418-1435) + unit
+      tests for emoji/clamping (host.rs:2335+). GAPS (with evidence):
+      G1 onInput/onChange collapse — EVENT_NAMES maps BOTH to per-edit
+      "change" (renderer.ts:39-52, comment admits it); no commit-on-blur.
+      G2 set_selected_text_range unimplemented (trait default no-op,
+      platform.rs trait list) → arrow keys/home/end/click cannot move the
+      caret; InputState has no selection anchor so shift-select is absent.
+      G3 paste unimplemented → Cmd+V dead on focused inputs.
+      G4 (minor) autosize counts logical lines only (comment at 1424).
+- [ ] P2-b adversarial typing tests (GUI): CJK IME composition, paste,
+      caret moves mid-composition, UTF-16 surrogate pairs (emoji), offset
+      clamping; record what breaks before fixing
+- [ ] P2-c fixes for confirmed gaps + onInput/onChange split (per-edit vs
+      commit) if missing
+- [ ] P2-d multiline growth rules verified (minRows floor, maxRows cap,
+      newlines from Return) if textarea semantics incomplete
+- [ ] VERIFY: gates + independent review

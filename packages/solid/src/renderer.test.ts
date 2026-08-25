@@ -446,3 +446,31 @@ describe("shorthand normalization (P1-d)", () => {
     expect(hover?.style).toEqual({ paddingLeft: 2, paddingRight: 2 })
   })
 })
+
+describe("onInput/onChange split (P2 G1)", () => {
+  test("onInput registers the per-edit input listener; onChange stays change", async () => {
+    const rec = recording()
+    const { renderer: R, render, flush } = createSolidRenderer(rec.send)
+    const container = R.createElement("#root")
+    let node: ReturnType<typeof R.createElement> | null = null
+    const dispose = render(() => {
+      const input = R.createElement("input")
+      node = input
+      return input
+    }, container)
+    await flush()
+
+    R.setProp(node!, "onInput", () => {})
+    R.setProp(node!, "onChange", () => {})
+    await flush()
+    dispose()
+
+    const listeners = rec.batches
+      .flatMap((b) => b.mutations)
+      .filter((m): m is Extract<Mutation, { op: "setEventListener" }> => m.op === "setEventListener")
+      .map((m) => m.eventType)
+    expect(listeners).toContain("input")
+    expect(listeners).toContain("change")
+    // DOM contract documented: input fires per edit, change commits on blur.
+  })
+})

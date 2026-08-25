@@ -63,8 +63,13 @@ pub struct InputState {
     pub value: String,
     /// Caret position in UTF-16 code units (NSTextInputClient's unit).
     pub caret: usize,
+    /// Selection anchor (shift-arrow/selection drag). None = collapsed.
+    pub anchor: Option<usize>,
     /// IME composing (marked) range in UTF-16 code units, if active.
     pub marked: Option<Range<usize>>,
+    /// An edit happened since the last committed change (blur/Enter). Drives
+    /// DOM-style onChange: input events fire per keystroke; change commits.
+    pub dirty: bool,
 }
 
 impl InputState {
@@ -73,8 +78,40 @@ impl InputState {
         InputState {
             value,
             caret,
+            anchor: None,
             marked: None,
+            dirty: false,
         }
+    }
+
+    /// The active selection as a sorted UTF-16 range (start <= end).
+    pub fn selection(&self) -> Range<usize> {
+        match self.anchor {
+            None => self.caret..self.caret,
+            Some(a) => {
+                let (start, end) = if a <= self.caret {
+                    (a, self.caret)
+                } else {
+                    (self.caret, a)
+                };
+                start..end
+            }
+        }
+    }
+
+    /// Whether the caret sits before the anchor (a backwards selection) —
+    /// the platform asks so shift-arrow keeps extending the right end.
+    pub fn selection_reversed(&self) -> bool {
+        self.anchor.is_some_and(|a| a > self.caret)
+    }
+
+    /// Set caret + anchor from a platform UTF-16 range, clamped to the value.
+    pub fn set_selection(&mut self, range: Range<usize>) {
+        let len = utf16_len(&self.value);
+        let start = range.start.min(len);
+        let end = range.end.min(len).max(start);
+        self.anchor = (start != end).then_some(start);
+        self.caret = end;
     }
 }
 
@@ -145,17 +182,21 @@ fn edit_input(
     let new_value = {
         let mut s = state.borrow_mut();
         let len = utf16_len(&s.value);
-        let sel = range.unwrap_or(s.caret..s.caret);
+        // None = "at the active selection" (anchor-aware) — backspace,
+        // delete, and paste over a shift-arrow selection all arrive this way.
+        let sel = range.unwrap_or_else(|| s.selection());
         let start = sel.start.min(len).min(sel.end.min(len));
         let end = sel.end.min(len).max(start);
         s.value = edit_utf16(&s.value, start..end, text);
         s.caret = start + utf16_len(text);
+        s.anchor = None;
         s.marked = None;
+        s.dirty = true;
         s.value.clone()
     };
     sink(&Event::Input {
         id,
-        event_type: EventType::Change,
+        event_type: EventType::Input,
         x: None,
         y: None,
         key: None,
@@ -342,6 +383,7 @@ impl HostView {
         s.value = value.to_string();
         s.caret = utf16_len(value);
         s.marked = None;
+        s.dirty = false;
     }
 
     /// simulateInput command + Enter-newline: apply a text edit at the caret
@@ -366,6 +408,24 @@ impl HostView {
     /// Push a submit event (input Enter / textarea Shift+Enter).
     fn emit_submit(&self, id: ElementId) {
         self.emit_event(id, EventType::Submit, None, None, None, None, None);
+    }
+
+    /// DOM-style onChange commit: fire one change event carrying the current
+    /// value when an input saw edits since its last commit (blur/Enter).
+    /// No-op for pristine inputs or non-input ids.
+    pub fn commit_input_if_dirty(&self, id: ElementId) {
+        let Some(state) = self.input_states.borrow().get(&id).cloned() else {
+            return;
+        };
+        let value = {
+            let mut s = state.borrow_mut();
+            if !s.dirty {
+                return;
+            }
+            s.dirty = false;
+            s.value.clone()
+        };
+        self.emit_event(id, EventType::Change, None, None, None, None, Some(value));
     }
 
     /// A content-changing mutation landed on `id` (setText/setStyle/setValue):
@@ -540,7 +600,9 @@ impl HostView {
         modifiers: Option<solid_gpui_protocol::Modifiers>,
         value: Option<String>,
     ) {
-        write_event_line(&Event::Input {
+        // Through the injectable sink (write_event_line in production) so
+        // tests observe every emitted event uniformly.
+        (self.sink)(&Event::Input {
             id,
             event_type,
             x,
@@ -778,8 +840,8 @@ impl InputHandler for InputHandlerState {
     ) -> Option<UTF16Selection> {
         let s = self.state.borrow();
         Some(UTF16Selection {
-            range: s.caret..s.caret,
-            reversed: false,
+            range: s.selection(),
+            reversed: s.selection_reversed(),
         })
     }
 
@@ -827,11 +889,12 @@ impl InputHandler for InputHandlerState {
             let composed_end = start + utf16_len(new_text);
             s.caret = new_selected_range.map(|ns| ns.end).unwrap_or(composed_end);
             s.marked = Some(start..composed_end);
+            s.dirty = true;
             s.value.clone()
         };
         (self.sink)(&Event::Input {
             id: self.id,
-            event_type: EventType::Change,
+            event_type: EventType::Input,
             x: None,
             y: None,
             key: None,
@@ -843,6 +906,28 @@ impl InputHandler for InputHandlerState {
 
     fn unmark_text(&mut self, _window: &mut Window, _cx: &mut App) {
         self.state.borrow_mut().marked = None;
+    }
+
+    fn set_selected_text_range(
+        &mut self,
+        range_utf16: Range<usize>,
+        _window: &mut Window,
+        cx: &mut App,
+    ) {
+        // Arrow keys / home / end / click-to-position land here. Movement is
+        // not a value edit: update state, repaint for the caret, emit nothing.
+        self.state.borrow_mut().set_selection(range_utf16);
+        self.repaint(cx);
+    }
+
+    fn paste(&mut self, item: gpui::ClipboardItem, _window: &mut Window, cx: &mut App) {
+        // The platform supplies the clipboard payload; route it through the
+        // same edit pipeline as typed text (selection-aware replace +
+        // change event + repaint).
+        if let Some(text) = item.text() {
+            edit_input(&self.state, self.id, None, &text, &self.sink);
+            self.repaint(cx);
+        }
     }
 
     fn bounds_for_range(
@@ -1324,6 +1409,8 @@ fn apply_interactive(
             });
             let sub_out = cx.on_focus_out(&handle, window, move |view, _event, _window, _cx| {
                 view.emit_focus(id, false);
+                // DOM-style onChange: blur commits pending edits.
+                view.commit_input_if_dirty(id);
             });
             ctx.subscriptions.push(sub_in);
             ctx.subscriptions.push(sub_out);
@@ -1473,11 +1560,13 @@ fn build_input_element(
         }
         if multiline {
             if event.keystroke.modifiers.shift {
+                view.commit_input_if_dirty(id);
                 view.emit_submit(id);
             } else {
                 view.insert_text(id, "\n");
             }
         } else {
+            view.commit_input_if_dirty(id);
             view.emit_submit(id);
         }
     });
@@ -2356,7 +2445,7 @@ mod tests {
     }
 
     #[test]
-    fn edit_input_emits_change_with_new_value_and_moves_caret() {
+    fn edit_input_emits_input_event_with_new_value_and_moves_caret() {
         let state = Rc::new(RefCell::new(InputState::with_value("hi".into())));
         let events = Rc::new(RefCell::new(Vec::new()));
         let sink: Rc<dyn Fn(&Event)> = {
@@ -2375,7 +2464,9 @@ mod tests {
             Event::Input {
                 event_type, value, ..
             } => {
-                assert_eq!(*event_type, EventType::Change);
+                // P2 split: per-edit edits emit `input`; `change` commits on
+                // blur/Enter (commit_input_if_dirty).
+                assert_eq!(*event_type, EventType::Input);
                 assert_eq!(value.as_deref(), Some("hi🎉"));
             }
         }
@@ -2512,5 +2603,119 @@ mod element_needs_stateful_tests {
             false,
             false
         ));
+    }
+}
+
+#[cfg(test)]
+mod input_selection_tests {
+    use super::*;
+
+    #[test]
+    fn selection_resolves_collapse_or_range() {
+        // Collapsed: no anchor → caret..caret.
+        let mut s = InputState::with_value("hello".into());
+        s.caret = 2;
+        assert_eq!(s.selection(), 2..2);
+        // Shift-arrow sets an anchor; forward selection is not reversed.
+        s.set_selection(4..5);
+        assert_eq!(s.selection(), 4..5);
+        assert!(!s.selection_reversed());
+        // Backwards selection (caret left of anchor) IS reversed.
+        s.caret = 2;
+        s.anchor = Some(4);
+        assert_eq!(s.selection(), 2..4);
+        assert!(s.selection_reversed());
+        // Anchor cleared → collapsed again.
+        s.anchor = None;
+        assert_eq!(s.selection(), 2..2);
+    }
+
+    #[test]
+    fn selection_clamps_to_value_length() {
+        let mut s = InputState::with_value("ab".into());
+        s.set_selection(1..99);
+        assert_eq!(s.selection(), 1..2);
+        s.set_selection(50..60);
+        assert_eq!(s.selection(), 2..2);
+    }
+
+    #[test]
+    fn edit_at_selection_replaces_and_collapses() {
+        // edit_input with None range must use the ACTIVE selection, not just
+        // the caret — that's how shift-arrow + backspace/delete/paste over a
+        // selection work.
+        let mut s = InputState::with_value("a🎉b".into());
+        s.set_selection(1..3); // the emoji (2 UTF-16 units)
+        s.anchor = Some(1);
+        let state = Rc::new(RefCell::new(s));
+        let events = Rc::new(RefCell::new(Vec::new()));
+        let sink_events = events.clone();
+        let sink: Rc<dyn Fn(&Event)> = Rc::new(move |e: &Event| {
+            sink_events
+                .borrow_mut()
+                .push(format!("{:?}", e.event_type()));
+        });
+        let out = edit_input(&state, ElementId(1), None, "!", &sink);
+        assert_eq!(out, "a!b");
+        assert_eq!(state.borrow().caret, 2);
+        assert_eq!(state.borrow().anchor, None, "edit collapses the selection");
+    }
+}
+
+#[cfg(test)]
+mod input_commit_tests {
+    use super::*;
+
+    fn host_with_input(value: &str) -> (HostView, ElementId) {
+        let view = HostView::new();
+        view.set_input_value(ElementId(1), value);
+        (view, ElementId(1))
+    }
+
+    #[test]
+    fn commit_input_if_dirty_commits_once_then_silent() {
+        type Observed = Rc<RefCell<Vec<(EventType, Option<String>)>>>;
+        let events: Observed = Rc::new(RefCell::new(Vec::new()));
+        let sink_events = events.clone();
+        let mut view = HostView::new();
+        view.sink = Rc::new(move |e: &Event| {
+            let Event::Input {
+                event_type, value, ..
+            } = e;
+            sink_events.borrow_mut().push((*event_type, value.clone()));
+        });
+        let id = ElementId(1);
+        view.set_input_value(id, "hi");
+
+        // No edits yet → no commit.
+        view.commit_input_if_dirty(id);
+        assert!(events.borrow().is_empty());
+
+        // Edits emit per-keystroke `input`; blur commits ONE `change`.
+        view.simulate_input(id, "!").unwrap();
+        view.simulate_input(id, "x").unwrap();
+        assert_eq!(events.borrow().len(), 2);
+        view.commit_input_if_dirty(id);
+        {
+            let ev = events.borrow();
+            assert_eq!(ev.len(), 3);
+            assert_eq!(ev[2], (EventType::Change, Some("hi!x".into())));
+        }
+        // Second commit is silent; setValue clears dirty (programmatic ≠ edit).
+        view.commit_input_if_dirty(id);
+        view.simulate_input(id, "y").unwrap();
+        view.set_input_value(id, "reset");
+        view.commit_input_if_dirty(id);
+        assert_eq!(
+            events.borrow().len(),
+            4,
+            "setValue-cleared dirty does not commit"
+        );
+    }
+
+    #[test]
+    fn commit_for_unknown_id_is_a_noop() {
+        let (view, _) = host_with_input("hi");
+        view.commit_input_if_dirty(ElementId(99));
     }
 }

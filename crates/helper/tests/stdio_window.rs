@@ -469,14 +469,14 @@ fn window_mode_input_change_events_and_controlled_sync() {
     std::thread::sleep(std::time::Duration::from_millis(200));
 
     // simulateInput types at the caret through the SAME path as the platform
-    // IME (edit_input): the change event (helper→JS) precedes the result reply
-    // because the sink writes inside window.update.
+    // IME (edit_input): the per-edit INPUT event (helper→JS) precedes the
+    // result reply because the sink writes inside window.update.
     let line = r#"{"type":"simulateInput","seq":91,"id":2,"text":"ab"}"#;
     writeln!(stdin, "{line}").unwrap();
     stdin.flush().unwrap();
     assert_eq!(
         lines.next().unwrap().unwrap(),
-        r#"{"type":"event","id":2,"eventType":"change","value":"ab"}"#
+        r#"{"type":"event","id":2,"eventType":"input","value":"ab"}"#
     );
     assert_eq!(
         lines.next().unwrap().unwrap(),
@@ -498,7 +498,7 @@ fn window_mode_input_change_events_and_controlled_sync() {
     stdin.flush().unwrap();
     assert_eq!(
         lines.next().unwrap().unwrap(),
-        r#"{"type":"event","id":2,"eventType":"change","value":"XYc"}"#
+        r#"{"type":"event","id":2,"eventType":"input","value":"XYc"}"#
     );
 
     // EOF quits the app cleanly.

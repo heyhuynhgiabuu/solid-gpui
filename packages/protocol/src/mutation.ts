@@ -16,6 +16,8 @@ export type ElementType =
  */
 export type EventType =
   | "click"
+  /** Per-edit input notification (DOM onInput semantics). */
+  | "input"
   | "mouseDown"
   | "mouseUp"
   | "mouseEnter"
@@ -38,6 +40,7 @@ export const STYLE_STATES: readonly StyleState[] = ["hover", "active"]
 
 export const EVENT_TYPES: readonly EventType[] = [
   "click",
+  "input",
   "mouseDown",
   "mouseUp",
   "mouseEnter",

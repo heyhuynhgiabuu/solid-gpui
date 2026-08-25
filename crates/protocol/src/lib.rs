@@ -72,6 +72,9 @@ pub enum StyleState {
 #[serde(rename_all = "camelCase")]
 pub enum EventType {
     Click,
+    /// Per-edit input notification (DOM onInput semantics): fires for every
+    /// text edit while typing, IME composition included.
+    Input,
     MouseDown,
     MouseUp,
     MouseEnter,

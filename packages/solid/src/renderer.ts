@@ -47,9 +47,9 @@ const EVENT_NAMES: Record<string, EventType> = {
   onFocus: "focus",
   onBlur: "blur",
   onScroll: "scroll",
-  // v1 emits one "change" per edit for BOTH onInput and onChange (DOM
-  // distinguishes commit from per-keystroke; we do not yet).
-  onInput: "change",
+  // DOM semantics: input fires per edit (IME included); change commits on
+  // blur/Enter (the helper tracks dirty state and emits it).
+  onInput: "input",
   onChange: "change",
   onSubmit: "submit",
 }

@@ -78,3 +78,13 @@ describe("decodeEvent", () => {
     if (!r.ok) expect(r.error.kind).toBe("invalidShape")
   })
 })
+
+describe("input event type (P2 split)", () => {
+  test("decodeEvent accepts per-edit input events", () => {
+    const r = decodeEvent(
+      JSON.stringify({ type: "event", id: 3, eventType: "input", value: "ab" }),
+    )
+    expect(r.ok).toBe(true)
+    if (r.ok) expect(r.value.eventType).toBe("input")
+  })
+})
