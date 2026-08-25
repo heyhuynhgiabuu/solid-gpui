@@ -455,3 +455,27 @@
   helpers installs broken for everyone at that version).
 - Helper binary in tarball stays UNCOMPRESSED: npm preserves the exec bit;
   gzip saved <40 percent and would cost a runtime decompress step.
+
+## P1 — styling depth (2026-08-25)
+
+- **Non-interactive divs skip .id()+apply_interactive in build_element** —
+  any feature needing gpui Stateful (hover/active refinements!) must extend
+  the routing predicate (element_needs_stateful), else mutations are acked
+  but never rendered: the applied-count-lies trap (invariant 1). Reviewer
+  caught it because the GUI smoke asserted only the ack, not the render.
+- **Removing a key from one side's key list while the OTHER side transforms
+  it first is a silent-dead-feature recipe**: shorthand expansion moved
+  padding→physical keys pre-wire; ANIMATABLE_STYLE_KEYS still listed
+  "padding" (never emitted) — transitionMs+padding flowed statically with
+  zero warnings. When JS transforms keys, update downstream closed lists on
+  BOTH sides in the same commit, and grep test suites for the old key.
+- **CSS TRBL fan-out semantics**: 1→all, 2→(v,h), 3→(t,h,b), 4→t,r,b,l;
+  X shorthand takes sides[3]/sides[1], Y takes sides[0]/sides[2]. Easy to
+  get the X indexing backwards — the fanout-table pattern (FANOUTS keyed by
+  shorthand, fed a 4-tuple) makes each mapping one reviewable line.
+- **gpui hover()/active() take StyleRefinement, which implements Styled** —
+  one generic apply_style<S: Styled> table drives base Div styles AND state
+  refinements; overflow stays out of the generic (element-specific scroll
+  handles). active() requires Stateful<Div> — apply inside apply_interactive.
+- Rust protocol tests building nodes: Node::new is crate-private — build via
+  RetainedTree + Mutation::apply (public API) instead.

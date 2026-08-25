@@ -631,7 +631,7 @@ h()/JSX APIs unchanged.
 Cross-ref: DECISIONS.md#adr-005
 
 ### 2026-08-25 - P1: styling depth (hoverStyle/activeStyle, shorthands, colors, text props)
-status: active
+status: CLOSED 2026-08-25 (r2: findings fixed, one stale-test Major fixed in d45dbd8)
 
 Goal: styling reaches CSS-familiar depth per Phase 2 roadmap P1: state
 styles (hover/active + group states if gpui supports), shorthand keys
@@ -667,13 +667,13 @@ cross-language contract discipline (TS+Rust lockstep, fixtures regenerated).
       apply_style refactored generic over Styled (refinements share the
       table; overflow excluded by design); GUI smoke applied=3; commit
       39f5d7f.
-- [ ] VERIFY: gates + independent review — gates xanh (bun 126/126, tsc ×3,
-      cargo 68+30+14, clippy, fmt, smoke). r1 (mt8y1v7h-75ef) NOT CLEAN:
-      M1 state layers acked-but-never-rendered trên div phi tương tác
-      (early-return bỏ .id()+apply_interactive) → element_needs_stateful
-      predicate + regression test; M2 transitionMs+padding chết sau khi
-      shorthand expansion (ANIMATABLE_STYLE_KEYS chỉ liệt kê 'padding' không
-      bao giờ phát) → thêm paddingTop/Right/Bottom/Left HAI phía + test;
-      M3 chuỗi TRBL nhiều giá trị bị copy nguyên chuỗi rồi drop → fan-out
-      1/2/3/4 giá trị đúng ngữ nghĩa CSS + 6 unit tests. Fixes trong 81645d4
-      + follow-up tuple-type. r2 (mt8yf9r5-afcf) đang chờ verdict.
+- [x] VERIFY: gates + independent review — r1 (mt8y1v7h-75ef) NOT CLEAN
+      (M1/M2/M3 — fixed trong 81645d4 + 2b5cfd1); r2 (mt8yf9r5-afcf)
+      verified cả ba findings FIXED (predicate test fail-pre-fix reasoning
+      valid, animation test asserts physical-key setAnimation, TRBL mapping
+      pinned, invariants A/B/C/E giữ nguyên) nhưng bắt 1 Major mới: suite đỏ
+      ở HEAD do test numeric-start vẫn animate key "padding" đã rời khỏi
+      animatable list. Fixed trong d45dbd8 (test đổi sang paddingTop —
+      subject là numeric-start, không phải key). Gates sau fix: bun
+      126/126 · tsc ×3 · cargo 68+29+30+14 · clippy · fmt · GUI smokes.
+      P1 CLOSED.
