@@ -11,7 +11,9 @@ status: done (2026-08-24 — Q1–Q3 decided, spec frozen; community probe moved
 - [x] User decision Q2: repo license → **Apache-2.0** (ADR 003, 2026-08-24)
 - [x] User decision Q3: repo name → **solid-gpui** (local dir `gpuis` still to be renamed by user; renaming under a live session breaks cwd)
 - [x] Freeze Phase 1 spec + slices in PLAN.md after Q1–Q3 (spec frozen 2026-08-24)
-- [ ] Community probe (r/solidjs, Solid Discord) — user action, parallel to Phase 1
+- [x] Community probe (r/solidjs, Solid Discord) — drafts written (casual
+      tone, 3 variants) in .pi/artifacts/community-post-draft.md (27dc273);
+      posting itself is the user's action. 2026-08-25.
 
 ### 2026-08-24 - Slice 6: event backchannel (GPUI clicks → Solid handlers)
 status: Phase 1 CLOSED 2026-08-24 (reviewer: mergeable, 0 blocker/major).
