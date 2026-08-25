@@ -379,6 +379,7 @@ impl HostView {
     /// list styles apply — followTail alignment must be known before the
     /// first paint (render-population is lazy, same pattern as scroll/focus
     /// handles). Idempotent with the render-time get-or-create.
+    ///
     pub fn ensure_list_state(&mut self, id: ElementId) {
         let Some(node) = self.tree.get(id) else {
             return;
@@ -399,6 +400,11 @@ impl HostView {
                 .insert(id, ListState::new(0, alignment, px(500.)));
             self.list_alignment.insert(id, alignment);
             self.list_follow_armed.remove(&id);
+            // The fresh state has 0 items: the splice diff baseline must
+            // follow, or the next render sees an empty range and never
+            // populates the recreated state (regression: followTail toggle
+            // emptied the list until the next children mutation).
+            self.list_children.insert(id, Vec::new());
         }
         if follow_tail
             && self.list_follow_armed.insert(id)
@@ -1194,6 +1200,7 @@ fn build_input_element(
 ///
 /// render_item re-enters the view via Entity::update to build items with
 /// full interactive wiring (clicks/focus work inside lists).
+#[allow(clippy::too_many_arguments)]
 fn build_list_element(
     tree: &RetainedTree,
     id: ElementId,
@@ -1226,6 +1233,10 @@ fn build_list_element(
             .insert(id, ListState::new(0, alignment, px(500.)));
         ctx.list_alignment.insert(id, alignment);
         ctx.list_follow_armed.remove(&id);
+        // Reset the splice baseline with the fresh 0-item state (see
+        // ensure_list_state — a stale baseline would skip the populate
+        // splice and render an empty list).
+        ctx.list_children.insert(id, Vec::new());
     }
     let state = ctx
         .list_states

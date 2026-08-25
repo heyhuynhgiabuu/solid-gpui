@@ -639,3 +639,92 @@ fn window_mode_virtual_list_follows_tail_and_virtualizes() {
     let status = child.wait().expect("wait");
     assert_eq!(status.code(), Some(0), "EOF must exit 0");
 }
+
+#[test]
+fn window_mode_follow_tail_toggle_keeps_items() {
+    if skip() {
+        return;
+    }
+    let _lock = WINDOW_TEST_LOCK.lock().unwrap();
+    let bin = env!("CARGO_BIN_EXE_solid-gpui-helper");
+    let mut child = Command::new(bin)
+        .arg("--stdio-window")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .spawn()
+        .expect("helper spawns");
+
+    let mut stdin = child.stdin.take().expect("stdin piped");
+    let reader = BufReader::new(child.stdout.take().expect("stdout piped"));
+    let mut lines = reader.lines();
+
+    // A Top-aligned list (no followTail) with 100 items. Small lists report
+    // atEnd null (gpui: not yet scrollable / heights not all known), so keep
+    // it clearly larger than the viewport: false at the top, true once
+    // following.
+    let mut items = String::new();
+    for i in 2..102 {
+        items.push_str(&format!(
+            r#"{{"op":"createElement","id":{i},"elementType":"div"}},{{"op":"appendChild","parentId":1,"childId":{i}}},{{"op":"setStyle","id":{i},"style":{{"height":24}}}},"#
+        ));
+    }
+    let batch = format!(
+        concat!(
+            r#"{{"v":1,"seq":110,"mutations":[{{"op":"createElement","id":1,"elementType":"list"}},"#,
+            r#"{{"op":"setRoot","id":1}},"#,
+            r#"{{"op":"setStyle","id":1,"style":{{"itemHeight":24}}}},"#,
+            "{}",
+            r#"]}}"#,
+        ),
+        items.trim_end_matches(',')
+    );
+    writeln!(stdin, "{batch}").unwrap();
+    stdin.flush().unwrap();
+    assert_eq!(
+        lines.next().unwrap().unwrap(),
+        r#"{"type":"ack","seq":110,"applied":303}"#
+    );
+    std::thread::sleep(std::time::Duration::from_millis(400));
+
+    let info = r#"{"type":"listInfo","seq":111,"id":1}"#;
+    writeln!(stdin, "{info}").unwrap();
+    stdin.flush().unwrap();
+    let reply: serde_json::Value = serde_json::from_str(&lines.next().unwrap().unwrap()).unwrap();
+    assert_eq!(reply["value"]["itemCount"], 100, "{reply}");
+    assert_eq!(reply["value"]["atEnd"], false, "{reply}");
+
+    // Toggle followTail: the state is RECREATED (Bottom alignment + Tail
+    // follow). The recreated 0-item state must be spliced to the retained
+    // children on the next render — a stale splice baseline would leave the
+    // list empty until the next children mutation (review regression).
+    let batch = r#"{"v":1,"seq":112,"mutations":[{"op":"setStyle","id":1,"style":{"followTail":"true","itemHeight":24}}]}"#;
+    writeln!(stdin, "{batch}").unwrap();
+    stdin.flush().unwrap();
+    assert_eq!(
+        lines.next().unwrap().unwrap(),
+        r#"{"type":"ack","seq":112,"applied":1}"#
+    );
+    std::thread::sleep(std::time::Duration::from_millis(400));
+
+    // The recreated state must hold the retained items (the reviewer's
+    // regression: a stale splice baseline left the recreated state at 0
+    // items until the next children mutation). atEnd is NOT asserted after
+    // the toggle: gpui reports null while the fresh state's heights are
+    // still unknown — the follow itself works (layout recomputes the end
+    // position every frame while following).
+    let info = r#"{"type":"listInfo","seq":113,"id":1}"#;
+    writeln!(stdin, "{info}").unwrap();
+    stdin.flush().unwrap();
+    let reply: serde_json::Value = serde_json::from_str(&lines.next().unwrap().unwrap()).unwrap();
+    assert_eq!(reply["value"]["itemCount"], 100, "{reply}");
+    let painted = reply["value"]["paintedCount"].as_u64().unwrap();
+    assert!(
+        painted > 0 && painted < 200,
+        "virtualized paint expected, got {painted}"
+    );
+
+    // EOF quits the app cleanly.
+    drop(stdin);
+    let status = child.wait().expect("wait");
+    assert_eq!(status.code(), Some(0), "EOF must exit 0");
+}
