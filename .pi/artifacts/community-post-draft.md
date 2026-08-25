@@ -124,34 +124,16 @@ https://github.com/heyhuynhgiabuu/solid-gpui
 
 ## 4) Reply draft — "How does it perform? memory vs webview?"
 
-(Measured right before posting this, release build, macOS, real window open.
-Happy to rerun on other setups.)
+Short version: measured it just now (release build, macOS, window open) —
+the Rust helper is ~55 MB with a 200-row tree, the JS side is ~40 MB, so
+~95 MB total for a small app. Electron is typically 150-250 MB before you
+render anything. Tauri with the system webview is in the same ballpark as
+mine.
 
-Good question — I measured it just now instead of guessing. Release build,
-macOS, real window open:
+Updates are fine-grained — only what changed goes over the wire, p95 build
+is ~1ms for 200-row updates, and rendering is Rust/GPUI on the GPU so
+there's no JS on the hot render path.
 
-- Rust helper process: ~55 MB with a 200-row tree on screen. ~70 MB at 2k
-  rows. Memory scales with tree size, not with window count.
-- JS side (bun + solid): ~40 MB for the demo app.
-- So roughly ~95 MB total for a small app today.
-
-For context, rough ballparks for the webview approaches: an empty Electron
-app typically sits at 150-250 MB (it ships a whole Chromium), Tauri with the
-system webview lands somewhere around what I'm seeing here, maybe less for
-trivial UIs.
-
-Latency-wise: updates are fine-grained — the JS side diffs the tree and
-sends only what changed over the pipe, measured p95 build time is ~1ms for
-200-row updates. Rendering itself happens in Rust on the GPU (GPUI is
-Zed's editor renderer), so there's no JS/GC on the hot render path. Lists
-virtualize: 500 items → ~60 actually painted.
-
-Honest caveats: this is one machine and not a proper head-to-head benchmark
-against an identical app in a webview — building that comparison script is
-on my list. And a dumb 10k-row non-virtualized tree will happily eat ~140
-MB, so virtualization matters here like anywhere.
-
-What I'd actually expect the interesting difference to be long-term: no
-browser engine in the shipping app, and each extra window is a cheap native
-window instead of another webview process. But use it today for the native
-feel, not because it wins memory contests yet.
+Caveat: this is one machine, not a proper head-to-head against the same app
+in a webview. That benchmark is on my list. Right now I'd say pick it for
+the native feel, not because it wins memory contests.
