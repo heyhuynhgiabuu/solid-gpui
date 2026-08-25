@@ -500,3 +500,23 @@ entirely helper-side (fence tag already parsed into Block::CodeBlock).
       CLOSED.
 
 Cross-ref: TODO.md#2026-08-25---s13-rich-text--markdowncodediff-ported-from-comet-mit
+
+### 2026-08-25 - S13f: ```diff fence rendering (Comet LineKind port)
+status: active
+
+Lightweight completion of the original "markdown/code/diff" scope: pulldown
+already yields CodeBlock{language:"diff"} - render those fences with per-
+line kind coloring instead of tree-sitter. NOT the 5248-LOC Changes viewer
+(that is app-coupled: rpc/comments/folds/watch streams).
+
+- [x] S13f-a markdown/diff.rs: DiffLineKind::classify (Add/Del/Hunk/Meta/
+      Context, prefix-only markers, +++/--- before +/-) + 2 test fns
+- [x] S13f-b MdTheme diff palette (emerald-400 add / red-400 del / accent
+      hunk text per upstream builtins) + render_code_block wiring: diff
+      branch precedes syntax; full-bleed row washes via negative mx/px pair
+- [x] S13f-c window test mounts a ```diff fence (ack+frames proof); demo
+      DOC_B shows one
+- [~] VERIFY: bun 96/96 · tsc ×3 · cargo all suites · clippy · fmt. Pending:
+      independent review.
+
+Cross-ref: TODO.md#2026-08-25---s13-rich-text--markdowncodediff-ported-from-comet-mit

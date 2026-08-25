@@ -65,6 +65,12 @@ name: solid-gpui
 syntax: bundled
 \`\`\`
 
+\`\`\`diff
+@@ -3,1 +3,1 @@
+-old behavior: plain text only
++new behavior: diffs color themselves
+\`\`\`
+
 - [x] mount
 - [x] swap
 - [x] syntax highlighting (S13e)`

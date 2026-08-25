@@ -906,7 +906,7 @@ fn window_mode_renders_markdown_element() {
     let reader = BufReader::new(child.stdout.take().expect("stdout piped"));
     let mut lines = reader.lines();
 
-    let md = "# Title\\n\\nHello **bold** and `code` with a [link](https://zed.dev).\\n\\n- a\\n- b\\n\\n1. one\\n\\n> quote\\n\\n```rust\\nfn main() {}\\n```\\n\\n| h1 | h2 |\\n|:--|--:|\\n| x | 1 |\\n\\n---\\n\\ntail.";
+    let md = "# Title\\n\\nHello **bold** and `code` with a [link](https://zed.dev).\\n\\n- a\\n- b\\n\\n1. one\\n\\n> quote\\n\\n```rust\\nfn main() {}\\n```\\n\\n```diff\\n@@ -1,2 +1,2 @@\\n-old line\\n+new line\\n context\\n```\\n\\n| h1 | h2 |\\n|:--|--:|\\n| x | 1 |\\n\\n---\\n\\ntail.";
     let mount = format!(
         r#"{{"v":1,"seq":1,"mutations":[{{"op":"createElement","id":1,"elementType":"div"}},{{"op":"setRoot","id":1}},{{"op":"createElement","id":2,"elementType":"markdown"}},{{"op":"appendChild","parentId":1,"childId":2}},{{"op":"setText","id":2,"text":"{md}"}}]}}"#
     );

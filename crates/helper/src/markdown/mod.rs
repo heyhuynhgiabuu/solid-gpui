@@ -2,8 +2,10 @@
 // Wing. Adapted for solid-gpui (Apache-2.0); see THIRD_PARTY_NOTICES.md.
 
 //! Markdown subsystem: pulldown-cmark parse (parser) → gpui elements (render),
-//! with tree-sitter syntax highlighting for code blocks (syntax).
+//! with tree-sitter syntax highlighting for code blocks (syntax) and diff-
+//! fence coloring (diff).
 
+pub mod diff;
 pub mod parser;
 pub mod render;
 pub mod syntax;

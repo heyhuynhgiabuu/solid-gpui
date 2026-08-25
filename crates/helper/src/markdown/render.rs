@@ -136,6 +136,12 @@ pub struct MdTheme {
     pub code_text: Hsla,
     pub code_wash: Hsla,
     pub syntax: SyntaxPalette,
+    /// ```diff fences: added-line text tone + row wash (emerald-400 family,
+    /// upstream `theme.diff_add`), deleted-line (red-400, `diff_del`).
+    pub diff_add: Hsla,
+    pub diff_add_wash: Hsla,
+    pub diff_del: Hsla,
+    pub diff_del_wash: Hsla,
 }
 
 impl Default for MdTheme {
@@ -153,6 +159,10 @@ impl Default for MdTheme {
             code_text: gpui::rgba(0xcba6f7ff).into(),
             code_wash: gpui::hsla(0.0, 0.0, 1.0, 0.06),
             syntax: SyntaxPalette::default(),
+            diff_add: gpui::rgba(0x34d399ff).into(),
+            diff_add_wash: gpui::rgba(0x34d39926).into(),
+            diff_del: gpui::rgba(0xf87171ff).into(),
+            diff_del_wash: gpui::rgba(0xf8717126).into(),
         }
     }
 }
@@ -616,6 +626,25 @@ fn text_element(
         .into_any_element()
 }
 
+fn is_diff_fence(language: Option<&str>) -> bool {
+    matches!(language, Some("diff") | Some("patch"))
+}
+
+/// One line of a ```diff fence: its kind decides both the row wash and the
+/// text tone. Runs stay plain single-run — diff lines are not tokenized.
+fn diff_line_paint(line: &str, theme: &MdTheme) -> (super::diff::DiffLineKind, Option<Hsla>, Hsla) {
+    use super::diff::{DiffLineKind, classify};
+    let kind = classify(line);
+    let (wash, text) = match kind {
+        DiffLineKind::Add => (Some(theme.diff_add_wash), theme.diff_add),
+        DiffLineKind::Del => (Some(theme.diff_del_wash), theme.diff_del),
+        DiffLineKind::Hunk => (Some(theme.code_wash), theme.accent),
+        DiffLineKind::Meta => (None, theme.text_muted),
+        DiffLineKind::Context => (None, theme.text),
+    };
+    (kind, wash, text)
+}
+
 fn render_code_block(
     row: &str,
     language: Option<&str>,
@@ -662,17 +691,43 @@ fn render_code_block(
                 // One StyledText per line keeps the block's height exactly
                 // lines × line_height; horizontal overflow scrolls. Syntax
                 // highlighting is recolored runs on the same mono font —
-                // layout never changes (highlight is pure paint).
+                // layout never changes (highlight is pure paint). Diff
+                // fences skip tokenization entirely: each line gets a kind
+                // wash + tone instead.
                 .children(code.split('\n').enumerate().map(|(li, line)| {
-                    let spans = highlight
-                        .and_then(|h| h.get(li))
-                        .map(|s| s.as_slice())
-                        .unwrap_or(&[]);
-                    let runs = runs_for_syntax_line(line, spans, &mono, theme);
-                    div()
-                        .h(px(CODE_LINE_HEIGHT * scale))
-                        .flex_none()
-                        .child(StyledText::new(SharedString::from(line)).with_runs(runs))
+                    let mut line_el = div().h(px(CODE_LINE_HEIGHT * scale)).flex_none();
+                    if is_diff_fence(language) {
+                        let (kind, wash, text) = diff_line_paint(line, theme);
+                        if let Some(wash) = wash {
+                            // Full-bleed wash inside the padded body: pull
+                            // the row out by the body padding on both axes.
+                            line_el = line_el
+                                .bg(wash)
+                                .mx(px(-(CODE_PADDING_X * scale)))
+                                .px(px(CODE_PADDING_X * scale));
+                        }
+                        let color = match kind {
+                            super::diff::DiffLineKind::Context => theme.text,
+                            _ => text,
+                        };
+                        let run = TextRun {
+                            len: line.len(),
+                            font: mono.clone(),
+                            color,
+                            background_color: None,
+                            underline: None,
+                            strikethrough: None,
+                        };
+                        line_el
+                            .child(StyledText::new(SharedString::from(line)).with_runs(vec![run]))
+                    } else {
+                        let spans = highlight
+                            .and_then(|h| h.get(li))
+                            .map(|s| s.as_slice())
+                            .unwrap_or(&[]);
+                        let runs = runs_for_syntax_line(line, spans, &mono, theme);
+                        line_el.child(StyledText::new(SharedString::from(line)).with_runs(runs))
+                    }
                 })),
         )
         .into_any_element()
