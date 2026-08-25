@@ -337,6 +337,9 @@ Design sketch:
       id→(list,item) unit-tested; window test exercises it. The List already
       measures real heights as items render — the hint only seeds off-screen
       items. No windowed mounting needed: gpui List virtualization suffices.
-- [ ] VERIFY S11: suites green; commits 9ee5d9e+81b9d3b+2657d4c; reviewer
+- [x] VERIFY S11: r1 = 3 findings (scroll reset on splice, tsc gate, non-root
+      wrapper height) fixed in 9d7362b; r2 = 1 Major (list_children baseline
+      not reset on followTail-toggle recreation → list emptied) fixed in
+      c047c36; r3: mergeable. Closed 2026-08-24.
 
 Cross-ref: PLAN.md Phase 2 roadmap (S11 entry)

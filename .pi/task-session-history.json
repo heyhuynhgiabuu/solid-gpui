@@ -480,5 +480,29 @@
     "reportedStatus": "success",
     "resultValid": true,
     "completedAt": 1787593000504
+  },
+  {
+    "id": "mt85p5n6-d4ec",
+    "agentType": "reviewer",
+    "description": "Re-verify S11 r2 major fix",
+    "sessionName": "task-mt85p5n6-d4ec",
+    "startedAt": 1787631604874,
+    "paneId": "w3:pE6",
+    "handle": {
+      "backend": "herdr",
+      "resourceId": "w3:pE6",
+      "socketPath": "/Users/huynhgiabuu/.config/herdr/herdr.sock",
+      "terminalId": "term_659d76a77d6cd35",
+      "agentName": "reviewer-mt85p5n6",
+      "foregroundProcessGroupId": 97338
+    },
+    "piDir": "/Users/huynhgiabuu/dev/projects/solid-gpui/.pi",
+    "dir": "/Users/huynhgiabuu/dev/projects/solid-gpui/.pi/artifacts/tasks",
+    "cwd": "/Users/huynhgiabuu/dev/projects/solid-gpui",
+    "status": "done",
+    "background": true,
+    "reportedStatus": "success",
+    "resultValid": true,
+    "completedAt": 1787631884081
   }
 ]
