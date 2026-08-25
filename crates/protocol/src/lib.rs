@@ -116,7 +116,12 @@ pub const ANIMATABLE_STYLE_KEYS: &[&str] = &[
     "height",
     "minWidth",
     "minHeight",
-    "padding",
+    // padding/paddingX/paddingY expand to physical keys on the TS side
+    // before anything is sent, so the wire only ever carries these four.
+    "paddingTop",
+    "paddingRight",
+    "paddingBottom",
+    "paddingLeft",
     "gap",
     "borderRadius",
     "fontSize",

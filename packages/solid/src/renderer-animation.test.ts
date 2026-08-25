@@ -184,3 +184,27 @@ describe("h() reactive style prop", () => {
     dispose()
   })
 })
+
+describe("padding transitions after shorthand expansion (P1 r1 M2)", () => {
+  test("numeric→numeric padding with transitionMs animates via physical keys", async () => {
+    const rec = recording()
+    const { renderer: R, render, flush } = createSolidRenderer(rec.send)
+    const container = R.createElement("#root")
+    const dispose = render(() => {
+      const box = R.createElement("div")
+      R.setProp(box, "style", { paddingTop: 8, paddingBottom: 8 })
+      R.setProp(box, "transitionMs", 250)
+      R.setProp(box, "style", { paddingTop: 16, paddingBottom: 16 })
+      return box
+    }, container)
+    await flush()
+    dispose()
+
+    const anim = lastMutations(rec.batches).find(
+      (m): m is Extract<Mutation, { op: "setAnimation" }> => m.op === "setAnimation",
+    )
+    // Pre-fix this is a silent static setStyle — the M2 regression.
+    expect(anim).toBeDefined()
+    expect(anim?.target).toEqual({ paddingTop: 16, paddingBottom: 16 })
+  })
+})

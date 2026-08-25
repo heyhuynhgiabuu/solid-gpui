@@ -1169,13 +1169,27 @@ fn build_element(
     };
     let has_autofocus = node.style.contains_key("autoFocus");
     let wants_focus = tab_index.is_some() || has_focus || has_key || has_autofocus;
-    if axis.is_none() && !has_click && !wants_focus {
+    if !element_needs_stateful(node, axis.is_some(), has_click, wants_focus) {
         return el.into_any_element();
     }
 
     let el = el.id(id.0 as usize);
     let el = apply_interactive(el, tree, id, window, cx, ctx, tab_index, false);
     el.into_any_element()
+}
+
+/// Whether the plain-div path must become stateful (id + interactivity).
+/// State layers (hover/active) need a Stateful element for gpui's
+/// hover()/active() refinements — without this check they would be stored
+/// on the wire, acked, and silently never rendered (applied count lies;
+/// AGENTS.md invariant 1).
+fn element_needs_stateful(
+    node: &solid_gpui_protocol::Node,
+    has_overflow: bool,
+    has_click: bool,
+    wants_focus: bool,
+) -> bool {
+    has_overflow || has_click || wants_focus || !node.state_styles.is_empty()
 }
 
 /// Markdown element: parse the node's text (markdown source), highlight its
@@ -2443,5 +2457,60 @@ mod tests {
         assert_eq!(s.value, "controlled");
         assert_eq!(s.caret, utf16_len("controlled"));
         assert!(s.marked.is_none());
+    }
+}
+
+#[cfg(test)]
+mod element_needs_stateful_tests {
+    use super::*;
+    use solid_gpui_protocol::StyleMap;
+
+    fn node_with_state(state: Option<StyleState>) -> solid_gpui_protocol::Node {
+        // Build via the retained tree's public apply API (Node::new is
+        // crate-private to the protocol): createElement + state-layered
+        // setStyle gives us exactly the node shape under test.
+        let mut tree = solid_gpui_protocol::RetainedTree::new();
+        tree.apply(&Mutation::CreateElement {
+            id: ElementId(1),
+            element_type: ElementType::Div,
+        })
+        .unwrap();
+        if let Some(s) = state {
+            tree.apply(&Mutation::SetStyle {
+                id: ElementId(1),
+                style: StyleMap::from([(
+                    "backgroundColor".to_string(),
+                    StyleValue::Text("#ff0000".into()),
+                )]),
+                state: Some(s),
+            })
+            .unwrap();
+        }
+        tree.get(ElementId(1)).unwrap().clone()
+    }
+
+    #[test]
+    fn plain_div_stays_stateless_but_state_layers_force_stateful() {
+        // The regression: a div with no click/focus/overflow MUST still go
+        // stateful when it carries hover/active layers — otherwise they are
+        // acked but silently never rendered.
+        assert!(!element_needs_stateful(
+            &node_with_state(None),
+            false,
+            false,
+            false
+        ));
+        assert!(element_needs_stateful(
+            &node_with_state(Some(StyleState::Hover)),
+            false,
+            false,
+            false
+        ));
+        assert!(element_needs_stateful(
+            &node_with_state(Some(StyleState::Active)),
+            false,
+            false,
+            false
+        ));
     }
 }

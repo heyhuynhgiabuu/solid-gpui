@@ -6,29 +6,90 @@
 import type { StyleMap } from "@solid-gpui/protocol"
 
 type StyleDict = Record<string, string | number>
+type Sides = readonly (string | number)[]
 
-/** Each shorthand fans out to physical keys; last-write-wins per physical
- *  key matches CSS cascade order within one object (later wins). */
-const EXPANSIONS: Readonly<Record<string, readonly string[]>> = {
-  padding: ["paddingTop", "paddingRight", "paddingBottom", "paddingLeft"],
-  paddingX: ["paddingLeft", "paddingRight"],
-  paddingY: ["paddingTop", "paddingBottom"],
-  margin: ["marginTop", "marginRight", "marginBottom", "marginLeft"],
-  marginX: ["marginLeft", "marginRight"],
-  marginY: ["marginTop", "marginBottom"],
-  inset: ["top", "right", "bottom", "left"],
-  size: ["width", "height"],
+/** Per-shorthand fan-out, given the CSS TRBL side values [t, r, b, l]. */
+const FANOUTS: Readonly<
+  Record<string, (s: Sides) => ReadonlyArray<[string, string | number]>>
+> = {
+  padding: (s) => [
+    ["paddingTop", s[0]],
+    ["paddingRight", s[1]],
+    ["paddingBottom", s[2]],
+    ["paddingLeft", s[3]],
+  ],
+  paddingX: (s) => [
+    ["paddingLeft", s[3]],
+    ["paddingRight", s[1]],
+  ],
+  paddingY: (s) => [
+    ["paddingTop", s[0]],
+    ["paddingBottom", s[2]],
+  ],
+  margin: (s) => [
+    ["marginTop", s[0]],
+    ["marginRight", s[1]],
+    ["marginBottom", s[2]],
+    ["marginLeft", s[3]],
+  ],
+  marginX: (s) => [
+    ["marginLeft", s[3]],
+    ["marginRight", s[1]],
+  ],
+  marginY: (s) => [
+    ["marginTop", s[0]],
+    ["marginBottom", s[2]],
+  ],
+  inset: (s) => [
+    ["top", s[0]],
+    ["right", s[1]],
+    ["bottom", s[2]],
+    ["left", s[3]],
+  ],
+  // size has no TRBL semantics: one value, both axes.
+  size: (s) => [
+    ["width", s[0]],
+    ["height", s[0]],
+  ],
+}
+
+/**
+ * CSS TRBL fan-out for string values: 1 value → all sides; 2 → (v, h);
+ * 3 → (top, h, bottom); 4 → (top, right, bottom, left). Numbers apply to
+ * every side. Anything else (unparsable, mixed) returns null — the original
+ * string then passes through and drops helper-side under the open-value
+ * rule, exactly like a non-shorthand key with a junk value.
+ */
+function perSide(value: string | number): Sides | null {
+  if (typeof value === "number") return [value, value, value, value]
+  const parts = value.trim().split(/\s+/)
+  if (parts.some((p) => !/^-?[\d.]+(px|rem|%)?$/.test(p))) return null
+  switch (parts.length) {
+    case 1:
+      return [parts[0], parts[0], parts[0], parts[0]]
+    case 2:
+      return [parts[0], parts[1], parts[0], parts[1]]
+    case 3:
+      return [parts[0], parts[1], parts[2], parts[1]]
+    case 4:
+      return parts
+    default:
+      return null
+  }
 }
 
 export function expandShorthands(style: StyleMap): StyleMap {
   const out: StyleDict = {}
   for (const [key, value] of Object.entries(style)) {
-    const physical = EXPANSIONS[key]
-    if (physical && value !== null && value !== undefined) {
-      for (const k of physical) out[k] = value
-    } else {
-      out[key] = value
+    const fanout = FANOUTS[key]
+    if (fanout && value !== null && value !== undefined) {
+      const sides = perSide(value)
+      if (sides) {
+        for (const [physical, v] of fanout(sides)) out[physical] = v
+        continue
+      }
     }
+    out[key] = value
   }
   return out as StyleMap
 }

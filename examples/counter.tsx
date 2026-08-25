@@ -41,7 +41,8 @@ function Tree() {
       </div>
       <div
         style={{
-          padding: "10px 18px",
+          paddingY: 10,
+          paddingX: 18,
           borderRadius: 8,
           backgroundColor: pressed() ? "#89b4fa" : "#45475a",
           color: "#1e1e2e",

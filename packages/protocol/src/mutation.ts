@@ -96,7 +96,12 @@ export const ANIMATABLE_STYLE_KEYS = [
   "height",
   "minWidth",
   "minHeight",
-  "padding",
+  // padding/paddingX/paddingY expand to physical keys BEFORE animation
+  // detection, so the wire only ever carries these four.
+  "paddingTop",
+  "paddingRight",
+  "paddingBottom",
+  "paddingLeft",
   "gap",
   "borderRadius",
   "fontSize",
