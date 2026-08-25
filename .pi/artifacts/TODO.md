@@ -343,3 +343,41 @@ Design sketch:
       c047c36; r3: mergeable. Closed 2026-08-24.
 
 Cross-ref: PLAN.md Phase 2 roadmap (S11 entry)
+
+### 2026-08-24 - S12: animations (Phase 2)
+status: active
+Recon: gpui has a first-class animation API (crates/gpui/src/elements/
+animation.rs): `Animation::new(duration)` + `.with_easing(fn)` +
+`AnimationExt::with_animation(id, anim, |el, t| ...)` — the animator receives
+normalized time (eased, may overshoot) and rebuilds the element; the element
+id preserves identity across frames. Springs (`with_spring`, SpringTarget)
+preserve velocity across target changes — ideal for width/height/opacity
+transitions (a chat list growing, a panel collapsing).
+
+Design sketch:
+- [ ] S12a Protocol: Mutation::setAnimation {id, target: StyleMap,
+      transitionMs, easing?} — single op, numeric targets ONLY (width,
+      height, minWidth/minHeight, padding, borderRadius, opacity — closed set
+      matching what apply_style can interpolate; non-numeric targets are an
+      applyFailed). Style keys NOT in the closed set are rejected (numeric
+      animation is a real semantic, unlike static style keys).
+- [ ] S12a Helper: per-element animation state (start value, target, start
+      instant, duration) keyed by ElementId; render interpolates the CURRENT
+      value (elapsed/duration with easing) and applies it through the same
+      apply_style path; the op stores the TARGET as the element's style so
+      the final frame == the static state (no re-render needed at the end —
+      the animation entry is dropped once complete). Animate via gpui's
+      AnimationElement OR manual interpolation + cx.notify chain (choose at
+      implementation based on where the animation clock lives).
+- [ ] S12a Tests: fixture setAnimation (both suites); window test: setStyle
+      opacity 1 -> setAnimation opacity 0 (transitionMs 300) -> getStats /
+      listInfo-style probe or captureFrame at t<300 shows an intermediate
+      value (via a stats/animationInfo command or frame capture); end state
+      equals the target. Unit test the easing/interpolation math (pure).
+- [ ] S12b transition continuity: new setAnimation while one is running
+      starts from the CURRENT value (no jump); animation on a destroyed
+      element is dropped; reduce-motion (gpui App::reduce_motion) renders
+      the end state — verify we respect it.
+- [ ] VERIFY: suites green; commit per sub-slice; independent review
+
+Cross-ref: PLAN.md Phase 2 roadmap (S12 entry)
