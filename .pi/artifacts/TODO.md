@@ -502,7 +502,10 @@ entirely helper-side (fence tag already parsed into Block::CodeBlock).
 Cross-ref: TODO.md#2026-08-25---s13-rich-text--markdowncodediff-ported-from-comet-mit
 
 ### 2026-08-25 - S13f: ```diff fence rendering (Comet LineKind port)
-status: active
+status: done (2026-08-25; r1 FINDINGS-SHOULD-FIX both minors fixed; r2
+verdict CLEAN with an empirical taffy reproduction of the scroll fix.
+S13 rich text now fully closed: markdown core + syntax highlighting +
+diff fences. Remaining future slices: streaming, full Changes pane.)
 
 Lightweight completion of the original "markdown/code/diff" scope: pulldown
 already yields CodeBlock{language:"diff"} - render those fences with per-
@@ -523,7 +526,9 @@ line kind coloring instead of tree-sitter. NOT the 5248-LOC Changes viewer
       use taffy default stretch instead of negative mx/px — scroll extent
       no longer inflated 2×padding; fence tag now case-insensitive;
       notices add changes.rs source.
-- [~] VERIFY: bun 96/96 · tsc ×3 · cargo all suites green · clippy · fmt.
-      Pending: reviewer r2 on the fixes.
+- [x] VERIFY: bun 96/96 · tsc ×3 · cargo all suites green · clippy · fmt.
+      Review r2 (mt8igv0v-05a7) verdict **CLEAN**: both minors verified
+      fixed with code evidence + an empirical taffy 0.13 model (scroll_max
+      24→0). S13f CLOSED.
 
 Cross-ref: TODO.md#2026-08-25---s13-rich-text--markdowncodediff-ported-from-comet-mit

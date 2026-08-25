@@ -366,3 +366,26 @@
   "Proposed changes:", "Write/read policy:", "Acceptance criteria and stop
   condition:" sections in the prompt; full brief in .pi/review-tmp/*.md,
   short prompt references it.
+
+## S13f diff-fence learnings (2026-08-25)
+
+- Unified-diff line classification, stateless version: space-gate the file
+  headers ("+++ "/"--- " — git always writes the path after a space) so
+  ADDED CONTENT beginning with ++ (e.g. `+++i;`) classifies Add. Upstream
+  Comet does strip_prefix("+++ ") — same rule. Header-shaped content
+  ("+++ path") is genuinely ambiguous without hunk-state tracking: pick
+  the header reading, document it, pin it with tests. Plumbing lines
+  (new/deleted file mode, rename/copy from/to, Binary files, similarity
+  index) belong in Meta/muted.
+- LAYOUT: negative mx + compensating px for "full-bleed" rows inflates
+  gpui's children-bounds scroll extent by 2×padding (dead band at max
+  scroll). Taffy's DEFAULT cross-axis stretch already spans flex-col
+  children to the container content width — `.bg(wash)` alone gives an
+  honest edge-to-edge wash (verified with a scratch taffy model:
+  scroll_max 24 → 0).
+- Review-request pattern that caught real issues: ask reviewers to
+  EMPIRICALLY reproduce layout claims (scratch cargo project modeling the
+  element chain) instead of trusting source reading — r2 reproduced the
+  24px inflation before verifying the fix.
+- GFM fence info strings are case-insensitive; match language tags with
+  eq_ignore_ascii_case.
