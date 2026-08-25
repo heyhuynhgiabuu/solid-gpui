@@ -171,6 +171,17 @@ class HelperConnection {
       p?.reject(new ReplyError(reply.code, reply.message))
       return
     }
+    // Seq-less error: a line the helper could not decode (the batch/command
+    // never parsed, so there is no seq to echo). Strict line ordering makes
+    // the oldest unsatisfied pending the culprit — reject it instead of
+    // hanging its flush forever.
+    const first = this.pending.entries().next().value
+    if (first) {
+      const [seq, p] = first
+      this.pending.delete(seq)
+      p.reject(new ReplyError(reply.code, reply.message))
+      return
+    }
     this.opts.onUnmatchedReply?.(reply)
   }
 

@@ -6,6 +6,11 @@
 echo '{"type":"event","id":7,"eventType":"click","x":10,"y":20}'
 while IFS= read -r line; do
   case "$line" in
+    *'"mutations"'*)
+      # A batch the helper cannot decode: error reply carries no seq because
+      # the batch never parsed (mirrors real decode-failure framing).
+      printf '{"type":"error","seq":null,"code":"decodeFailed","message":"simulated decode failure"}\n'
+      ;;
     *'"type":"getStats"'*)
       seq=$(printf '%s' "$line" | sed -n 's/.*"seq":\([0-9]*\).*/\1/p')
       printf '{"type":"result","seq":%s,"value":{"frames":3,"p95Ms":0.2}}\n' "$seq"

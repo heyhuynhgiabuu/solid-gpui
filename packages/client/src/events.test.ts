@@ -41,3 +41,18 @@ describe("sendCommand", () => {
     await helper.close()
   })
 })
+
+describe("batch decode failure (seq-less error reply)", () => {
+  test("sendBatch rejects with ReplyError instead of hanging forever", async () => {
+    const helper = spawnHelper({ binary: fake, args: [] })
+    const err = await helper
+      .sendBatch({ v: 1, seq: 5, mutations: [] })
+      .then(
+        () => null,
+        (e) => e,
+      )
+    expect(err).toBeInstanceOf(ReplyError)
+    expect((err as ReplyError).code).toBe("decodeFailed")
+    await helper.close()
+  })
+})
