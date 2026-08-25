@@ -66,7 +66,16 @@ describe("transition props animate style changes", () => {
     const ms = lastMutations(rec.batches)
     expect(ms.some((m) => m.op === "setAnimation")).toBe(false)
     const style = ms.filter((m): m is Extract<Mutation, { op: "setStyle" }> => m.op === "setStyle").at(-1)
-    expect(style?.style).toEqual({ opacity: 1, width: 300, padding: 8 })
+    // padding is a P1-d shorthand: it expands to the four physical keys on
+    // the wire, so the static style carries the expansion (not "padding").
+    expect(style?.style).toEqual({
+      opacity: 1,
+      width: 300,
+      paddingTop: 8,
+      paddingRight: 8,
+      paddingBottom: 8,
+      paddingLeft: 8,
+    })
     dispose()
   })
 

@@ -19,6 +19,7 @@ import {
   type StyleMap,
 } from "@solid-gpui/protocol"
 import type { Ack } from "@solid-gpui/client"
+import { expandShorthands } from "./style-normalize"
 
 /** Sends one batch; resolves on its ack, rejects on its error reply. */
 export type Send = (batch: MutationBatch) => Promise<Ack>
@@ -251,12 +252,12 @@ export function createSolidRenderer(send: Send): SolidGpuiRenderer {
         // session (validation and rendering agree), so drop it here instead.
         if (node.tag === "markdown") return
         const state = name === "hoverStyle" ? "hover" : "active"
-        const layer = (value ?? {}) as StyleMap
+        const layer = expandShorthands((value ?? {}) as StyleMap)
         push({ op: "setStyle", id, style: layer, state })
         return
       }
       if (name === "style") {
-        const next = (value ?? {}) as StyleMap
+        const next = expandShorthands((value ?? {}) as StyleMap)
         const prev = node.lastStyle
         node.lastStyle = next
         if (node.transitionMs && prev && node.tag === "markdown") {

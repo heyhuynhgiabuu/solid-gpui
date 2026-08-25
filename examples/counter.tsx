@@ -27,7 +27,18 @@ function Tree() {
         backgroundColor: "#1e1e2e",
       }}
     >
-      <div style={{ fontSize: 28, color: "#cdd6f4" }}>Count: {count()}</div>
+      <div
+        style={{
+          fontSize: 28,
+          color: "#cdd6f4",
+          whiteSpace: "nowrap",
+          textOverflow: "ellipsis",
+          boxShadow: "0 4 12 rgba(0, 0, 0, 0.35)",
+          paddingX: 12,
+        }}
+      >
+        Count: {count()}
+      </div>
       <div
         style={{
           padding: "10px 18px",
@@ -39,6 +50,7 @@ function Tree() {
         hoverStyle={{
           backgroundColor: "rgba(137, 180, 250, 0.35)",
           borderRadius: 12,
+          marginTop: 2,
         }}
         activeStyle={{
           backgroundColor: "hsl(220, 50%, 40%)",

@@ -1637,59 +1637,15 @@ fn apply_state_styles(
 fn apply_refinement(mut s: gpui::StyleRefinement, map: &StyleMap) -> gpui::StyleRefinement {
     for (key, value) in map {
         let key: &str = key;
-        let num = match value {
-            StyleValue::Number(n) => n.as_f64(),
-            StyleValue::Text(t) => parse_px(t),
-        };
-        match key {
-            "backgroundColor" => {
-                if let Some(c) = parse_color(value) {
-                    s = s.bg(c);
-                }
-            }
-            "color" => {
-                if let Some(c) = parse_color(value) {
-                    s = s.text_color(c);
-                }
-            }
-            "opacity" => {
-                if let Some(n) = num {
-                    s = s.opacity(n as f32);
-                }
-            }
-            "borderRadius" => {
-                if let Some(n) = num {
-                    s = s.rounded(px(n as f32));
-                }
-            }
-            "padding" => {
-                if let Some(n) = num {
-                    s = s.p(px(n as f32));
-                }
-            }
-            "width" => {
-                if let Some(n) = num {
-                    s = s.w(px(n as f32));
-                }
-            }
-            "height" => {
-                if let Some(n) = num {
-                    s = s.h(px(n as f32));
-                }
-            }
-            "gap" => {
-                if let Some(n) = num {
-                    s = s.gap(px(n as f32));
-                }
-            }
-            _ => {}
-        }
+        s = apply_style(s, key, value);
     }
     s
 }
 
 /// v1 style subset; unknown keys and unparsable values are ignored by design.
-fn apply_style(mut el: Div, key: &str, value: &StyleValue) -> Div {
+/// Generic over Styled so the same matcher drives base styles (Div) and
+/// state-layer refinements (StyleRefinement) — one table, two callers.
+fn apply_style<S: gpui::Styled>(mut el: S, key: &str, value: &StyleValue) -> S {
     let num = match value {
         StyleValue::Number(n) => n.as_f64(),
         StyleValue::Text(s) => parse_px(s),
@@ -1718,6 +1674,92 @@ fn apply_style(mut el: Div, key: &str, value: &StyleValue) -> Div {
         "padding" => {
             if let Some(n) = num {
                 el = el.p(px(n as f32));
+            }
+        }
+        "paddingTop" => {
+            if let Some(n) = num {
+                el = el.pt(px(n as f32));
+            }
+        }
+        "paddingRight" => {
+            if let Some(n) = num {
+                el = el.pr(px(n as f32));
+            }
+        }
+        "paddingBottom" => {
+            if let Some(n) = num {
+                el = el.pb(px(n as f32));
+            }
+        }
+        "paddingLeft" => {
+            if let Some(n) = num {
+                el = el.pl(px(n as f32));
+            }
+        }
+        "margin" => {
+            if let Some(n) = num {
+                el = el.m(px(n as f32));
+            }
+        }
+        "marginTop" => {
+            if let Some(n) = num {
+                el = el.mt(px(n as f32));
+            }
+        }
+        "marginRight" => {
+            if let Some(n) = num {
+                el = el.mr(px(n as f32));
+            }
+        }
+        "marginBottom" => {
+            if let Some(n) = num {
+                el = el.mb(px(n as f32));
+            }
+        }
+        "marginLeft" => {
+            if let Some(n) = num {
+                el = el.ml(px(n as f32));
+            }
+        }
+        "top" => {
+            if let Some(n) = num {
+                el = el.top(px(n as f32));
+            }
+        }
+        "right" => {
+            if let Some(n) = num {
+                el = el.right(px(n as f32));
+            }
+        }
+        "bottom" => {
+            if let Some(n) = num {
+                el = el.bottom(px(n as f32));
+            }
+        }
+        "left" => {
+            if let Some(n) = num {
+                el = el.left(px(n as f32));
+            }
+        }
+        "boxShadow" => {
+            if let Some(shadow) = parse_box_shadow(value) {
+                el = el.shadow(vec![shadow]);
+            }
+        }
+        "lineClamp" => {
+            if let Some(n) = num {
+                let lines = (n as usize).max(1);
+                el = el.line_clamp(lines);
+            }
+        }
+        "whiteSpace" => match value.as_str() {
+            Some("nowrap") => el = el.whitespace_nowrap(),
+            Some("normal") => el = el.whitespace_normal(),
+            _ => {}
+        },
+        "textOverflow" => {
+            if value.as_str() == Some("ellipsis") {
+                el = el.text_ellipsis();
             }
         }
         "gap" => {
@@ -1864,6 +1906,29 @@ fn css_alpha(rest: &str) -> Option<f64> {
         return None;
     }
     Some(a)
+}
+
+/// boxShadow string: "offsetX offsetY blur [color]" (CSS-ish). Color is any
+/// format parse_color accepts; missing color means black. Fewer than three
+/// numeric fields is ignored like any unparsable value.
+fn parse_box_shadow(value: &StyleValue) -> Option<gpui::BoxShadow> {
+    let text = value.as_str()?;
+    let mut parts = text.split_whitespace();
+    let x: f64 = parts.next()?.parse().ok()?;
+    let y: f64 = parts.next()?.parse().ok()?;
+    let blur: f64 = parts.next()?.parse().ok()?;
+    let color = parts
+        .next()
+        .and_then(|c| parse_color(&StyleValue::Text(c.to_string())))
+        .map(gpui::Hsla::from)
+        .unwrap_or(gpui::black());
+    Some(gpui::BoxShadow {
+        color,
+        offset: gpui::point(px(x as f32), px(y as f32)),
+        blur_radius: px(blur as f32),
+        spread_radius: px(0.),
+        inset: false,
+    })
 }
 
 /// hsl()/hsla() body: hue (deg, may exceed 360), saturation and lightness

@@ -966,3 +966,35 @@ fn window_mode_renders_state_layer_styles_without_apply_errors() {
     let status = child.wait().expect("wait");
     assert_eq!(status.code(), Some(0), "EOF must exit 0");
 }
+
+#[test]
+fn window_mode_renders_shorthand_expanded_and_text_props() {
+    if skip() {
+        return;
+    }
+    let _lock = window_lock();
+    let bin = env!("CARGO_BIN_EXE_solid-gpui-helper");
+    let mut child = Command::new(bin)
+        .arg("--stdio-window")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .spawn()
+        .expect("helper spawns");
+
+    let mut stdin = child.stdin.take().expect("stdin piped");
+    let reader = BufReader::new(child.stdout.take().expect("stdout piped"));
+    let mut lines = reader.lines();
+
+    // Physical expansion keys (JS already expanded), margins, inset, shadow,
+    // lineClamp/whiteSpace/textOverflow — all through a real render (P1-d/e
+    // smoke): ack proves none of the new arms panics during element build.
+    let batch = r#"{"v":1,"seq":1,"mutations":[{"op":"createElement","id":1,"elementType":"div"},{"op":"setStyle","id":1,"style":{"paddingLeft":12,"paddingRight":12,"paddingTop":6,"paddingBottom":6,"marginTop":8,"marginLeft":4,"top":10,"left":10,"boxShadow":"0 2 8 #00000060","lineClamp":2,"whiteSpace":"nowrap","textOverflow":"ellipsis"}},{"op":"setRoot","id":1}]}"#;
+    writeln!(stdin, "{batch}").unwrap();
+    stdin.flush().unwrap();
+    let ack = lines.next().unwrap().expect("ack line");
+    assert_eq!(ack, r#"{"type":"ack","seq":1,"applied":3}"#);
+
+    drop(stdin);
+    let status = child.wait().expect("wait");
+    assert_eq!(status.code(), Some(0), "EOF must exit 0");
+}

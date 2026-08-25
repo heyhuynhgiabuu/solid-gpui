@@ -355,3 +355,94 @@ describe("state-layer styles (hoverStyle/activeStyle)", () => {
     expect(stateStyles).toEqual([])
   })
 })
+
+describe("shorthand normalization (P1-d)", () => {
+  test("paddingX/paddingY/margin/inset/size expand to physical keys", async () => {
+    const rec = recording()
+    const { renderer: R, render, flush } = createSolidRenderer(rec.send)
+    const container = R.createElement("#root")
+    let node: ReturnType<typeof R.createElement> | null = null
+    const dispose = render(() => {
+      const root = R.createElement("div")
+      node = root
+      return root
+    }, container)
+    await flush()
+
+    R.setProp(node!, "style", {
+      paddingX: 12,
+      paddingY: 6,
+      margin: 8,
+      inset: 4,
+      size: 100,
+      boxShadow: "0 2 8 #00000060",
+    })
+    await flush()
+    dispose()
+
+    const style = rec.batches
+      .flatMap((b) => b.mutations)
+      .find((m): m is Extract<Mutation, { op: "setStyle" }> => m.op === "setStyle")
+    expect(style?.style).toEqual({
+      paddingLeft: 12,
+      paddingRight: 12,
+      paddingTop: 6,
+      paddingBottom: 6,
+      marginTop: 8,
+      marginRight: 8,
+      marginBottom: 8,
+      marginLeft: 8,
+      top: 4,
+      right: 4,
+      bottom: 4,
+      left: 4,
+      width: 100,
+      height: 100,
+      boxShadow: "0 2 8 #00000060",
+    })
+  })
+
+  test("physical keys pass through untouched (no double expansion)", async () => {
+    const rec = recording()
+    const { renderer: R, render, flush } = createSolidRenderer(rec.send)
+    const container = R.createElement("#root")
+    let node: ReturnType<typeof R.createElement> | null = null
+    const dispose = render(() => {
+      const root = R.createElement("div")
+      node = root
+      return root
+    }, container)
+    await flush()
+
+    R.setProp(node!, "style", { paddingLeft: 3, marginTop: 5, width: 42 })
+    await flush()
+    dispose()
+
+    const style = rec.batches
+      .flatMap((b) => b.mutations)
+      .find((m): m is Extract<Mutation, { op: "setStyle" }> => m.op === "setStyle")
+    expect(style?.style).toEqual({ paddingLeft: 3, marginTop: 5, width: 42 })
+  })
+
+  test("state layers expand too (hoverStyle with paddingX)", async () => {
+    const rec = recording()
+    const { renderer: R, render, flush } = createSolidRenderer(rec.send)
+    const container = R.createElement("#root")
+    let node: ReturnType<typeof R.createElement> | null = null
+    const dispose = render(() => {
+      const root = R.createElement("div")
+      node = root
+      return root
+    }, container)
+    await flush()
+
+    R.setProp(node!, "hoverStyle", { paddingX: 2 })
+    await flush()
+    dispose()
+
+    const hover = rec.batches
+      .flatMap((b) => b.mutations)
+      .find((m): m is Extract<Mutation, { op: "setStyle" }> => m.op === "setStyle" && m.state === "hover")
+    expect(hover?.style).toEqual({ paddingLeft: 2, paddingRight: 2 })
+  })
+})
