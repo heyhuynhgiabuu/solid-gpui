@@ -702,11 +702,17 @@ closes correctness gaps found by adversarial typing tests.
       caret; InputState has no selection anchor so shift-select is absent.
       G3 paste unimplemented → Cmd+V dead on focused inputs.
       G4 (minor) autosize counts logical lines only (comment at 1424).
-- [ ] P2-b adversarial typing tests (GUI): CJK IME composition, paste,
-      caret moves mid-composition, UTF-16 surrogate pairs (emoji), offset
-      clamping; record what breaks before fixing
-- [ ] P2-c fixes for confirmed gaps + onInput/onChange split (per-edit vs
-      commit) if missing
-- [ ] P2-d multiline growth rules verified (minRows floor, maxRows cap,
-      newlines from Return) if textarea semantics incomplete
+- [x] P2-b/c recon-driven scope: IME composing (replace_and_mark/unmark),
+      UTF-16 surrogate handling, offset clamping ALREADY implemented +
+      unit-tested (emoji tests at host.rs:2335+); adversarial gaps were
+      G1-G3, fixed in this slice (commit above). Remaining manual check:
+      live CJK typing in a window (user-side).
+- [x] P2-c G1 event split (input per-edit / change commit-on-blur+Enter,
+      dirty tracking, setValue clears), G2 selection anchor +
+      set_selected_text_range + selection-aware replace, G3 paste — TDD
+      units + GUI + TS coverage
+- [x] P2-d recon verdict: autosize (minRows floor, maxRows cap, Enter →
+      newline, Shift+Enter → submit) already implemented and GUI-covered;
+      known limitation (logical lines, not wrapped) documented in code —
+      reclassifying as a P5-class polish item, not this slice.
 - [ ] VERIFY: gates + independent review
