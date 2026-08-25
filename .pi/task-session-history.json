@@ -552,5 +552,30 @@
     "reportedStatus": "success",
     "resultValid": true,
     "completedAt": 1787636434842
+  },
+  {
+    "id": "mt88w36f-416c",
+    "agentType": "reviewer",
+    "description": "Verify S12 blocker fixes",
+    "sessionName": "task-mt88w36f-416c",
+    "startedAt": 1787636966253,
+    "paneId": "w3:pEE",
+    "handle": {
+      "backend": "herdr",
+      "resourceId": "w3:pEE",
+      "socketPath": "/Users/huynhgiabuu/.config/herdr/herdr.sock",
+      "terminalId": "term_659d8aa1264733d",
+      "agentName": "reviewer-mt88w36f",
+      "foregroundProcessGroupId": 42420
+    },
+    "piDir": "/Users/huynhgiabuu/dev/projects/solid-gpui/.pi",
+    "dir": "/Users/huynhgiabuu/dev/projects/solid-gpui/.pi/artifacts/tasks",
+    "cwd": "/Users/huynhgiabuu/dev/projects/solid-gpui",
+    "status": "timeout",
+    "background": true,
+    "reportedStatus": "unknown",
+    "rawStatus": "unknown",
+    "resultValid": false,
+    "completedAt": 1787638774660
   }
 ]

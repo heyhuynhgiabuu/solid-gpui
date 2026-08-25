@@ -712,6 +712,11 @@ struct RenderCtx<'a> {
     /// In-flight setAnimation states; render substitutes interpolated values
     /// for the touched keys (the static style already holds the target).
     animations: &'a HashMap<ElementId, ActiveAnimation>,
+    /// Set when a list state was created/reconciled this frame: gpui's first
+    /// prepaint of fresh state wipes the uniform height hints, so atEnd
+    /// reads null unless a SECOND frame re-hints. Nothing else re-renders a
+    /// steady list, so render must request one settle frame itself.
+    list_settle: std::rc::Rc<std::cell::Cell<bool>>,
     /// Snapshot taken at render start so every substitution in the frame
     /// interpolates against the same instant.
     now: std::time::Instant,
@@ -1010,6 +1015,7 @@ impl Render for HostView {
         self.animations
             .retain(|id, a| !reduce_motion && self.tree.get(*id).is_some() && !a.is_complete(now));
         let animating = !self.animations.is_empty();
+        let list_settle = std::rc::Rc::new(std::cell::Cell::new(false));
         let mut ctx = RenderCtx {
             scroll_handles: &self.scroll_handles,
             focus_handles: &self.focus_handles,
@@ -1025,6 +1031,7 @@ impl Render for HostView {
             list_children: &mut self.list_children,
             animations: &self.animations,
             now,
+            list_settle: list_settle.clone(),
         };
         let mut content = match self.tree.root() {
             Some(root) => build_element(&self.tree, root, window, cx, &mut ctx),
@@ -1034,8 +1041,13 @@ impl Render for HostView {
         self.stats.push(started.elapsed());
 
         // While any transition is in flight, keep the frame loop alive so
-        // interpolation advances (settles on its own once all complete).
-        if animating {
+        // interpolation advances (settles on its own once all complete). A
+        // list whose state was just populated also needs ONE more frame: the
+        // state's first prepaint wipes the uniform height hints and nothing
+        // else would re-render the steady list to re-hint them (atEnd stayed
+        // null forever after single-frame mounts; observed flaky in CI-like
+        // load). Self-terminating: the settle frame splices nothing.
+        if animating || list_settle.get() {
             window.request_animation_frame();
         }
 
@@ -1443,6 +1455,9 @@ fn build_list_element(
         let (range, new_mid) = splice_range(prev, &node.children);
         if !range.is_empty() || new_mid != 0 {
             state.splice(range, new_mid);
+            // A populated/fresh state needs one more frame after its first
+            // prepaint wiped the hints (see RenderCtx::list_settle).
+            ctx.list_settle.set(true);
         }
         *prev = node.children.clone();
     }
@@ -1460,6 +1475,7 @@ fn build_list_element(
     // as the rest of the frame even though the List builds them later in
     // layout.
     let frame_now = ctx.now;
+    let item_settle = ctx.list_settle.clone();
     let render_item = move |ix: usize, window: &mut Window, cx: &mut App| {
         counter.set(counter.get() + 1);
         entity.update(cx, |view, vcx| {
@@ -1486,6 +1502,7 @@ fn build_list_element(
                 list_children: &mut view.list_children,
                 animations: &view.animations,
                 now: frame_now,
+                list_settle: item_settle.clone(),
             };
             build_element(&view.tree, cid, window, vcx, &mut ctx)
         })
