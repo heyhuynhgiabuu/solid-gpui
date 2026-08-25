@@ -534,7 +534,7 @@ line kind coloring instead of tree-sitter. NOT the 5248-LOC Changes viewer
 Cross-ref: TODO.md#2026-08-25---s13-rich-text--markdowncodediff-ported-from-comet-mit
 
 ### 2026-08-25 - S15: JSX pipeline (universal preset track)
-status: implementation complete 2026-08-25 — independent review pending
+status: CLOSED 2026-08-25 (review r1 CLEAN; minor + coverage notes fixed)
 
 Goal: author components in JSX (.tsx) against the existing renderer -
 h() stays additive, no breaking changes. Success criterion:
@@ -565,6 +565,15 @@ examples/counter.tsx behaves identically to counter.ts.
       client seq-less error replies now reject the oldest pending instead
       of hanging flush forever (helper cannot echo a seq for a batch that
       never decoded).
-- [ ] VERIFY: gates + independent review
+- [x] VERIFY: gates + independent review — review r1 (mt8t1zyj-488d) verdict
+      **CLEAN / mergeable**: invariants A–F all pass (reviewer independently
+      re-ran bun test 104/104, typecheck, demo with real clicks, plus
+      throwaway probes of compiled shapes / effect re-run safety / flow
+      components). One Minor + two coverage Notes closed in a follow-up
+      commit: replaceText update-path stringification now asserted
+      (setN/setZ re-render), jsx.ts bindings pinned to void returns
+      ([REACTIVITY_HALTED] guard for effect commits), and Show/For render
+      through the suite committed as a test. Single-window JSX suite
+      documented as accepted (h() remains multi-window). S15 CLOSED.
 
 Cross-ref: TODO.md#2026-08-25---s13-rich-text--markdowncodediff-ported-from-comet-mit

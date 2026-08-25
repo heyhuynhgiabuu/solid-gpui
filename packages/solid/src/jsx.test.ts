@@ -16,6 +16,7 @@ import {
   insert,
   setProp,
   effect,
+  createComponent,
   Show,
   For,
 } from "./jsx"
@@ -140,10 +141,17 @@ describe("jsx runtime bindings", () => {
     try {
       const root = createElement("div")
       insert(root, createTextNode(42), null, null) // static numeric child
-      const [n] = createSignal(0)
+      const [n, setN] = createSignal(0)
       insert(root, n, null, null) // accessor child whose value is a number
-      const [z] = createSignal<string | null>(null)
+      const [z, setZ] = createSignal<string | null>(null)
       insert(root, z, null, null) // null child renders as empty text
+      await suite.flush()
+
+      // Update path (replaceText): the signal CHANGE must also arrive as a
+      // string — the original wire bug surfaced on re-renders too.
+      setN(7)
+      setZ("x")
+      await new Promise((r) => setTimeout(r, 0))
       await suite.flush()
       const texts = rec.batches
         .flatMap((b) => b.mutations)
@@ -152,6 +160,62 @@ describe("jsx runtime bindings", () => {
       expect(texts).toContain("42")
       expect(texts).toContain("0")
       expect(texts).toContain("")
+      expect(texts).toContain("7")
+      expect(texts).toContain("x")
+      // Every wire op carried a string; a leaked number would have failed
+      // helper-side decode (the S15 hang).
+      expect(texts.every((t) => typeof t === "string")).toBe(true)
+    } finally {
+      resetJsxRuntime()
+    }
+  })
+
+  test("jsx.ts bindings return undefined (effect commits must not return values)", async () => {
+    // S12 landmine: solid-js rc.1 stores an effect commit's RETURN VALUE in
+    // the cleanup slot and calls it on the next run — a value-returning
+    // binding reintroduces [REACTIVITY_HALTED] under compiled two-arg
+    // effects. These bindings are called from inside commits; pin their
+    // void return so an added `return` fails here, not in user apps.
+    const rec = recording()
+    const suite = initJsxRuntime(rec.send)
+    try {
+      const el = createElement("div")
+      expect(setProp(el, "source", "x")).toBeUndefined()
+      expect(insert(el, createTextNode("t"), null, null)).toBeUndefined()
+      await suite.flush()
+    } finally {
+      resetJsxRuntime()
+    }
+  })
+
+  test("flow components render through the suite (Show/For)", async () => {
+    const rec = recording()
+    const suite = initJsxRuntime(rec.send)
+    try {
+      const root = createElement("div")
+      insert(
+        root,
+        createComponent(Show, { when: true, children: () => createTextNode("shown") }),
+        null,
+        null,
+      )
+      insert(
+        root,
+        createComponent(For, {
+          each: ["a", "b"],
+          children: (item: string) => createTextNode(item),
+        }),
+        null,
+        null,
+      )
+      await suite.flush()
+      const texts = rec.batches
+        .flatMap((b) => b.mutations)
+        .filter((m): m is Extract<Mutation, { op: "setText" }> => m.op === "setText")
+        .map((m) => m.text)
+      expect(texts).toContain("shown")
+      expect(texts).toContain("a")
+      expect(texts).toContain("b")
     } finally {
       resetJsxRuntime()
     }
