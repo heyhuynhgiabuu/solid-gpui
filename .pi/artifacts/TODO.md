@@ -363,29 +363,34 @@ preserve velocity across target changes — ideal for width/height/opacity
 transitions (a chat list growing, a panel collapsing).
 
 Design sketch:
-- [ ] S12a Protocol: Mutation::setAnimation {id, target: StyleMap,
-      transitionMs, easing?} — single op, numeric targets ONLY (width,
-      height, minWidth/minHeight, padding, borderRadius, opacity — closed set
-      matching what apply_style can interpolate; non-numeric targets are an
-      applyFailed). Style keys NOT in the closed set are rejected (numeric
-      animation is a real semantic, unlike static style keys).
-- [ ] S12a Helper: per-element animation state (start value, target, start
-      instant, duration) keyed by ElementId; render interpolates the CURRENT
-      value (elapsed/duration with easing) and applies it through the same
-      apply_style path; the op stores the TARGET as the element's style so
-      the final frame == the static state (no re-render needed at the end —
-      the animation entry is dropped once complete). Animate via gpui's
-      AnimationElement OR manual interpolation + cx.notify chain (choose at
-      implementation based on where the animation clock lives).
-- [ ] S12a Tests: fixture setAnimation (both suites); window test: setStyle
-      opacity 1 -> setAnimation opacity 0 (transitionMs 300) -> getStats /
-      listInfo-style probe or captureFrame at t<300 shows an intermediate
-      value (via a stats/animationInfo command or frame capture); end state
-      equals the target. Unit test the easing/interpolation math (pure).
-- [ ] S12b transition continuity: new setAnimation while one is running
-      starts from the CURRENT value (no jump); animation on a destroyed
-      element is dropped; reduce-motion (gpui App::reduce_motion) renders
-      the end state — verify we respect it.
+- [x] S12a Protocol: Mutation::SetAnimation {id, target, transitionMs,
+      easing?} — closed ANIMATABLE_STYLE_KEYS set (width/height/minWidth/
+      minHeight/padding/gap/borderRadius/fontSize/flexGrow/flexShrink/
+      opacity) + Easing enum (linear|easeIn|easeOut|easeInOut, default
+      easeOut). TS decode = invalidShape; Rust retained apply =
+      InvalidMutation (rejected on both sides). Target merged into the
+      static style at apply time so the end state sticks without further
+      traffic. Fixture batch-animation-01.json round-trips byte-identically
+      in both suites (71d7389).
+- [x] S12a Helper: ActiveAnimation (transitions + started + duration +
+      easing) captured at APPLY time via prepare_animation (starts read
+      BEFORE the merge destroys old values); render substitutes interpolated
+      numbers in every build loop (div/input/textarea/list wrapper/items
+      share a frame-start clock snapshot), request_animation_frame while
+      any transition runs, entries dropped when complete/element
+      gone/reduce-motion (17c7b06).
+- [x] S12a Tests: fixture parity both suites; window test
+      window_mode_animation_frames_flow_and_settle (frames climb >= +3
+      during a 400ms transition, settle <= +1 after — observed RED with RAF
+      disabled); easing endpoint/monotonic/midpoint-shape + lerp/clamp unit
+      tests (17c7b06).
+- [x] S12b continuity: resolve_start prefers the in-flight interpolated
+      value (unit test: halfway 200->300 retarget starts at 250, not the
+      merged 300); destroyed elements dropped by the render retain;
+      reduce-motion drops entries (jump to end — static style already rests
+      at the target) (17c7b06). Bonus S12c solid binding: transitionMs/
+      transitionEasing props diff the style bag, changed numeric animatable
+      keys emit setAnimation + companion setStyle omits them (4246191).
 - [ ] VERIFY: suites green; commit per sub-slice; independent review
 
 Cross-ref: PLAN.md Phase 2 roadmap (S12 entry)
