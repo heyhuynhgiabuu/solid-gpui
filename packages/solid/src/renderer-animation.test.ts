@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import { createSignal } from "solid-js"
 import { createSolidRenderer, type Send } from "./renderer"
-import type { MutationBatch, Mutation } from "@solid-gpui/protocol"
+import type { MutationBatch, Mutation, TextRun } from "@solid-gpui/protocol"
 
 function recording(): { send: Send; batches: MutationBatch[] } {
   const batches: MutationBatch[] = []
@@ -181,6 +181,28 @@ describe("h() reactive style prop", () => {
     // unchanged key at its current value and the animated key at its START.
     const style = ms.filter((m): m is Extract<Mutation, { op: "setStyle" }> => m.op === "setStyle").at(-1)
     expect(style?.style).toEqual({ opacity: 1, width: 200 })
+    dispose()
+  })
+
+  test("function runs re-flow on signal change", async () => {
+    const { makeH } = await import("./h")
+    const rec = recording()
+    const { renderer: R, render, flush } = createSolidRenderer(rec.send)
+    const h = makeH(R)
+    const container = R.createElement("#root")
+    const [runs, setRuns] = createSignal<TextRun[]>([{ text: "before", color: "#cdd6f4" }])
+    const dispose = render(() => h("text", { runs: () => runs() }), container)
+
+    await flush()
+    expect(lastMutations(rec.batches).some((mutation) => mutation.op === "setTextRuns")).toBe(true)
+
+    setRuns([{ text: "after 世界", color: "#89b4fa", weight: 700 }])
+    await flush()
+    expect(lastMutations(rec.batches)).toContainEqual({
+      op: "setTextRuns",
+      id: expect.any(Number),
+      runs: [{ text: "after 世界", color: "#89b4fa", weight: 700 }],
+    })
     dispose()
   })
 })

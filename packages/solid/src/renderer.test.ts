@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import { createSignal } from "solid-js"
 import { createSolidRenderer, type Send } from "./renderer"
-import type { MutationBatch, Mutation } from "@solid-gpui/protocol"
+import type { MutationBatch, Mutation, TextRun } from "@solid-gpui/protocol"
 
 function recording(): { send: Send; batches: MutationBatch[] } {
   const batches: MutationBatch[] = []
@@ -107,6 +107,56 @@ describe("fine-grained updates", () => {
     R.setProp(node!, "style", { opacity: 0 })
     await flush()
     expect(ops(rec.batches[2])).toEqual(["setStyle"])
+  })
+})
+
+describe("text runs", () => {
+  test("text runs replace the text content as one styled batch mutation", async () => {
+    const rec = recording()
+    const { renderer: R, flush } = createSolidRenderer(rec.send)
+    const text = R.createElement("text")
+    const runs: TextRun[] = [
+      { text: "Hello ", color: "#cdd6f4", weight: 400, style: "normal" },
+      { text: "世界 🌍", color: "#89b4fa", weight: 700, style: "italic", underline: true },
+    ]
+
+    R.setProp(text, "runs", runs)
+    await flush()
+
+    expect(rec.batches).toHaveLength(1)
+    expect(rec.batches[0]?.mutations.map((m) => (m as { op: string }).op)).toEqual([
+      "createElement",
+      "setTextRuns",
+    ])
+    expect(rec.batches[0]?.mutations[1]).toEqual({
+      op: "setTextRuns",
+      id: expect.any(Number),
+      runs,
+    })
+  })
+
+  test("text runs validate at the renderer boundary and empty runs clear", async () => {
+    const rec = recording()
+    const { renderer: R, flush } = createSolidRenderer(rec.send)
+    const div = R.createElement("div")
+    const text = R.createElement("text")
+    const warn = console.warn
+    const warnings: string[] = []
+    console.warn = (message: string) => warnings.push(message)
+    try {
+      R.setProp(div, "runs", [{ text: "wrong target" }])
+      R.setProp(text, "runs", [{ text: "bad", weight: 99 }])
+      R.setProp(text, "runs", [])
+      await flush()
+    } finally {
+      console.warn = warn
+    }
+
+    const mutations = rec.batches.flatMap((batch) => batch.mutations)
+    expect(mutations.filter((mutation) => mutation.op === "setTextRuns")).toEqual([
+      { op: "setTextRuns", id: expect.any(Number), runs: [] },
+    ])
+    expect(warnings).toHaveLength(2)
   })
 })
 

@@ -1,0 +1,1 @@
+{"v":1,"seq":27,"mutations":[{"op":"createElement","id":1,"elementType":"text"},{"op":"setTextRuns","id":1,"runs":[{"text":"Hello ","color":"#cdd6f4","weight":400,"style":"normal"},{"text":"世界 🌍","color":"#89b4fa","weight":700,"style":"italic","underline":true}]},{"op":"setRoot","id":1}]}

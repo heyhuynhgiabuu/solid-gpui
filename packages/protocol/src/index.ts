@@ -17,6 +17,8 @@ export type {
   EventType,
   Mutation,
   MutationOp,
+  TextRun,
+  TextRunStyle,
 } from "./mutation"
 export { decodeBatch, encodeBatch } from "./batch"
 export type { MutationBatch, ProtocolError, Result } from "./batch"

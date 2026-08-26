@@ -13,6 +13,8 @@ import {
   type Mutation,
   type MutationOp,
   type StyleState,
+  type TextRun,
+  type TextRunStyle,
 } from "./mutation"
 import type { StyleMap } from "./style"
 
@@ -114,6 +116,48 @@ const shape = (path: string, message: string): ProtocolError => ({
   path,
   message,
 })
+
+const TEXT_RUN_STYLES: readonly TextRunStyle[] = ["normal", "italic", "oblique"]
+
+function decodeTextRun(p: string, value: unknown): Result<TextRun, ProtocolError> {
+  if (!isDict(value)) return { ok: false, error: shape(p, "expected an object") }
+  const text = value.text
+  if (typeof text !== "string" || text.length === 0) {
+    return { ok: false, error: shape(`${p}.text`, "expected a non-empty string") }
+  }
+  const color = value.color
+  if (color !== undefined && typeof color !== "string") {
+    return { ok: false, error: shape(`${p}.color`, "expected a string") }
+  }
+  const weight = value.weight
+  if (
+    weight !== undefined &&
+    (typeof weight !== "number" || !Number.isInteger(weight) || weight < 100 || weight > 900)
+  ) {
+    return { ok: false, error: shape(`${p}.weight`, "expected an integer in 100..=900") }
+  }
+  const style = value.style
+  if (
+    style !== undefined &&
+    (typeof style !== "string" || !TEXT_RUN_STYLES.includes(style as TextRunStyle))
+  ) {
+    return { ok: false, error: shape(`${p}.style`, "expected normal|italic|oblique") }
+  }
+  const underline = value.underline
+  if (underline !== undefined && typeof underline !== "boolean") {
+    return { ok: false, error: shape(`${p}.underline`, "expected a boolean") }
+  }
+  return {
+    ok: true,
+    value: {
+      text,
+      ...(color !== undefined ? { color } : {}),
+      ...(weight !== undefined ? { weight } : {}),
+      ...(style !== undefined ? { style: style as TextRunStyle } : {}),
+      ...(underline !== undefined ? { underline } : {}),
+    },
+  }
+}
 
 function requireId(
   dict: Dict,
@@ -336,6 +380,20 @@ function decodeMutation(m: Dict, p: string): Result<Mutation, ProtocolError> {
         return { ok: false, error: shape(`${p}.text`, "expected a string") }
       }
       return { ok: true, value: { op, id: idR.value, text } }
+    }
+    case "setTextRuns": {
+      const idR = id()
+      if (!idR.ok) return idR
+      if (!Array.isArray(m.runs)) {
+        return { ok: false, error: shape(`${p}.runs`, "expected an array") }
+      }
+      const runs: TextRun[] = []
+      for (let i = 0; i < m.runs.length; i++) {
+        const run = decodeTextRun(`${p}.runs[${i}]`, m.runs[i])
+        if (!run.ok) return run
+        runs.push(run.value)
+      }
+      return { ok: true, value: { op, id: idR.value, runs } }
     }
     case "setValue": {
       const idR = id()

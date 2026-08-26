@@ -1352,5 +1352,55 @@
     "rawStatus": "success",
     "resultValid": true,
     "completedAt": 1787738850938
+  },
+  {
+    "id": "mt9xxuhy-0ceb",
+    "agentType": "explore",
+    "description": "Map P11 text seams",
+    "sessionName": "task-mt9xxuhy-0ceb",
+    "startedAt": 1787739504656,
+    "paneId": "w3:pFT",
+    "handle": {
+      "backend": "herdr",
+      "resourceId": "w3:pFT",
+      "socketPath": "/Users/huynhgiabuu/.config/herdr/herdr.sock",
+      "terminalId": "term_659f089d9b1b219",
+      "agentName": "explore-mt9xxuhy",
+      "foregroundProcessGroupId": 79525
+    },
+    "piDir": "/Users/huynhgiabuu/dev/projects/solid-gpui/.pi",
+    "dir": "/Users/huynhgiabuu/dev/projects/solid-gpui/.pi/artifacts/tasks",
+    "cwd": "/Users/huynhgiabuu/dev/projects/solid-gpui",
+    "status": "done",
+    "background": true,
+    "reportedStatus": "success",
+    "rawStatus": "success",
+    "resultValid": true,
+    "completedAt": 1787739874337
+  },
+  {
+    "id": "mt9xxui4-ed97",
+    "agentType": "scout",
+    "description": "Verify gpui styled text API",
+    "sessionName": "task-mt9xxui4-ed97",
+    "startedAt": 1787739508468,
+    "paneId": "w3:pFV",
+    "handle": {
+      "backend": "herdr",
+      "resourceId": "w3:pFV",
+      "socketPath": "/Users/huynhgiabuu/.config/herdr/herdr.sock",
+      "terminalId": "term_659f08a2066dc1a",
+      "agentName": "scout-mt9xxui4",
+      "foregroundProcessGroupId": 80114
+    },
+    "piDir": "/Users/huynhgiabuu/dev/projects/solid-gpui/.pi",
+    "dir": "/Users/huynhgiabuu/dev/projects/solid-gpui/.pi/artifacts/tasks",
+    "cwd": "/Users/huynhgiabuu/dev/projects/solid-gpui",
+    "status": "done",
+    "background": true,
+    "reportedStatus": "success",
+    "rawStatus": "success",
+    "resultValid": true,
+    "completedAt": 1787739601527
   }
 ]

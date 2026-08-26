@@ -153,6 +153,32 @@ impl StyleValue {
 
 pub type StyleMap = BTreeMap<String, StyleValue>;
 
+/// Font face style for one P11 text run.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum TextRunStyle {
+    Normal,
+    Italic,
+    Oblique,
+}
+
+/// One substring in a text element's wholesale styled-runs value. The helper
+/// concatenates these substrings and derives the UTF-8 byte lengths gpui
+/// requires, so JavaScript never has to send UTF-16-derived offsets.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TextRun {
+    pub text: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub color: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub weight: Option<u16>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub style: Option<TextRunStyle>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub underline: Option<bool>,
+}
+
 /// Style keys that setAnimation accepts. Closed set (unlike setStyle's
 /// forward-compatible open set): interpolation needs a real numeric render
 /// path on the helper side, so animating an unsupported key must fail
@@ -306,6 +332,14 @@ pub enum Mutation {
     SetText {
         id: ElementId,
         text: String,
+    },
+    /// Replace a text element's single wrapping string and its inline runs
+    /// atomically. Runs carry substrings rather than byte offsets; the helper
+    /// computes the UTF-8 lengths required by gpui.
+    #[serde(rename_all = "camelCase")]
+    SetTextRuns {
+        id: ElementId,
+        runs: Vec<TextRun>,
     },
     /// Transition the element's current numeric values for `target`'s keys to
     /// the target values over `transition_ms`. Targets must be numeric and
@@ -838,6 +872,7 @@ const KNOWN_OPS: &[&str] = &[
     "insertBefore",
     "setStyle",
     "setText",
+    "setTextRuns",
     "setKeyBindings",
     "setDrawList",
     "setSrc",
@@ -944,6 +979,25 @@ fn from_value(v: serde_json::Value) -> Result<MutationBatch, ProtocolError> {
 
     // 0 is reserved; serde accepts it as u32, so reject it after parsing.
     for (i, m) in batch.mutations.iter().enumerate() {
+        if let Mutation::SetTextRuns { runs, .. } = m {
+            for (j, run) in runs.iter().enumerate() {
+                if run.text.is_empty() {
+                    return Err(ProtocolError::InvalidShape {
+                        path: format!("mutations[{i}].runs[{j}].text"),
+                        message: "expected a non-empty string".into(),
+                    });
+                }
+                if run
+                    .weight
+                    .is_some_and(|weight| !(100..=900).contains(&weight))
+                {
+                    return Err(ProtocolError::InvalidShape {
+                        path: format!("mutations[{i}].runs[{j}].weight"),
+                        message: "expected an integer in 100..=900".into(),
+                    });
+                }
+            }
+        }
         let zero_field = match m {
             Mutation::CreateElement { id, .. }
             | Mutation::DestroyElement { id }
@@ -955,6 +1009,7 @@ fn from_value(v: serde_json::Value) -> Result<MutationBatch, ProtocolError> {
             | Mutation::SetKeyBindings { id, .. }
             | Mutation::SetDragData { id, .. }
             | Mutation::SetText { id, .. }
+            | Mutation::SetTextRuns { id, .. }
             | Mutation::SetValue { id, .. }
             | Mutation::SetAnimation { id, .. }
             | Mutation::SetEventListener { id, .. }

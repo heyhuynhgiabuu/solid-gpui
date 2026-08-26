@@ -703,6 +703,9 @@ fn run_stdio_window() {
                                             solid_gpui_protocol::Mutation::SetText {
                                                 id, ..
                                             }
+                                            | solid_gpui_protocol::Mutation::SetTextRuns {
+                                                id, ..
+                                            }
                                             | solid_gpui_protocol::Mutation::SetStyle {
                                                 id, ..
                                             }

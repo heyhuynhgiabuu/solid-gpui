@@ -935,6 +935,50 @@ fn window_mode_renders_markdown_element() {
     assert_eq!(status.code(), Some(0), "EOF must exit 0");
 }
 
+/// P11: a text element with one Unicode wrapping string and per-span
+/// highlights reaches gpui's StyledText path without a decode/apply panic;
+/// replacing the wholesale run list also remains live.
+#[test]
+fn window_mode_renders_text_runs() {
+    if skip() {
+        return;
+    }
+    let _lock = window_lock();
+    let bin = env!("CARGO_BIN_EXE_solid-gpui-helper");
+    let mut child = Command::new(bin)
+        .arg("--stdio-window")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .spawn()
+        .expect("helper spawns");
+
+    let mut stdin = child.stdin.take().expect("stdin piped");
+    let reader = BufReader::new(child.stdout.take().expect("stdout piped"));
+    let mut lines = reader.lines();
+
+    let mount = r###"{"v":1,"seq":1,"mutations":[{"op":"createElement","id":1,"elementType":"div"},{"op":"setStyle","id":1,"style":{"width":240,"height":80,"fontSize":18,"color":"#cdd6f4"}},{"op":"createElement","id":2,"elementType":"text"},{"op":"setTextRuns","id":2,"runs":[{"text":"Hello ","color":"#cdd6f4","weight":400},{"text":"世界 🌍 — styled", "color":"#89b4fa","weight":700,"style":"italic","underline":true}]},{"op":"appendChild","parentId":1,"childId":2},{"op":"setRoot","id":1}]}"###;
+    writeln!(stdin, "{mount}").unwrap();
+    stdin.flush().unwrap();
+    let ack = lines.next().unwrap().expect("ack line");
+    assert_eq!(ack, r#"{"type":"ack","seq":1,"applied":6}"#, "{ack}");
+
+    std::thread::sleep(std::time::Duration::from_millis(300));
+    writeln!(stdin, "{{\"type\":\"getStats\",\"seq\":2}}").unwrap();
+    stdin.flush().unwrap();
+    let stats = lines.next().unwrap().expect("stats line");
+    assert!(stats.contains(r#""frames""#), "{stats}");
+
+    let update = r###"{"v":1,"seq":3,"mutations":[{"op":"setTextRuns","id":2,"runs":[{"text":"updated ","color":"#f9e2af"},{"text":"runs", "weight":700,"underline":true}]}]}"###;
+    writeln!(stdin, "{update}").unwrap();
+    stdin.flush().unwrap();
+    let ack2 = lines.next().unwrap().expect("ack line 2");
+    assert_eq!(ack2, r#"{"type":"ack","seq":3,"applied":1}"#, "{ack2}");
+
+    drop(stdin);
+    let status = child.wait().expect("wait");
+    assert_eq!(status.code(), Some(0), "EOF must exit 0");
+}
+
 #[test]
 fn window_mode_renders_state_layer_styles_without_apply_errors() {
     if skip() {

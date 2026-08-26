@@ -105,6 +105,19 @@ export type StyleState = "hover" | "active" | "dragOver"
 
 export const STYLE_STATES: readonly StyleState[] = ["hover", "active", "dragOver"]
 
+/** One substring in a text element's wholesale styled-runs value (P11).
+ * `text` keeps the wire independent of JavaScript's UTF-16 offsets; the
+ * helper derives the UTF-8 byte lengths required by gpui. */
+export type TextRunStyle = "normal" | "italic" | "oblique"
+
+export interface TextRun {
+  readonly text: string
+  readonly color?: string
+  readonly weight?: number
+  readonly style?: TextRunStyle
+  readonly underline?: boolean
+}
+
 export const EVENT_TYPES: readonly EventType[] = [
   "click",
   "input",
@@ -152,6 +165,7 @@ export type Mutation =
       readonly state?: StyleState
     }
   | { readonly op: "setText"; readonly id: ElementId; readonly text: string }
+  | { readonly op: "setTextRuns"; readonly id: ElementId; readonly runs: readonly TextRun[] }
   | { readonly op: "setValue"; readonly id: ElementId; readonly value: string }
   | {
       readonly op: "setKeyBindings"
@@ -237,6 +251,7 @@ export const MUTATION_OPS = [
   "insertBefore",
   "setStyle",
   "setText",
+  "setTextRuns",
   "setKeyBindings",
   "setSrc",
   "setDeferred",

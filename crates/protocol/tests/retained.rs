@@ -4,7 +4,7 @@
 
 use solid_gpui_protocol::{
     ApplyError, DrawItem, ElementId, ElementType, EventType, Mutation, RetainedTree, StyleMap,
-    StyleState, StyleValue, from_json,
+    StyleState, StyleValue, TextRun, TextRunStyle, from_json,
 };
 use std::fs;
 
@@ -285,6 +285,92 @@ fn set_text_requires_text_type_element() {
         })
         .unwrap_err();
     assert!(err.to_string().contains("text"), "got: {err}");
+}
+
+#[test]
+fn set_text_runs_replaces_text_and_clears_on_plain_text() {
+    let mut tree = RetainedTree::new();
+    apply_all(
+        &mut tree,
+        &[Mutation::CreateElement {
+            id: 1.into(),
+            element_type: ElementType::Text,
+        }],
+    )
+    .unwrap();
+
+    tree.apply(&Mutation::SetTextRuns {
+        id: 1.into(),
+        runs: vec![
+            TextRun {
+                text: "Hello ".into(),
+                color: Some("#cdd6f4".into()),
+                weight: Some(400),
+                style: Some(TextRunStyle::Normal),
+                underline: None,
+            },
+            TextRun {
+                text: "世界 🌍".into(),
+                color: Some("#89b4fa".into()),
+                weight: Some(700),
+                style: Some(TextRunStyle::Italic),
+                underline: Some(true),
+            },
+        ],
+    })
+    .unwrap();
+    let node = tree.get(1.into()).unwrap();
+    assert_eq!(node.text.as_deref(), Some("Hello 世界 🌍"));
+    assert_eq!(node.text_runs.as_ref().unwrap().len(), 2);
+
+    tree.apply(&Mutation::SetText {
+        id: 1.into(),
+        text: "plain".into(),
+    })
+    .unwrap();
+    let node = tree.get(1.into()).unwrap();
+    assert_eq!(node.text.as_deref(), Some("plain"));
+    assert_eq!(node.text_runs, None);
+}
+
+#[test]
+fn set_text_runs_rejects_non_text_and_bad_weights() {
+    let mut tree = RetainedTree::new();
+    apply_all(
+        &mut tree,
+        &[Mutation::CreateElement {
+            id: 1.into(),
+            element_type: ElementType::Div,
+        }],
+    )
+    .unwrap();
+    let run = TextRun {
+        text: "x".into(),
+        color: None,
+        weight: Some(99),
+        style: None,
+        underline: None,
+    };
+    let err = tree
+        .apply(&Mutation::SetTextRuns {
+            id: 1.into(),
+            runs: vec![run.clone()],
+        })
+        .unwrap_err();
+    assert!(err.to_string().contains("text element"), "got: {err}");
+
+    tree.apply(&Mutation::CreateElement {
+        id: 2.into(),
+        element_type: ElementType::Text,
+    })
+    .unwrap();
+    let err = tree
+        .apply(&Mutation::SetTextRuns {
+            id: 2.into(),
+            runs: vec![run],
+        })
+        .unwrap_err();
+    assert!(err.to_string().contains("100..=900"), "got: {err}");
 }
 
 #[test]

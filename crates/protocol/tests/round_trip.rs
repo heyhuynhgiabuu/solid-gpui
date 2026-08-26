@@ -12,6 +12,12 @@ fn fixture() -> String {
     fs::read_to_string(path).expect("fixture readable")
 }
 
+fn text_runs_fixture() -> String {
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../packages/protocol/fixtures/batch-text-runs-01.json");
+    fs::read_to_string(path).expect("text-runs fixture readable")
+}
+
 struct Recording {
     ops: Vec<Mutation>,
 }
@@ -37,6 +43,34 @@ fn fixture_parses_and_round_trips() {
     }
     let re = from_json(&to_json(&batch)).expect("re-parse of emitted JSON");
     assert_eq!(batch, re);
+}
+
+#[test]
+fn text_runs_fixture_parses_and_round_trips() {
+    let json = text_runs_fixture();
+    let batch = from_json(&json).expect("text-runs fixture parses");
+    let emitted = to_json(&batch);
+    let re = from_json(&emitted).expect("re-parse of emitted text-runs JSON");
+    assert_eq!(batch, re);
+    assert_eq!(
+        emitted,
+        json.trim_end(),
+        "fixture must use Rust's canonical JSON"
+    );
+}
+
+#[test]
+fn text_runs_decoder_rejects_invalid_segments() {
+    for (field, value) in [("text", "\"\""), ("weight", "99")] {
+        let json = format!(
+            r#"{{"v":1,"seq":1,"mutations":[{{"op":"setTextRuns","id":1,"runs":[{{"text":"ok","{field}":{value}}}]}}]}}"#
+        );
+        let error = from_json(&json).expect_err("invalid text run must be rejected");
+        assert!(
+            matches!(error, ProtocolError::InvalidShape { ref path, .. } if path.contains(field)),
+            "{error:?}"
+        );
+    }
 }
 
 #[test]

@@ -22,7 +22,8 @@
     "example:canvas": "bun --conditions=browser run examples/canvas.tsx",
     "example/canvas": "bun --conditions=browser --preload ./scripts/solid-jsx-preload.ts examples/canvas.tsx",
     "example/menus": "bun --conditions=browser --preload ./scripts/solid-jsx-preload.ts examples/menus.tsx",
-    "example/media": "bun --conditions=browser --preload ./scripts/solid-jsx-preload.ts examples/media.tsx"
+    "example/media": "bun --conditions=browser --preload ./scripts/solid-jsx-preload.ts examples/media.tsx",
+    "example/text-runs": "bun --conditions=browser --preload ./scripts/solid-jsx-preload.ts examples/text-runs.tsx"
   },
   "devDependencies": {
     "@babel/core": "^7",

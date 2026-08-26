@@ -1062,3 +1062,24 @@ r2 NOT MERGEABLE: tint fallback alpha-0; fixes c3b25a8+225d09a; r3 CLEAN)
       từ P8. r2: Major — fallback Hsla::default() là ALPHA-0 (derive trên 4
       f32) vẫn invisible; fix = One Dark text OPAQUE hsla(221,.11,.86,1)
       khớp default hiệu lực của gpui (cite fallback_themes.rs). r3 CLEAN.
+
+### 2026-08-26 - P11: span styled runs inside text
+status: active
+
+- [x] Recon current text protocol, renderer, and pinned gpui styled-text APIs;
+      `StyledText::with_runs` is the version-matched wrapping seam; `TextRun`
+      lengths are UTF-8 bytes and exact-cover is panic-sensitive.
+- [x] PLAN/contract (assumed under resume): public `<text runs={...}>`; each
+      segment carries its own substring + optional `color`, numeric `weight`,
+      `style` (`normal|italic|oblique`), and boolean `underline`; new
+      `setTextRuns` replaces all segments atomically. Rust concatenates and
+      validates, avoiding JS UTF-16 offsets. Only Text accepts runs; empty
+      array clears content; plain `setText` clears runs. P12 stays parked.
+- [x] RED: fixture/parity + renderer tests failed before implementation
+      (`setTextRuns` was unknown/no-op); helper smoke initially exposed the
+      r# delimiter collision and was corrected to r### before GREEN.
+- [x] GREEN: protocol/helper/renderer/demo implemented; `setTextRuns` is
+      wholesale, Rust derives UTF-8 ranges, client validates boundary shapes,
+      plain `setText` clears runs, and list-height remeasure sees the new op.
+- [ ] VERIFY: fresh full exit-code gates plus independent review; close only
+      after all checklist items are green.

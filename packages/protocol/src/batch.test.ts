@@ -10,6 +10,7 @@ import canvasFixture from "../fixtures/batch-canvas-01.json"
 import mediaFixture from "../fixtures/batch-media-01.json"
 import animationFixture from "../fixtures/batch-animation-01.json"
 import markdownFixture from "../fixtures/batch-markdown-01.json"
+import textRunsFixture from "../fixtures/batch-text-runs-01.json"
 import { elementId } from "./ids"
 import { decodeBatch, encodeBatch } from "./batch"
 import type { MutationBatch } from "./batch"
@@ -186,6 +187,37 @@ describe("decodeBatch rejects malformed input", () => {
       expect(text && "text" in text && text.text).toContain("# solid-gpui markdown 🎉")
       const roundTrip = decodeBatch(JSON.stringify(r.value))
       expect(roundTrip.ok).toBe(true)
+    }
+  })
+
+  test("text-runs batch fixture parses and preserves Unicode segments", () => {
+    const r = decodeBatch(JSON.stringify(textRunsFixture))
+    expect(r.ok).toBe(true)
+    if (r.ok) {
+      const runs = r.value.mutations[1]
+      expect(runs && "runs" in runs && runs.runs).toEqual([
+        { text: "Hello ", color: "#cdd6f4", weight: 400, style: "normal" },
+        { text: "世界 🌍", color: "#89b4fa", weight: 700, style: "italic", underline: true },
+      ])
+      expect(decodeBatch(encodeBatch(r.value))).toEqual(r)
+    }
+  })
+
+  test("text-runs rejects malformed segment shapes", () => {
+    for (const [field, value] of [
+      ["text", ""],
+      ["weight", 99],
+      ["style", "slanted"],
+      ["underline", "yes"],
+    ] as const) {
+      const r = decodeBatch(
+        JSON.stringify({
+          v: 1,
+          seq: 1,
+          mutations: [{ op: "setTextRuns", id: 1, runs: [{ text: "ok", [field]: value }] }],
+        }),
+      )
+      expect(!r.ok && r.error.kind === "invalidShape" && r.error.path.includes(field)).toBe(true)
     }
   })
 

@@ -74,8 +74,8 @@ export async function mountJsx(code: () => HostNode): Promise<RenderHandle> {
 /**
  * createElement(tag, props?): compiled JSX passes static attributes here.
  * Every prop flows through setProperty so it takes the SAME paths as h() —
- * style maps, event handlers, markdown source, input value/placeholder,
- * transitionMs animation diffing.
+ * style maps, event handlers, markdown source, text runs, input
+ * value/placeholder, transitionMs animation diffing.
  */
 export function createElement(tag: string, props?: Record<string, unknown>): HostNode {
   const el = s().renderer.createElement(tag)

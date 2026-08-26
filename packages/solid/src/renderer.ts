@@ -18,6 +18,8 @@ import {
   type MutationBatch,
   type StyleKey,
   type StyleMap,
+  type TextRun,
+  type TextRunStyle,
 } from "@solid-gpui/protocol"
 import type { Ack } from "@solid-gpui/client"
 import { expandShorthands } from "./style-normalize"
@@ -102,6 +104,43 @@ export interface SolidGpuiRenderer {
  *  values ({count()} can be a number, null renders as empty). */
 function textOf(value: unknown): string {
   return value == null ? "" : String(value)
+}
+
+const TEXT_RUN_STYLES: readonly TextRunStyle[] = ["normal", "italic", "oblique"]
+
+function normalizeTextRuns(value: unknown): TextRun[] | null {
+  if (!Array.isArray(value)) return null
+  const runs: TextRun[] = []
+  for (const run of value) {
+    if (typeof run !== "object" || run === null || Array.isArray(run)) return null
+    const raw = run as Record<string, unknown>
+    if (typeof raw.text !== "string" || raw.text.length === 0) return null
+    if (raw.color !== undefined && typeof raw.color !== "string") return null
+    if (
+      raw.weight !== undefined &&
+      (typeof raw.weight !== "number" ||
+        !Number.isInteger(raw.weight) ||
+        raw.weight < 100 ||
+        raw.weight > 900)
+    ) {
+      return null
+    }
+    if (
+      raw.style !== undefined &&
+      (typeof raw.style !== "string" || !TEXT_RUN_STYLES.includes(raw.style as TextRunStyle))
+    ) {
+      return null
+    }
+    if (raw.underline !== undefined && typeof raw.underline !== "boolean") return null
+    runs.push({
+      text: raw.text,
+      ...(raw.color !== undefined ? { color: raw.color } : {}),
+      ...(raw.weight !== undefined ? { weight: raw.weight } : {}),
+      ...(raw.style !== undefined ? { style: raw.style as TextRunStyle } : {}),
+      ...(raw.underline !== undefined ? { underline: raw.underline } : {}),
+    })
+  }
+  return runs
 }
 
 export function createSolidRenderer(send: Send): SolidGpuiRenderer {
@@ -486,6 +525,25 @@ export function createSolidRenderer(send: Send): SolidGpuiRenderer {
           return
         }
         push({ op: "setDrawList", id, items: value as never })
+        return
+      }
+      if (name === "runs") {
+        if (node.kind !== "element" || node.tag !== "text") {
+          if (typeof console !== "undefined") {
+            console.warn("[solid-gpui] runs is only valid on an explicit <text> element")
+          }
+          return
+        }
+        const runs = normalizeTextRuns(value)
+        if (runs === null) {
+          if (typeof console !== "undefined") {
+            console.warn(
+              "[solid-gpui] text runs must be an array of non-empty segments with optional color, weight 100..=900, style normal|italic|oblique, and boolean underline",
+            )
+          }
+          return
+        }
+        push({ op: "setTextRuns", id, runs })
         return
       }
       if (name === "value" && (node.tag === "input" || node.tag === "textarea")) {

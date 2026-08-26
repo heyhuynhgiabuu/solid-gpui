@@ -16,8 +16,10 @@
 //!   destroyed subtree contains the current root, the root is cleared.
 //! - `setRoot` requires an existing element and may replace a previous root
 //!   (the `bun --hot` remount pattern swaps roots on a live window).
-//! - `setText` is valid on text elements (plain string) and markdown
-//!   elements (the markdown source the helper parses and renders).
+//! - `setText` is valid on text elements (plain string), markdown elements
+//!   (the markdown source the helper parses and renders), and svg elements
+//!   (raw markup); `setTextRuns` is valid only on text elements and replaces
+//!   their one wrapping string atomically.
 //! - Destroying the current root clears it; the window shows nothing until a
 //!   new root is set.
 
@@ -25,6 +27,7 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 use crate::{
     ApplyError, ElementId, ElementType, EventType, Mutation, StyleMap, StyleState, StyleValue,
+    TextRun,
 };
 
 pub const MAX_DEPTH: usize = 256;
@@ -56,6 +59,9 @@ pub struct Node {
     /// silently drop them (validation and rendering agree).
     pub state_styles: BTreeMap<StyleState, StyleMap>,
     pub text: Option<String>,
+    /// Inline styled runs for a text element (P11); their concatenated text
+    /// is also kept in `text` for the normal render/cache path.
+    pub text_runs: Option<Vec<TextRun>>,
     /// Input/textarea document value (setValue). Present only on
     /// input/textarea elements; validation and rendering agree.
     pub value: Option<String>,
@@ -77,6 +83,7 @@ impl Node {
             key_bindings: Vec::new(),
             state_styles: BTreeMap::new(),
             text: None,
+            text_runs: None,
             value: None,
             children: Vec::new(),
             parent: None,
@@ -362,11 +369,44 @@ impl RetainedTree {
                 ) {
                     return Err(ApplyError::InvalidMutation {
                         message: format!(
-                            "setText: element {id:?} is not a text or markdown element"
+                            "setText: element {id:?} is not a text, markdown, or svg element"
                         ),
                     });
                 }
                 node.text = Some(text.clone());
+                node.text_runs = None;
+                Ok(())
+            }
+            Mutation::SetTextRuns { id, runs } => {
+                let node = self.mut_node(*id, "setTextRuns")?;
+                if node.element_type != ElementType::Text {
+                    return Err(ApplyError::InvalidMutation {
+                        message: format!("setTextRuns: element {id:?} is not a text element"),
+                    });
+                }
+                let mut text = String::new();
+                for (index, run) in runs.iter().enumerate() {
+                    if run.text.is_empty() {
+                        return Err(ApplyError::InvalidMutation {
+                            message: format!(
+                                "setTextRuns: run {index} must have non-empty text ({id:?})"
+                            ),
+                        });
+                    }
+                    if run
+                        .weight
+                        .is_some_and(|weight| !(100..=900).contains(&weight))
+                    {
+                        return Err(ApplyError::InvalidMutation {
+                            message: format!(
+                                "setTextRuns: run {index} weight must be in 100..=900 ({id:?})"
+                            ),
+                        });
+                    }
+                    text.push_str(&run.text);
+                }
+                node.text = Some(text);
+                node.text_runs = Some(runs.clone());
                 Ok(())
             }
             Mutation::SetValue { id, value } => {

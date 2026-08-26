@@ -3,10 +3,11 @@
 use crate::frame_stats::FrameStats;
 use gpui::{
     AnyElement, App, AppContext as _, BorderStyle, Bounds, Context, Corners, Div, Edges, Element,
-    FocusHandle, FollowMode, Hsla, InputHandler, InteractiveElement, IntoElement, LayoutId,
-    ListAlignment, ListState, PaintQuad, ParentElement, PathBuilder, Pixels, Point, Render, Rgba,
-    ScrollHandle, SharedString, StatefulInteractiveElement, Style, Styled, TextAlign, TextRun,
-    UTF16Selection, WeakEntity, Window, anchored, canvas, deferred, div, font, img, list, point,
+    FocusHandle, FollowMode, FontStyle, FontWeight, HighlightStyle, Hsla, InputHandler,
+    InteractiveElement, IntoElement, LayoutId, ListAlignment, ListState, PaintQuad, ParentElement,
+    PathBuilder, Pixels, Point, Render, Rgba, ScrollHandle, SharedString,
+    StatefulInteractiveElement, Style, Styled, StyledText, TextAlign, TextRun, UTF16Selection,
+    UnderlineStyle, WeakEntity, Window, anchored, canvas, deferred, div, font, img, list, point,
     prelude::FluentBuilder as _, px, rgb, rgba, size, svg,
 };
 use gpui::{ImageSource, Resource};
@@ -1543,10 +1544,68 @@ impl Render for HostView {
     }
 }
 
+/// Convert protocol runs into one string and delayed GPUI highlights.
+/// Substrings are joined here so all ranges are derived from Rust UTF-8 byte
+/// lengths, never JavaScript UTF-16 offsets.
+fn styled_text_parts(
+    runs: &[solid_gpui_protocol::TextRun],
+) -> (String, Vec<(Range<usize>, HighlightStyle)>) {
+    let mut text = String::new();
+    let mut highlights = Vec::with_capacity(runs.len());
+    for run in runs {
+        let start = text.len();
+        text.push_str(&run.text);
+        let end = text.len();
+        let mut highlight = HighlightStyle::default();
+        if let Some(color) = &run.color {
+            highlight.color = parse_color(&StyleValue::Text(color.clone())).map(Into::into);
+        }
+        if let Some(weight) = run.weight {
+            highlight.font_weight = Some(FontWeight(weight as f32));
+        }
+        if let Some(style) = run.style {
+            highlight.font_style = Some(match style {
+                solid_gpui_protocol::TextRunStyle::Normal => FontStyle::Normal,
+                solid_gpui_protocol::TextRunStyle::Italic => FontStyle::Italic,
+                solid_gpui_protocol::TextRunStyle::Oblique => FontStyle::Oblique,
+            });
+        }
+        if run.underline == Some(true) {
+            highlight.underline = Some(UnderlineStyle {
+                thickness: px(1.0),
+                color: None,
+                wavy: false,
+            });
+        }
+        if highlight != HighlightStyle::default() {
+            // `start..end` is derived from Rust UTF-8 lengths and every
+            // segment was validated non-empty by RetainedTree, so the ranges
+            // are sorted, non-overlapping, and character-boundary safe.
+            highlights.push((start..end, highlight));
+        }
+    }
+    (text, highlights)
+}
+
+/// Build a text node, optionally using one wrapping StyledText with delayed
+/// highlights so unstyled run properties inherit the parent GPUI text style.
+fn build_text_element(node: &solid_gpui_protocol::Node) -> AnyElement {
+    let Some(runs) = node.text_runs.as_ref() else {
+        return SharedString::from(node.text.clone().unwrap_or_default()).into_any_element();
+    };
+    let (text, highlights) = styled_text_parts(runs);
+    if highlights.is_empty() {
+        return SharedString::from(text).into_any_element();
+    }
+    StyledText::new(SharedString::from(text))
+        .with_highlights(highlights)
+        .into_any_element()
+}
+
 /// Map one retained node to a GPUI element. Unknown style keys/values are
 /// ignored (forward compatibility — see protocol StyleMap docs). Text nodes
-/// render as plain GPUI text children; input/textarea get the dedicated
-/// builder (text + caret + IME anchor).
+/// render as plain GPUI text children unless they carry P11 runs;
+/// input/textarea get the dedicated builder (text + caret + IME anchor).
 fn build_element(
     tree: &RetainedTree,
     id: ElementId,
@@ -1601,7 +1660,7 @@ fn build_element_inner(
         return div().into_any_element();
     };
     if node.element_type == ElementType::Text {
-        return SharedString::from(node.text.clone().unwrap_or_default()).into_any_element();
+        return build_text_element(node);
     }
     if matches!(
         node.element_type,
@@ -3136,6 +3195,35 @@ mod parse_color_tests {
 mod tests {
     use super::*;
     use gpui::Rgba;
+
+    #[test]
+    fn styled_text_parts_use_utf8_byte_ranges_and_run_styles() {
+        let (text, highlights) = styled_text_parts(&[
+            solid_gpui_protocol::TextRun {
+                text: "a".into(),
+                color: None,
+                weight: None,
+                style: None,
+                underline: None,
+            },
+            solid_gpui_protocol::TextRun {
+                text: "世界".into(),
+                color: Some("#89b4fa".into()),
+                weight: Some(700),
+                style: Some(solid_gpui_protocol::TextRunStyle::Italic),
+                underline: Some(true),
+            },
+        ]);
+
+        assert_eq!(text, "a世界");
+        assert_eq!(highlights.len(), 1);
+        let (range, style) = &highlights[0];
+        assert_eq!(range, &(1..7), "世界 occupies six UTF-8 bytes");
+        assert!(style.color.is_some());
+        assert_eq!(style.font_weight, Some(FontWeight::BOLD));
+        assert_eq!(style.font_style, Some(FontStyle::Italic));
+        assert!(style.underline.is_some());
+    }
 
     #[test]
     fn easing_curves_hit_their_endpoints_and_midpoints() {
