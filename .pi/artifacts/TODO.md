@@ -1024,11 +1024,11 @@ status: CLOSED 2026-08-26 (r1 NOT MERGEABLE: helper không biên dịch do
 ### 2026-08-26 - P9: menu bar (macOS)
 status: active
 
-- [ ] P9-a recon: gpui Menu/MenuItem/set_menus (app vs window level), action
+- [x] P9-a recon: gpui Menu/MenuItem/set_menus (app vs window level), action
       dispatch model (typed actions vs runtime names), keystroke wiring,
       separator/role support; quyết định đường event-back-to-JS.
-- [ ] P9-b protocol: surface chốt sau recon (nghi hướng command-channel cho
+- [x] P9-b protocol: surface chốt sau recon (nghi hướng command-channel cho
       set + event mới cho click) + lockstep + fixture.
-- [ ] P9-c helper: dựng menu thật + forward click về JS.
+- [x] P9-c helper: dựng menu thật + forward click về JS.
 - [ ] P9-d renderer TS + tests + demo.
-- [ ] VERIFY: gates (exit codes!) + independent review (retry contract).
+- [~] VERIFY: gates exit-code xanh; DANG review doc lap.
