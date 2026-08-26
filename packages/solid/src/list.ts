@@ -4,6 +4,11 @@
 import type { SolidGpuiCommand, JsonValue } from "@solid-gpui/protocol"
 import type { CommandChannel } from "./desktop"
 
+/**
+ * Seq namespace: list commands count from 2_000_000 — disjoint from the
+ * desktop module (1_000_000+) and the renderer's batches (1..), per the
+ * client's disjoint-range contract; wraps at u32 max like desktop.
+ */
 let nextSeq = 2_000_000
 
 function seq(): number {

@@ -666,17 +666,12 @@ impl HostView {
         if node.element_type != ElementType::List {
             return;
         }
-        let follow_tail = node.style.contains_key("followTail");
-        let alignment = if follow_tail {
-            ListAlignment::Bottom
-        } else {
-            ListAlignment::Top
-        };
+        let (alignment, overdraw) = list_state_config(node);
         if self.list_alignment.get(&id) != Some(&alignment) {
             // ListState bakes alignment at construction: recreate when the
             // followTail flag toggles (only meaningful before first paint).
             self.list_states
-                .insert(id, ListState::new(0, alignment, px(500.)));
+                .insert(id, ListState::new(0, alignment, overdraw));
             self.list_alignment.insert(id, alignment);
             self.list_follow_armed.remove(&id);
             // The fresh state has 0 items: the splice diff baseline must
@@ -685,6 +680,7 @@ impl HostView {
             // emptied the list until the next children mutation).
             self.list_children.insert(id, Vec::new());
         }
+        let follow_tail = node.style.contains_key("followTail");
         if follow_tail
             && self.list_follow_armed.insert(id)
             && let Some(state) = self.list_states.get(&id)
@@ -693,9 +689,6 @@ impl HostView {
         }
     }
 
-    /// S11 listInfo: item count, items painted last frame (virtualization
-    /// proof), and whether the list is scrolled to its end (followTail chat
-    /// position). Fails when the id never rendered as a list.
     /// Scroll a list's ListState to bring `index` to the viewport top
     /// (scrollToItem command). Fails when the id never rendered as a list.
     pub fn scroll_list_to_item(&self, id: ElementId, index: usize) -> Result<(), String> {
@@ -709,6 +702,9 @@ impl HostView {
         Ok(())
     }
 
+    /// S11 listInfo: item count, items painted last frame (virtualization
+    /// proof), and whether the list is scrolled to its end (followTail chat
+    /// position). Fails when the id never rendered as a list.
     pub fn list_info(&self, id: ElementId) -> Result<serde_json::Value, String> {
         let Some(state) = self.list_states.get(&id) else {
             return Err(format!("no list element for id {}", id.0));
@@ -1802,6 +1798,15 @@ fn build_input_element(
 /// render_item re-enters the view via Entity::update to build items with
 /// full interactive wiring (clicks/focus work inside lists).
 #[allow(clippy::too_many_arguments)]
+/// The full list-state construction config (P5): alignment + overdraw from
+/// one node read, so the EAGER apply-time path and the render-time path can
+/// never disagree (three construction sites, one source of truth).
+fn list_state_config(node: &solid_gpui_protocol::Node) -> (ListAlignment, Pixels) {
+    let alignment = resolve_list_alignment(node);
+    let overdraw = px(style_num(&node.style, "overdraw").unwrap_or(500.0) as f32);
+    (alignment, overdraw)
+}
+
 /// List vertical alignment (P5): explicit `listAlign` ("top"|"bottom") wins;
 /// otherwise followTail implies Bottom (the pre-P5 semantic). Unknown values
 /// fall through to the followTail rule (open-value drop). Pure — unit-tested.
@@ -1842,11 +1847,9 @@ fn build_list_element(
     // insertBefore mid-list splices the whole range — v1 keeps item identity
     // by index, documented simplification).
     let follow_tail = node.style.contains_key("followTail");
-    let alignment = resolve_list_alignment(node);
-    // Overdraw: extra px rendered above/below the viewport so scrolling
-    // doesn't pop. Default 500 preserves pre-P5 behavior; the style key is
-    // a plain number (open style-key rule).
-    let overdraw = px(style_num(&node.style, "overdraw").unwrap_or(500.0) as f32);
+    // Shared config with the eager apply-time path (ensure_list_state):
+    // overdraw/alignment must agree across all three construction sites.
+    let (alignment, overdraw) = list_state_config(node);
     if ctx.list_alignment.get(&id) != Some(&alignment) {
         ctx.list_states
             .insert(id, ListState::new(0, alignment, overdraw));
@@ -3126,5 +3129,54 @@ mod list_alignment_tests {
             )])),
             ListAlignment::Top
         );
+    }
+}
+
+#[cfg(test)]
+mod list_state_config_tests {
+    use super::*;
+
+    fn node_with(styles: &[(&str, StyleValue)]) -> solid_gpui_protocol::Node {
+        let mut tree = solid_gpui_protocol::RetainedTree::new();
+        tree.apply(&Mutation::CreateElement {
+            id: ElementId(1),
+            element_type: ElementType::List,
+        })
+        .unwrap();
+        tree.apply(&Mutation::SetStyle {
+            id: ElementId(1),
+            style: styles
+                .iter()
+                .map(|(k, v)| (k.to_string(), v.clone()))
+                .collect(),
+            state: None,
+        })
+        .unwrap();
+        tree.get(ElementId(1)).unwrap().clone()
+    }
+
+    #[test]
+    fn config_agrees_across_eager_and_render_paths() {
+        // The r1 Major: followTail + overdraw must resolve identically on
+        // the EAGER apply-time path (which runs FIRST for every list) — the
+        // old hardcoded px(500) there silently ignored the key forever.
+        let n = node_with(&[
+            ("followTail", StyleValue::Text("true".into())),
+            ("overdraw", StyleValue::Number(200u32.into())),
+        ]);
+        let (alignment, overdraw) = list_state_config(&n);
+        assert!(matches!(alignment, ListAlignment::Bottom));
+        assert_eq!(overdraw, px(200.0));
+
+        // overdraw alone (no alignment divergence → no render-time recreate).
+        let n2 = node_with(&[("overdraw", StyleValue::Number(120u32.into()))]);
+        let (a2, o2) = list_state_config(&n2);
+        assert!(matches!(a2, ListAlignment::Top));
+        assert_eq!(o2, px(120.0));
+
+        // Defaults identical to pre-P5 behavior.
+        let (a3, o3) = list_state_config(&node_with(&[]));
+        assert!(matches!(a3, ListAlignment::Top));
+        assert_eq!(o3, px(500.0));
     }
 }
