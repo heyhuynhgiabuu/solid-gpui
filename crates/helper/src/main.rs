@@ -69,51 +69,7 @@ fn main() {
                 window_bounds: Some(WindowBounds::Windowed(bounds)),
                 ..Default::default()
             },
-            |window, cx| {
-                let entity = cx.new(|_| HostView::new());
-                let entity_for_up = entity.clone();
-                // Scrollbar thumb drags (P6): window-level mouse listeners
-                // so the gesture survives the pointer leaving the 8px track.
-                // Registered ONCE at window construction (on_mouse_event is
-                // paint-phase-only — these cannot live in render()); the
-                // drag STATE lives on the HostView and is consumed here.
-                window.on_mouse_event(
-                    move |event: &gpui::MouseUpEvent, _phase, _window, cx: &mut App| {
-                        if event.button == gpui::MouseButton::Left {
-                            let entity_id = entity_for_up.entity_id();
-                            let had = entity_for_up.update(cx, |view, _| {
-                                view.scrollbar_drag.borrow_mut().take().is_some()
-                            });
-                            if had {
-                                cx.notify(entity_id);
-                            }
-                        }
-                    },
-                );
-                let entity_for_move = entity.clone();
-                window.on_mouse_event(
-                    move |event: &gpui::MouseMoveEvent, _phase, _window, cx: &mut App| {
-                        let entity_id = entity_for_move.entity_id();
-                        let target = entity_for_move.update(cx, |view, _| {
-                            let (_bar, handle, grab_y, track_h, start_off) =
-                                view.scrollbar_drag.borrow().clone()?;
-                            let dy = event.position.y - grab_y;
-                            let max = handle.max_offset().y.max(px(0.));
-                            if max <= px(0.) || track_h <= px(0.) {
-                                return None;
-                            }
-                            // Thumb px -> content px: (content / track) scale.
-                            let scale = (track_h + max) / track_h;
-                            Some((handle, (start_off + dy * scale).clamp(px(0.), max)))
-                        });
-                        if let Some((handle, target)) = target {
-                            handle.set_offset(gpui::point(handle.offset().x, -target));
-                            cx.notify(entity_id);
-                        }
-                    },
-                );
-                entity
-            },
+            |_, cx| cx.new(|_| HostView::new()),
         )
         .unwrap();
         cx.activate(true);

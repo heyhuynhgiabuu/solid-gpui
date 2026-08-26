@@ -4,6 +4,7 @@ import rustEmitted from "../fixtures/rust-emitted-batch-01.json"
 import listFixture from "../fixtures/batch-list-01.json"
 import stateFixture from "../fixtures/batch-style-state-01.json"
 import keysFixture from "../fixtures/batch-keys-01.json"
+import scrollbarFixture from "../fixtures/batch-scrollbar-01.json"
 import animationFixture from "../fixtures/batch-animation-01.json"
 import markdownFixture from "../fixtures/batch-markdown-01.json"
 import { elementId } from "./ids"
@@ -357,5 +358,22 @@ describe("keys fixture parity (P3)", () => {
       }),
     )
     expect(bad.ok).toBe(false)
+  })
+})
+
+describe("scrollbar fixture parity (P6)", () => {
+  test("batch-scrollbar-01 parses and re-encodes losslessly (elementType closed set)", () => {
+    const raw = JSON.stringify(scrollbarFixture)
+    const r = decodeBatch(raw)
+    expect(r.ok).toBe(true)
+    if (r.ok) {
+      expect(JSON.parse(encodeBatch(r.value))).toEqual(scrollbarFixture)
+      const mut = r.value.mutations[0]
+      expect(mut).toMatchObject({ op: "createElement", id: 1, elementType: "scrollbar" })
+    }
+    // Dropping "scrollbar" from the TS closed set must be caught: a
+    // re-decode of the raw line would fail.
+    const again = decodeBatch(raw)
+    expect(again.ok).toBe(true)
   })
 })

@@ -1303,6 +1303,7 @@ impl Render for HostView {
             // No root yet: dark placeholder keeps the window alive pre-mount.
             None => div().size_full().bg(rgb(0x1e1e2e)).into_any_element(),
         };
+
         self.stats.push(started.elapsed());
 
         // While any transition is in flight, keep the frame loop alive so
@@ -1451,6 +1452,112 @@ fn element_needs_stateful(
     has_overflow || has_click || wants_focus || !node.state_styles.is_empty()
 }
 
+impl IntoElement for ScrollDragAnchor {
+    type Element = Self;
+
+    fn into_element(self) -> Self::Element {
+        self
+    }
+}
+
+/// Zero-size element whose paint registers the scrollbar drag listeners
+/// (P6). window.on_mouse_event is PAINT-PHASE-ONLY and listeners live one
+/// frame (Frame::clear drops them), so registration must happen in an
+/// element's paint, every frame — exactly how gpui's own interactive
+/// elements register their listeners. The anchor sits inside the scrollbar
+/// wrapper (both window modes render it); handlers are drag-state-driven,
+/// so per-frame re-registration is idempotent.
+struct ScrollDragAnchor {
+    entity: gpui::Entity<HostView>,
+}
+
+impl Element for ScrollDragAnchor {
+    type RequestLayoutState = ();
+    type PrepaintState = ();
+
+    fn id(&self) -> Option<gpui::ElementId> {
+        None
+    }
+
+    fn source_location(&self) -> Option<&'static std::panic::Location<'static>> {
+        None
+    }
+
+    fn request_layout(
+        &mut self,
+        _: Option<&gpui::GlobalElementId>,
+        _: Option<&gpui::InspectorElementId>,
+        window: &mut Window,
+        cx: &mut App,
+    ) -> (LayoutId, Self::RequestLayoutState) {
+        // Zero-size: the anchor takes no space and paints nothing.
+        let style = Style {
+            size: size(px(0.).into(), px(0.).into()),
+            ..Default::default()
+        };
+        (window.request_layout(style, [], cx), ())
+    }
+
+    fn prepaint(
+        &mut self,
+        _: Option<&gpui::GlobalElementId>,
+        _: Option<&gpui::InspectorElementId>,
+        _: Bounds<Pixels>,
+        _: &mut Self::RequestLayoutState,
+        _: &mut Window,
+        _: &mut App,
+    ) -> Self::PrepaintState {
+    }
+
+    fn paint(
+        &mut self,
+        _: Option<&gpui::GlobalElementId>,
+        _: Option<&gpui::InspectorElementId>,
+        _: Bounds<Pixels>,
+        _: &mut Self::RequestLayoutState,
+        _: &mut Self::PrepaintState,
+        window: &mut Window,
+        _: &mut App,
+    ) {
+        let entity = self.entity.clone();
+        let entity_id = entity.entity_id();
+        window.on_mouse_event(
+            move |event: &gpui::MouseUpEvent, _phase, _window, cx: &mut App| {
+                if event.button == gpui::MouseButton::Left {
+                    let had = entity.update(cx, |view, _| {
+                        view.scrollbar_drag.borrow_mut().take().is_some()
+                    });
+                    if had {
+                        cx.notify(entity_id);
+                    }
+                }
+            },
+        );
+        let entity = self.entity.clone();
+        let entity_id = entity.entity_id();
+        window.on_mouse_event(
+            move |event: &gpui::MouseMoveEvent, _phase, _window, cx: &mut App| {
+                let target = entity.update(cx, |view, _| {
+                    let (_bar, handle, grab_y, track_h, start_off) =
+                        view.scrollbar_drag.borrow().clone()?;
+                    let dy = event.position.y - grab_y;
+                    let max = handle.max_offset().y.max(px(0.));
+                    if max <= px(0.) || track_h <= px(0.) {
+                        return None;
+                    }
+                    // Thumb px -> content px: (content / track) scale.
+                    let scale = (track_h + max) / track_h;
+                    Some((handle, (start_off + dy * scale).clamp(px(0.), max)))
+                });
+                if let Some((handle, target)) = target {
+                    handle.set_offset(gpui::point(handle.offset().x, -target));
+                    cx.notify(entity_id);
+                }
+            },
+        );
+    }
+}
+
 /// Thumb geometry for a vertical scrollbar: (top, height) within the track,
 /// proportional to the target's live offset/max, clamped to a minimum so
 /// huge lists keep the thumb grabbable. Zero height = nothing to scroll.
@@ -1510,12 +1617,14 @@ fn build_scrollbar_element(
         .clone();
     let entity = cx.entity();
 
-    // ScrollHandle exposes offset/max but NOT the viewport height, so the
-    // thumb ratio needs a track-height source: explicit style key wins, else
-    // the window height (right for root scrollbars; nested scrollbars should
-    // pass trackHeight). v1 limitation, documented.
+    // Track height = the target's live viewport: ScrollHandle::bounds()
+    // (populated each layout pass). The trackHeight style key overrides for
+    // explicit control; zero bounds (never laid out yet) falls back to the
+    // window height so the first frame has a sane thumb.
+    let bounds_h = handle.bounds().size.height;
     let track_h = match style_num(&node.style, "trackHeight") {
         Some(h) => px(h as f32),
+        None if bounds_h > px(0.) => bounds_h,
         None => px(window.bounds().size.height.into()),
     };
     let (thumb_top, thumb_h) = scrollbar_thumb_geometry(&handle, track_h, thumb_min);
@@ -1562,10 +1671,11 @@ fn build_scrollbar_element(
         });
 
     // Wrapper: the child (with its own overflow wiring) fills the box; the
-    // track overlays it absolutely.
+    // track overlays it absolutely; the drag anchor paints the listeners.
     let mut el = div().relative();
     el = el.child(build_element(tree, target_id, window, cx, ctx));
     el = el.child(track);
+    el = el.child(ScrollDragAnchor { entity });
     el.into_any_element()
 }
 
