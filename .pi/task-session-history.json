@@ -1724,5 +1724,59 @@
     "rawStatus": "success",
     "resultValid": true,
     "completedAt": 1787764742923
+  },
+  {
+    "id": "mtaekj5g-ad80",
+    "agentType": "scout",
+    "description": "Audit upstream solid-gpui problems",
+    "sessionName": "task-mtaekj5g-ad80",
+    "startedAt": 1787767437070,
+    "paneId": "wH:p1",
+    "handle": {
+      "backend": "herdr",
+      "resourceId": "wH:p1",
+      "socketPath": "/Users/huynhgiabuu/.config/herdr/herdr.sock",
+      "terminalId": "term_659f70abd521429",
+      "agentName": "scout-mtaekj5g",
+      "foregroundProcessGroupId": 13464,
+      "workspaceId": "wH",
+      "workspaceGroup": "upstream-audit"
+    },
+    "piDir": "/Users/huynhgiabuu/dev/projects/solid-gpui/.pi",
+    "dir": "/Users/huynhgiabuu/dev/projects/solid-gpui/.pi/artifacts/tasks",
+    "cwd": "/Users/huynhgiabuu/dev/projects/solid-gpui",
+    "status": "done",
+    "background": true,
+    "reportedStatus": "success",
+    "rawStatus": "success",
+    "resultValid": true,
+    "completedAt": 1787767617476
+  },
+  {
+    "id": "mtaekv2v-0a84",
+    "agentType": "explore",
+    "description": "Map local parity gaps",
+    "sessionName": "task-mtaekv2v-0a84",
+    "startedAt": 1787767451565,
+    "paneId": "wJ:p1",
+    "handle": {
+      "backend": "herdr",
+      "resourceId": "wJ:p1",
+      "socketPath": "/Users/huynhgiabuu/.config/herdr/herdr.sock",
+      "terminalId": "term_659f70ba8f2dd2a",
+      "agentName": "explore-mtaekv2v",
+      "foregroundProcessGroupId": 14109,
+      "workspaceId": "wJ",
+      "workspaceGroup": "local-audit"
+    },
+    "piDir": "/Users/huynhgiabuu/dev/projects/solid-gpui/.pi",
+    "dir": "/Users/huynhgiabuu/dev/projects/solid-gpui/.pi/artifacts/tasks",
+    "cwd": "/Users/huynhgiabuu/dev/projects/solid-gpui",
+    "status": "done",
+    "background": true,
+    "reportedStatus": "success",
+    "rawStatus": "success",
+    "resultValid": true,
+    "completedAt": 1787767567476
   }
 ]

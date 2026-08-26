@@ -721,3 +721,10 @@
   regression now keeps both closed sets identical.
 - [warning] S14b does not dismiss on outside click or suppress arrow handling
   during IME composition; both remain explicit v1 limitations.
+- [discovery] Audit of upstream `lxsmnsyc/solid-gpui` at `196aa6e` found no
+  issue/PR/release or runtime platform evidence; its missing acks, protocol
+  versioning, cycle guard, tests, and accessibility are already addressed here
+  by ADR 002/007 and the shared fixture/test gates.
+- [warning] The only upstream design risk not yet proven locally is a possible
+  cross-flush detach/reattach `Drop` hazard; probe it through the real client→
+  helper pipe before changing lifecycle semantics or adding re-create logic.

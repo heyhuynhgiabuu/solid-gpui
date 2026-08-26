@@ -1337,3 +1337,71 @@ Non-goals:
   window suite had a non-reproducible GUI contention flake in two earlier runs.
 - `bun run example/select` mounted and auto-disposed successfully. Outside-click
   dismissal and IME-composition arrow suppression remain explicitly deferred.
+
+### 2026-08-26 - Assess upstream solid-gpui problems and parity plan
+status: active | updated: 2026-08-26
+
+Goal: identify which real problems, gaps, and useful lessons around the upstream
+`lxsmnsyc/solid-gpui` repository should be solved in this Apache-2.0 clean-room
+project, then implement only an evidence-backed, prioritized subset.
+
+Scope:
+- inventory upstream documentation, issues, workflows, platform claims, and
+  externally observable failure modes;
+- compare those findings with this repository's architecture and existing gates;
+- derive a phased plan that preserves the out-of-process helper, protocol parity,
+  and clean-room attribution rules.
+
+Non-goals:
+- copying upstream source or dependencies, silently adopting its architecture,
+  promising to fix every historical issue without acceptance criteria, or making
+  Windows/Linux claims before running those platforms.
+
+- [x] Research upstream problems and classify each as applicable, already
+      solved, out of scope, or requiring user approval. Upstream `main` at
+      `196aa6e` (2026-08-24) has no issue/PR/release corpus; its main defects are
+      missing wire acknowledgements/versioning, cycle/depth protection, tests,
+      Windows support, and runtime platform evidence.
+- [x] Map applicable risks to local files, tests, and independent verification
+      gates; identify the smallest safe first slice. Local audit found five gaps;
+      the highest-value new probe is cross-flush detach/reattach, followed by
+      wire-level failure and cycle/depth verification.
+- [ ] Confirm priority, compatibility, licensing, and platform expectations with
+      the user before behavior-changing implementation.
+- [ ] Implement and review approved slices, then close this block with evidence.
+
+#### Research report
+
+Upstream evidence: `https://github.com/lxsmnsyc/solid-gpui` at commit
+`196aa6edc779cb39f37a3ade4517ed197ad58813` has no GitHub issues, PRs, releases,
+tags, or published npm packages. `docs/protocol.md` and the protocol/session
+sources show no ack, applied count, protocol version, or structured apply error;
+`docs/releasing.md` explicitly warns that mismatched positional peers fail
+strangely. The Rust tree has no cycle/depth guard or Rust tests, Windows is absent,
+and Linux is build-only in its release workflow. These are research findings,
+not instructions to copy the implementation.
+
+Local classification:
+- Already solved by design: structured replies and sequence correlation, poison
+  on failed batches with no requeue, protocol version/error validation, retained
+  ancestor/depth protection, shared TS/Rust fixtures, accessibility bridge, and
+  host-owned input/IME state (`DECISIONS.md` ADR 002/007; protocol/retained/client/
+  renderer tests).
+- Applicable probes: verify those failure guarantees through the real client→
+  helper pipe; exercise `MAX_DEPTH`/cycle rejection and subtree drop semantics;
+  probe detach in one flush followed by reattach in a later flush. The latter is
+  unverified and is the only upstream design risk not already covered by a local
+  invariant.
+- Platform/release gap: CI currently runs TypeScript on Ubuntu but Rust/helper
+  validation on macOS with GUI skipped; Linux/Windows helper packaging and runtime
+  evidence remain pending (`.github/workflows/ci.yml`, `release.yml`,
+  `crates/helper/Cargo.toml`).
+- Explicit non-gaps/out of scope: upstream's unpublished release state, its
+  multi-window absence, P12 compaction, and HTTP image policy before this project
+  adds image elements. Do not claim Linux/Windows support from a build alone.
+
+Recommended implementation order, pending user confirmation:
+1. Cross-flush detach/reattach probe plus wire-level failure/cycle probes.
+2. Mock/headless host or equivalent deterministic render seam, then CI GUI coverage.
+3. Linux CI build/run and Windows build/stdio; native Windows GUI requires an
+   interactive runner or VM. Add platform npm packages only after runtime gates.
