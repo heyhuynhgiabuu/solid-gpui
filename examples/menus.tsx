@@ -103,7 +103,7 @@ mountJsx(() => <Tree />).then(async (handle) => {
       name: "Edit",
       items: [
         { type: "item", label: "Cut", id: "edit.cut", osAction: "cut" },
-        { type: "item", label: "Copy", id: "edit.copy", keystroke: "cmd-c", osAction: "copy" },
+        { type: "item", label: "Copy", id: "edit.copy", osAction: "copy" },
       ],
     },
   ])

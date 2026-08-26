@@ -1258,13 +1258,28 @@ fn window_mode_set_menus_applies_and_replaces() {
         r#"{"type":"item","label":"Open…","id":"file.open","keystroke":"cmd-o"},"#,
         r#"{"type":"separator"},"#,
         r#"{"type":"item","label":"Copy","id":"edit.copy","osAction":"copy","checked":true},"#,
-        r#"{"type":"submenu","name":"Export","items":[{"type":"item","label":"PDF","id":"export.pdf","disabled":true}]}]}]}"#
+        r#"{"type":"submenu","name":"Export","items":[{"type":"item","label":"PDF","id":"export.pdf","disabled":true,"keystroke":"cmd-e p"}]}]}]}"#
     );
     writeln!(stdin, "{set_menus}").unwrap();
     stdin.flush().unwrap();
     assert_eq!(
         lines.next().unwrap().unwrap(),
         r#"{"type":"result","seq":300,"value":{"applied":true}}"#
+    );
+
+    // A wire-supplied unparseable keystroke must FAIL THE COMMAND, not
+    // panic the helper (KeyBinding::new panics on parse errors — the r1
+    // review Major). The helper stays alive for the next command.
+    let bad = concat!(
+        r#"{"type":"setMenus","seq":302,"menus":[{"name":"F","items":["#,
+        r#"{"type":"item","label":"B","id":"b","keystroke":"cmnd-o"}]}]}"#
+    );
+    writeln!(stdin, "{bad}").unwrap();
+    stdin.flush().unwrap();
+    let err_line = lines.next().unwrap().unwrap();
+    assert!(
+        err_line.contains("applyFailed") && err_line.contains("cmnd-o"),
+        "expected a typed apply failure, got {err_line}"
     );
 
     // Replace wholesale (empty bar) also applies.

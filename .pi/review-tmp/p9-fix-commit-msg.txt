@@ -1,0 +1,21 @@
+fix(helper): P9 r1 - keystroke validation, keymap ownership, osAction symmetry
+
+Major (r1 mt9sxy3f): KeyBinding::new PANICS on unparseable keystrokes
+(upstream .unwrap) and keystrokes are wire input - a typo like
+"cmnd-o" killed the whole helper. collect_wanted_keystrokes now
+validates every whitespace-separated token with Keystroke::parse and
+fails the command with a typed ApplyFailed reply instead; the GUI
+smoke proves a bad keystroke errors while the helper stays alive.
+Per-token validation keeps sequence bindings working (load splits on
+whitespace); the smoke binds a two-step sequence to prove no false
+rejection.
+
+Minor: the unknown-command error message enumerates setMenus now.
+Minor: apply_menus clears the keymap before rebinding - the menu bar
+owns its shortcuts, so removed shortcuts stop firing instead of
+accumulating stale bindings forever (nothing else in the helper uses
+the keymap; P3 element keys are focus-scoped listeners).
+Minor: items with an osAction ignore their keystroke field entirely -
+macOS wires its own system equivalent, and binding here would dispatch
+a JS event where the documented contract says native selectors never
+reach JS. Demo updated accordingly.

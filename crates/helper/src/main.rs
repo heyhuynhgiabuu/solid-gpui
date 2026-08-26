@@ -419,12 +419,16 @@ fn run_stdio_window() {
                         solid_gpui_protocol::Command::SetMenus { seq, menus } => {
                             // AsyncApp::update is infallible in this gpui
                             // (panics on a gone app instead of erroring).
-                            cx.update(|cx| {
-                                crate::host::apply_menus(cx, &menus);
-                                Reply::Result {
+                            cx.update(|cx| match crate::host::apply_menus(cx, &menus) {
+                                Ok(()) => Reply::Result {
                                     seq,
                                     value: serde_json::json!({ "applied": true }),
-                                }
+                                },
+                                Err(message) => Reply::Error {
+                                    seq: Some(seq),
+                                    code: ReplyCode::ApplyFailed,
+                                    message,
+                                },
                             })
                         }
 

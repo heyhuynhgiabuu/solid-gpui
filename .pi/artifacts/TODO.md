@@ -1030,5 +1030,15 @@ status: active
 - [x] P9-b protocol: surface chốt sau recon (nghi hướng command-channel cho
       set + event mới cho click) + lockstep + fixture.
 - [x] P9-c helper: dựng menu thật + forward click về JS.
-- [ ] P9-d renderer TS + tests + demo.
-- [~] VERIFY: gates exit-code xanh; DANG review doc lap.
+- [x] P9-d renderer TS + tests + demo.
+- [~] VERIFY: gates exit-code xanh (bun 161 · cargo 34+36 / 83+20 GUI ·
+      tsc · clippy/fmt) + demo example/menus chạy sạch. r1 (mt9sxy3f):
+      NOT MERGEABLE — Major: KeyBinding::new PANIC trên keystroke wire sai
+      ("cmnd-o") — helper chết vì wire input; Minor: error-message thiếu
+      setMenus; stale bindings tích tụ (bind_keys không có remove);
+      osAction+keystroke bất đối xứng (cmd-c bắn JS event thay vì copy).
+      Fixes đang chạy: per-token Keystroke::parse validation → command
+      fail có type (ApplyFailed), clear_key_bindings trước rebind (bar sở
+      hữu shortcut của nó), osAction bỏ qua keystroke (macOS tự cấp
+      equivalent), message sửa. Smoke thêm case cmnd-o (error reply,
+      helper sống) + sequence cmd-e p (per-token không từ chối nhầm).

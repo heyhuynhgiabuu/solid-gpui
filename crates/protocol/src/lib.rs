@@ -613,7 +613,7 @@ pub fn command_from_json(s: &str) -> Result<Command, ProtocolError> {
         return Err(ProtocolError::InvalidShape {
             path: "type".into(),
             message: format!(
-                "unknown command {:?}; expected getStats|captureFrame|scrollTo|getScrollOffset|focusElement|simulateInput|listInfo|setTitle|windowAction|dialogMessage|dialogOpenFile|dialogSaveFile|shellRevealPath|shellOpenPath|scrollToItem",
+                "unknown command {:?}; expected getStats|captureFrame|scrollTo|getScrollOffset|focusElement|simulateInput|listInfo|setMenus|setTitle|windowAction|dialogMessage|dialogOpenFile|dialogSaveFile|shellRevealPath|shellOpenPath|scrollToItem",
                 type_str.unwrap_or("<missing>")
             ),
         });

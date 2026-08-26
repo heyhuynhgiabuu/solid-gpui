@@ -182,69 +182,98 @@ struct MenuAction {
 #[derive(Default)]
 struct MenuState {
     handler_installed: bool,
-    bound: HashSet<String>,
 }
 
 impl gpui::Global for MenuState {}
 
-fn menu_binding_key(keystroke: &str, item_id: &str) -> String {
-    format!("{keystroke}\u{1f}{item_id}")
-}
-
 /// Replace the application menu bar wholesale (P9). Registers the shared
-/// action handler once; binds new keystrokes only.
-pub fn apply_menus(cx: &mut App, specs: &[solid_gpui_protocol::MenuSpec]) {
-    let state = cx.default_global::<MenuState>();
-    if !state.handler_installed {
-        state.handler_installed = true;
-        cx.on_action::<MenuAction>(|action, _cx| {
-            crate::host::write_event_line(&Event::Menu {
-                item_id: action.item_id.clone(),
+/// action handler once, REBINDS the keymap for this bar (menus own their
+/// shortcuts: cleared first so removed shortcuts stop firing — nothing else
+/// in the helper uses the keymap; P3 element keys are focus-scoped
+/// listeners, not bindings). Fails loudly on a wire-supplied keystroke that
+/// cannot parse — KeyBinding::new would panic.
+pub fn apply_menus(cx: &mut App, specs: &[solid_gpui_protocol::MenuSpec]) -> Result<(), String> {
+    {
+        let state = cx.default_global::<MenuState>();
+        if !state.handler_installed {
+            state.handler_installed = true;
+            cx.on_action::<MenuAction>(|action, _cx| {
+                crate::host::write_event_line(&Event::Menu {
+                    item_id: action.item_id.clone(),
+                });
             });
-        });
+        }
     }
 
-    let mut key_bindings = Vec::new();
-    let state = cx.global_mut::<MenuState>();
+    // Validate BEFORE mutating anything (a failed command must not leave a
+    // half-cleared keymap).
+    let mut wanted: Vec<(String, String)> = Vec::new();
+    let mut seen = HashSet::new();
     for spec in specs {
-        collect_key_bindings(&spec.items, &mut key_bindings, &mut state.bound);
+        collect_wanted_keystrokes(&spec.items, &mut wanted, &mut seen)?;
+    }
+
+    cx.clear_key_bindings();
+    let mut key_bindings = Vec::new();
+    for (keystroke, item_id) in wanted {
+        key_bindings.push(gpui::KeyBinding::new(
+            keystroke.as_str(),
+            MenuAction { item_id },
+            None,
+        ));
     }
     if !key_bindings.is_empty() {
         cx.bind_keys(key_bindings);
     }
     cx.set_menus(specs.iter().map(build_menu));
+    Ok(())
 }
 
-fn collect_key_bindings(
+/// Walk the spec collecting (keystroke, item_id) pairs to bind. Items with a
+/// native `os_action` are skipped: macOS wires its own system equivalents
+/// (e.g. cmd-c) to the selector, and a keymap binding here would dispatch a
+/// JS menu event instead of performing the edit — the documented contract
+/// says osAction picks never reach JS. Invalid keystroke strings fail the
+/// command (KeyBinding::new panics on them).
+fn collect_wanted_keystrokes(
     items: &[solid_gpui_protocol::MenuItemSpec],
-    out: &mut Vec<gpui::KeyBinding>,
-    bound: &mut HashSet<String>,
-) {
+    out: &mut Vec<(String, String)>,
+    seen: &mut HashSet<String>,
+) -> Result<(), String> {
     for item in items {
         match item {
             solid_gpui_protocol::MenuItemSpec::Item {
-                keystroke: Some(k),
+                keystroke,
                 id,
+                os_action,
                 ..
             } => {
-                let key = menu_binding_key(k, id);
-                if bound.insert(key) {
-                    out.push(gpui::KeyBinding::new(
-                        k.as_str(),
-                        MenuAction {
-                            item_id: id.clone(),
-                        },
-                        None,
-                    ));
+                let (Some(k), None) = (keystroke, os_action) else {
+                    continue;
+                };
+                if !seen.insert(k.clone()) {
+                    continue;
                 }
+                // KeyBinding::new PANICS on parse errors (upstream .unwrap)
+                // and keystrokes are wire input — validate every token here
+                // so an unparseable string fails the command instead. Space
+                // separates sequence steps; each step parses independently.
+                for token in k.split_whitespace() {
+                    if gpui::Keystroke::parse(token).is_err() {
+                        return Err(format!(
+                            "setMenus: invalid keystroke {k:?} for item {id:?} (expected modifiers-key like \"cmd-shift-p\")"
+                        ));
+                    }
+                }
+                out.push((k.clone(), id.clone()));
             }
-            solid_gpui_protocol::MenuItemSpec::Item { .. }
-            | solid_gpui_protocol::MenuItemSpec::Separator => {}
+            solid_gpui_protocol::MenuItemSpec::Separator => {}
             solid_gpui_protocol::MenuItemSpec::Submenu { items, .. } => {
-                collect_key_bindings(items, out, bound);
+                collect_wanted_keystrokes(items, out, seen)?;
             }
         }
     }
+    Ok(())
 }
 
 fn build_menu(spec: &solid_gpui_protocol::MenuSpec) -> gpui::Menu {
