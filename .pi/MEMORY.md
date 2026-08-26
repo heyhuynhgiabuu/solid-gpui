@@ -550,3 +550,26 @@
 - GUI smoke ack-only lại che lỗi (như P3 B1): command cần smoke assert
   RESULT payload, không chỉ ack/apply. Round-trip test phải đi qua CẢ
   encoder thật (encodeCommand) lẫn decoder thật (command_from_json).
+
+## P5 — list (2026-08-26)
+
+- **ĐẾM SỐ site khởi tạo trước khi nói "cả hai chỗ"**: ListState có BA nơi
+  tạo (eager apply-time ensure_list_state chạy TRƯỚC, + 2 render-time).
+  Tôi cập nhật 2, quên site eager — feature chết đúng trên path chính
+  (followTail+overdraw) mà smoke vẫn pass (config của smoke diverge alignment
+  → render-recreate cứu lấy). Reviewer bắt. Quy tắc: grep TẤT CẢ
+  `ListState::new`/constructor calls của type trước khi claim "cả hai sites";
+  extract config-helpers dùng chung thay vì copy giá trị mặc định.
+- **Eager-path + render-path đôi khi cùng tồn tại cho một feature** (state
+  tồn tại trước render) — render-time get-or-create KHÔNG tự sửa được giá trị
+  eager tạo sai; phải đồng bộ từ nguồn duy nhất.
+- **Recon-first thu gọn scope**: roadmap P5 viết theo kiến trúc JS-windowed
+  của prior-art (onRange round-trips, insertedAt); retained-tree của ta đã
+  phủ phần lớn — items helper-side, splice prefix/suffix = height-cache
+  continuity, itemHeight = hint semantics. Slice co lại từ 6 mục còn 3 gap
+  thật. Luôn recon kiến trúc MÌNH trước khi implement theo roadmap mượn.
+- Style keys (open set) không cần protocol change — chỉ union TS; command
+  mới mới cần lockstep 3 chỗ (decode+encode+name list).
+- Pixels không expose field .0 — so sánh bằng px(x) trực tiếp (PartialEq).
+- GUI smoke phải assert RESULT payload + error path có tương quan seq —
+  smoke P5 lần này làm đúng ngay từ đầu nhờ bài học P4.
