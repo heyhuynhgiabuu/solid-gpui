@@ -152,7 +152,7 @@ S13 design (frozen for implementation):
 Cross-ref: TODO.md#2026-08-25---s13-rich-text--markdowncodediff-ported-from-comet-mit
 
 ### 2026-08-25 - Phase 2 roadmap: element/event surface expansion
-status: research complete; P1–P11 implementation closed 2026-08-26; P12 parked pending benchmark
+status: research complete; P1–P11 implementation closed 2026-08-26; P12 benchmarked 2026-08-26 and retained as a no-op pending a better direct encoder/design
 
 Source studied: lxsmnsyc/solid-gpui docs (MIT; user re-authorized reference
 2026-08-25). Read docs/{elements,events,commands,styling,protocol}.md + README

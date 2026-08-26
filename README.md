@@ -8,8 +8,8 @@ Solid reactivity → mutation protocol (NDJSON) → Rust helper → GPUI
 ```
 
 Status: **Phase 2 complete through P11**. Mounts Solid 2 trees into native
-windows and applies fine-grained updates. P12 protocol compaction remains
-benchmark-gated; this is still a prerelease and not production-ready.
+windows and applies fine-grained updates. P12 compaction was benchmarked but
+not adopted; this is still a prerelease and not production-ready.
 
 ## The one trap you must know
 
@@ -122,8 +122,9 @@ loop on every OS, so no Zed fork and no ThreadsafeFunction usage. See
   and JSX compiler versions aligned.
 - macOS is validated; Windows/Linux remain pending (the architecture needs no
   per-OS patches).
-- Protocol compaction (P12) is intentionally deferred until benchmarks justify
-  its compatibility and maintenance cost.
+- Protocol compaction (P12) is intentionally deferred: the numeric candidate
+  cut wire bytes but regressed the measured encoder; revisit only with a direct
+  encoder and explicit compatibility design.
 - A failed batch poisons the renderer (by design): discard it and remount.
 
 ## License

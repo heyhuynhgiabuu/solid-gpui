@@ -1135,3 +1135,45 @@ status: done | updated: 2026-08-26
   treat that rerun as window-server/environment evidence, not an rc.3 failure.
 - Independent review: `.pi/review-tmp/rc3_r1_brief.md`; reviewer verdict
   CLEAN/MERGEABLE, no blocker/major/important finding.
+
+### 2026-08-26 - P12 protocol compaction benchmark
+status: active | updated: 2026-08-26
+
+#### Benchmark contract
+
+- Baseline is the shipped object envelope and `encodeBatch`/`decodeBatch`.
+- Candidate is benchmark-only `[v, seq, rows]`, with one positional row per
+  mutation; measure both string op names and numeric op tags to separate field
+  overhead from an op-table design.
+- Recommend P12 only when the numeric candidate saves at least 20% of total
+  UTF-8 wire bytes and does not regress median encode/decode time by more than
+  10% across the representative fixture suite.
+
+- [x] Define deterministic representative mutation batches and a positional-array
+      comparison without changing the production protocol.
+- [x] Measure encoded bytes and repeated encode/decode cost for both shapes,
+      including warmup, fixed iterations, and reproducible runtime metadata.
+- [x] Decide P12 from observed data: the numeric candidate saves 49.60% of
+      aggregate wire bytes, but its encode path regresses 27.59–30.04%; keep
+      the object wire format and do not reopen P12 automatically.
+- [ ] Obtain an independent review of the benchmark methodology, then close
+      this benchmark block without changing the production protocol.
+
+#### Run report
+
+- `bun run benchmark:protocol` — exit 0 in two consecutive runs on Bun 1.4.0
+  across 11 protocol fixtures with 1,000 warmups, 10,000 measured iterations,
+  and 5 samples.
+- Aggregate UTF-8 bytes: object `4504`, positional string-op `2964`
+  (`-34.19%`), positional numeric-op `2270` (`-49.60%`).
+- Aggregate median encode timing: object `456–464 ns/op`, numeric
+  `592–593 ns/op` (`+27.59–30.04%`); numeric decode was faster in this
+  representation-only probe (`-28.42–30.90%`).
+- The compact decoder checks envelope/row arity and expands generated rows; it
+  deliberately does not duplicate `decodeBatch`'s full untrusted-input validator.
+  The result is therefore a wire-size and representation-overhead decision,
+  not approval for a protocol implementation.
+- Decision: the byte reduction is real, but the measured encoder regression
+  fails the declared threshold. Keep the current object wire format; revisit
+  only with an explicit wire-version/compatibility design and a direct encoder
+  benchmark.

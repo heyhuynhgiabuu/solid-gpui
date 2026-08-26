@@ -701,3 +701,7 @@
   stats can remain at one frame even while stdio mutations are acknowledged;
   use `SOLID_GPUI_SKIP_GUI_TESTS=1` for headless verification and report the
   frame test separately rather than attributing it to the JS migration.
+- [discovery] P12 benchmark on Bun 1.4.0 across 11 fixtures: numeric positional
+  rows reduced UTF-8 bytes 49.60% (4504→2270), but the generic direct encoder
+  measured 27.59–30.04% slower. Keep the object wire format; do not reopen P12
+  without a direct encoder and explicit version/compatibility design.
