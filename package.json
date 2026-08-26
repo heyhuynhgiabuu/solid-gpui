@@ -21,7 +21,8 @@
     "typecheck": "tsc --noEmit -p packages/protocol && tsc --noEmit -p packages/client && tsc --noEmit -p packages/solid",
     "example:canvas": "bun --conditions=browser run examples/canvas.tsx",
     "example/canvas": "bun --conditions=browser --preload ./scripts/solid-jsx-preload.ts examples/canvas.tsx",
-    "example/menus": "bun --conditions=browser --preload ./scripts/solid-jsx-preload.ts examples/menus.tsx"
+    "example/menus": "bun --conditions=browser --preload ./scripts/solid-jsx-preload.ts examples/menus.tsx",
+    "example/media": "bun --conditions=browser --preload ./scripts/solid-jsx-preload.ts examples/media.tsx"
   },
   "devDependencies": {
     "@babel/core": "^7",

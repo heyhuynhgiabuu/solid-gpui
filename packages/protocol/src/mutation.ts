@@ -13,6 +13,12 @@ export type ElementType =
   /** Recorded draw list element (P8): rect/path/text ops, replaced
    * wholesale via setDrawList; no children, no interactive props. */
   | "canvas"
+  /** Monochrome icon; the `text` IS raw SVG markup; tinted via the
+   * `color` style key. No children, no interactive props. */
+  | "svg"
+  /** Raster image from a file path or http(s) URI (`src` prop).
+   * No children, no interactive props. */
+  | "img"
 
 /**
  * Closed set: the helper must know an event to wire it, so unknown event
@@ -44,6 +50,28 @@ export type EventType =
  * Closed set of style-STATE layers: the helper must know every state to wire
  * gpui interactivity (same asymmetry as EVENT_TYPES — style KEYS stay open).
  */
+/** Which corner of an anchored element pins to its render location (P10). */
+export type AnchorKind =
+  | "topLeft"
+  | "topRight"
+  | "bottomLeft"
+  | "bottomRight"
+  | "topCenter"
+  | "bottomCenter"
+  | "leftCenter"
+  | "rightCenter"
+
+export const ANCHOR_KINDS: readonly AnchorKind[] = [
+  "topLeft",
+  "topRight",
+  "bottomLeft",
+  "bottomRight",
+  "topCenter",
+  "bottomCenter",
+  "leftCenter",
+  "rightCenter",
+]
+
 /** One recorded draw op in a canvas draw list (P8). Coordinates are
  * absolute px within the canvas bounds; replaced wholesale on each set. */
 export type DrawItem =
@@ -105,6 +133,8 @@ export const ELEMENT_TYPES: readonly ElementType[] = [
   "markdown",
   "scrollbar",
   "canvas",
+  "svg",
+  "img",
 ]
 
 export type Mutation =
@@ -128,6 +158,24 @@ export type Mutation =
       readonly id: ElementId
       /** Keystroke strings; spaces separate a sequence ("ctrl-x ctrl-s"). */
       readonly bindings: readonly string[]
+    }
+  | {
+      readonly op: "setSrc"
+      readonly id: ElementId
+      /** Absolute file path or http(s) URI. img-only. */
+      readonly src: string
+    }
+  | {
+      readonly op: "setDeferred"
+      readonly id: ElementId
+      /** Paint this element after all non-deferred ancestors. */
+      readonly deferred: boolean
+    }
+  | {
+      readonly op: "setAnchored"
+      readonly id: ElementId
+      /** Corner pinning the element to its render location; null clears. */
+      readonly anchor: AnchorKind | null
     }
   | {
       readonly op: "setDrawList"
@@ -190,6 +238,9 @@ export const MUTATION_OPS = [
   "setStyle",
   "setText",
   "setKeyBindings",
+  "setSrc",
+  "setDeferred",
+  "setAnchored",
   "setDrawList",
   "setDragData",
   "setValue",

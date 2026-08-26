@@ -658,3 +658,66 @@ describe("canvas draw list (P8)", () => {
     ).toBe(false)
   })
 })
+
+describe("media + overlays (P10)", () => {
+  test("src routes by tag; deferred/anchor emit their mutations", async () => {
+    const rec = recording()
+    const { renderer: R, render, flush } = createSolidRenderer(rec.send)
+    const container = R.createElement("#root")
+    let icon: ReturnType<typeof R.createElement> | null = null
+    let photo: ReturnType<typeof R.createElement> | null = null
+    let pop: ReturnType<typeof R.createElement> | null = null
+    const dispose = render(() => {
+      const root = R.createElement("div")
+      icon = R.createElement("svg")
+      photo = R.createElement("img")
+      pop = R.createElement("div")
+      for (const n of [icon, photo, pop]) R.insert(root, n, null, null)
+      return root
+    }, container)
+    await flush()
+    R.setProp(icon!, "src", "<svg xmlns='http://www.w3.org/2000/svg'/>")
+    R.setProp(icon!, "color", "#7aa2f7")
+    R.setProp(photo!, "src", "/tmp/pic.png")
+    R.setProp(photo!, "deferred", true)
+    R.setProp(pop!, "anchor", "topRight")
+    await flush()
+    dispose()
+    const muts = rec.batches.flatMap((b) => b.mutations)
+    expect(muts).toContainEqual({ op: "setText", id: expect.anything(), text: "<svg xmlns='http://www.w3.org/2000/svg'/>" })
+    expect(muts).toContainEqual(expect.objectContaining({ op: "setSrc", src: "/tmp/pic.png" }))
+    expect(muts).toContainEqual(expect.objectContaining({ op: "setDeferred", deferred: true }))
+    expect(muts).toContainEqual(expect.objectContaining({ op: "setAnchored", anchor: "topRight" }))
+  })
+
+  test("anchor rejects unknown corners; null clears", async () => {
+    const rec = recording()
+    const { renderer: R, render, flush } = createSolidRenderer(rec.send)
+    const container = R.createElement("#root")
+    let dv: ReturnType<typeof R.createElement> | null = null
+    const dispose = render(() => {
+      const root = R.createElement("div")
+      dv = root
+      return root
+    }, container)
+    await flush()
+    const warn = console.warn
+    const calls: string[] = []
+    console.warn = (m: string) => calls.push(m)
+    try {
+      R.setProp(dv!, "anchor", "middle" as never)
+      await flush()
+      R.setProp(dv!, "anchor", null)
+      await flush()
+    } finally {
+      console.warn = warn
+    }
+    dispose()
+    expect(calls.some((m) => m.includes("anchor"))).toBe(true)
+    const anchored = rec.batches
+      .flatMap((b) => b.mutations)
+      .filter((m): m is Extract<Mutation, { op: "setAnchored" }> => m.op === "setAnchored")
+    expect(anchored).toHaveLength(1)
+    expect(anchored[0]?.anchor).toBeNull()
+  })
+})

@@ -6,6 +6,7 @@ import {
   createRoot as sigRoot,
 } from "solid-js"
 import {
+  ANCHOR_KINDS,
   elementId,
   ANIMATABLE_STYLE_KEYS,
   EASING_NAMES,
@@ -72,6 +73,8 @@ const TAG_ELEMENT_TYPES: Record<string, ElementType> = {
   markdown: "markdown",
   canvas: "canvas",
   scrollbar: "scrollbar",
+  svg: "svg",
+  img: "img",
 }
 
 export interface SolidGpuiRenderer {
@@ -418,6 +421,40 @@ export function createSolidRenderer(send: Send): SolidGpuiRenderer {
           handlers.delete(`${node.id}:${event}`)
           push({ op: "setEventListener", id, eventType: event, enabled: false })
         }
+        return
+      }
+      if (name === "src" && node.tag === "svg") {
+        // SVG markup rides the existing text channel (like markdown source).
+        push({ op: "setText", id, text: String(value ?? "") })
+        return
+      }
+      if (name === "src" && node.tag === "img") {
+        const src = String(value ?? "")
+        if (src.length === 0) {
+          if (typeof console !== "undefined") {
+            console.warn("[solid-gpui] <img> src must be a non-empty path or URI")
+          }
+          return
+        }
+        push({ op: "setSrc", id, src })
+        return
+      }
+      if (name === "deferred") {
+        push({ op: "setDeferred", id, deferred: value !== undefined && value !== null && value !== false })
+        return
+      }
+      if (name === "anchor") {
+        if (value == null) {
+          push({ op: "setAnchored", id, anchor: null })
+          return
+        }
+        if (!ANCHOR_KINDS.includes(value as never)) {
+          if (typeof console !== "undefined") {
+            console.warn(`[solid-gpui] anchor must be one of ${ANCHOR_KINDS.join("|")}`)
+          }
+          return
+        }
+        push({ op: "setAnchored", id, anchor: value as never })
         return
       }
       if (name === "drawList") {

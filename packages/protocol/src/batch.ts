@@ -1,5 +1,6 @@
 import { isElementIdValue, type ElementId } from "./ids"
 import {
+  ANCHOR_KINDS,
   ANIMATABLE_STYLE_KEYS,
   EASING_NAMES,
   ELEMENT_TYPES,
@@ -280,6 +281,30 @@ function decodeMutation(m: Dict, p: string): Result<Mutation, ProtocolError> {
         }
       }
       return { ok: true, value: { op, id: idR.value, bindings } }
+    }
+    case "setSrc": {
+      const idR = id()
+      if (!idR.ok) return idR
+      if (typeof m.src !== "string" || m.src.length === 0) {
+        return { ok: false, error: shape(`${p}.src`, "expected a non-empty string") }
+      }
+      return { ok: true, value: { op, id: idR.value, src: m.src } }
+    }
+    case "setDeferred": {
+      const idR = id()
+      if (!idR.ok) return idR
+      if (typeof m.deferred !== "boolean") {
+        return { ok: false, error: shape(`${p}.deferred`, "expected a boolean") }
+      }
+      return { ok: true, value: { op, id: idR.value, deferred: m.deferred } }
+    }
+    case "setAnchored": {
+      const idR = id()
+      if (!idR.ok) return idR
+      if (m.anchor !== null && m.anchor !== undefined && !ANCHOR_KINDS.includes(m.anchor as never)) {
+        return { ok: false, error: shape(`${p}.anchor`, `expected one of ${ANCHOR_KINDS.join("|")} or null`) }
+      }
+      return { ok: true, value: { op, id: idR.value, anchor: (m.anchor ?? null) as never } }
     }
     case "setDrawList": {
       const idR = id()

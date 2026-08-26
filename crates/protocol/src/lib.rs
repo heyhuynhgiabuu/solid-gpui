@@ -41,6 +41,8 @@ pub const ELEMENT_TYPES: &[&str] = &[
     "markdown",
     "scrollbar",
     "canvas",
+    "svg",
+    "img",
 ];
 
 /// Numeric id of a host element. 0 is reserved and never valid.
@@ -78,6 +80,14 @@ pub enum ElementType {
     /// rejects attach, like text nodes); no interactive props (like
     /// markdown). Base styles (size/background) apply.
     Canvas,
+    /// Monochrome icon rendered from raw SVG markup (the node's `text`
+    /// IS the source); tinted by the `color` style key. Helper-owned
+    /// subtree: no children, no interactive props (like markdown/canvas).
+    Svg,
+    /// Raster image from an absolute file path or http(s) URI (`setSrc`).
+    /// gpui reads file paths directly; no asset source needed. Same
+    /// helper-owned contracts as svg.
+    Img,
 }
 
 /// Interaction state a state-layer style applies under. Closed set (the
@@ -233,6 +243,29 @@ pub enum DrawItem {
     },
 }
 
+/// Which corner/edge-center of an anchored element pins to the render
+/// location (P10). Closed set — the helper must know every anchor to map
+/// onto gpui's `Anchor`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum AnchorKind {
+    #[serde(rename = "topLeft")]
+    TopLeft,
+    #[serde(rename = "topRight")]
+    TopRight,
+    #[serde(rename = "bottomLeft")]
+    BottomLeft,
+    #[serde(rename = "bottomRight")]
+    BottomRight,
+    #[serde(rename = "topCenter")]
+    TopCenter,
+    #[serde(rename = "bottomCenter")]
+    BottomCenter,
+    #[serde(rename = "leftCenter")]
+    LeftCenter,
+    #[serde(rename = "rightCenter")]
+    RightCenter,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "op", rename_all = "camelCase")]
 pub enum Mutation {
@@ -292,6 +325,30 @@ pub enum Mutation {
     /// Configure drag & drop for the element: `data` is a JSON string (the
     /// payload carried to drop targets); an empty string clears drag source
     /// behavior. Drop targets register onDrop listeners normally.
+    /// Set the media source of an img element: absolute file path or
+    /// http(s) URI. Only valid on img elements.
+    #[serde(rename_all = "camelCase")]
+    SetSrc {
+        id: ElementId,
+        src: String,
+    },
+    /// Paint this element after all non-deferred ancestors (overlay layer,
+    /// P10). Universal: any element can be lifted into the deferred pass.
+    #[serde(rename_all = "camelCase")]
+    SetDeferred {
+        id: ElementId,
+        deferred: bool,
+    },
+    /// Wrap this element in gpui's anchored overlay: the element escapes
+    /// ancestor clipping and pins the given corner of itself to its render
+    /// location (window coordinates), snapping to window edges on overflow.
+    /// None clears. Universal.
+    #[serde(rename_all = "camelCase")]
+    SetAnchored {
+        id: ElementId,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        anchor: Option<AnchorKind>,
+    },
     /// Replace the canvas element's recorded draw list (P8) wholesale.
     /// Only valid on canvas elements; validation rejects anything else.
     #[serde(rename_all = "camelCase")]
@@ -783,6 +840,9 @@ const KNOWN_OPS: &[&str] = &[
     "setText",
     "setKeyBindings",
     "setDrawList",
+    "setSrc",
+    "setDeferred",
+    "setAnchored",
     "setDragData",
     "setValue",
     "setAnimation",
@@ -889,6 +949,9 @@ fn from_value(v: serde_json::Value) -> Result<MutationBatch, ProtocolError> {
             | Mutation::DestroyElement { id }
             | Mutation::SetStyle { id, .. }
             | Mutation::SetDrawList { id, .. }
+            | Mutation::SetSrc { id, .. }
+            | Mutation::SetDeferred { id, .. }
+            | Mutation::SetAnchored { id, .. }
             | Mutation::SetKeyBindings { id, .. }
             | Mutation::SetDragData { id, .. }
             | Mutation::SetText { id, .. }

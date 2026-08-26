@@ -1,8 +1,8 @@
 use solid_gpui_protocol::{
-    ApplyError, Command, DrawItem, ElementId, Event, EventType, Mutation, MutationBatch,
-    MutationHandler, ProtocolError, Reply, ReplyCode, RetainedTree, command_from_json,
-    command_to_json, event_from_json, event_to_json, from_json, reply_from_json, reply_to_json,
-    to_json,
+    ApplyError, Command, DrawItem, ElementId, ElementType, Event, EventType, Mutation,
+    MutationBatch, MutationHandler, ProtocolError, Reply, ReplyCode, RetainedTree,
+    command_from_json, command_to_json, event_from_json, event_to_json, from_json, reply_from_json,
+    reply_to_json, to_json,
 };
 use std::fs;
 
@@ -753,4 +753,34 @@ fn set_menus_command_and_menu_event_round_trip() {
         value: None,
     };
     assert_eq!(input.element_id(), Some(ElementId(9)));
+}
+
+#[test]
+fn media_batch_fixture_parses_both_ways() {
+    let raw = fs::read_to_string(fixture_path("batch-media-01.json"))
+        .expect("fixture readable")
+        .trim()
+        .to_string();
+    let batch = from_json(&raw).expect("batch parses");
+    assert!(matches!(
+        &batch.mutations[0],
+        Mutation::CreateElement {
+            element_type: ElementType::Svg,
+            ..
+        }
+    ));
+    assert!(matches!(&batch.mutations[1], Mutation::SetText { .. }));
+    assert!(matches!(&batch.mutations[4], Mutation::SetSrc { src, .. } if src == "/tmp/photo.png"));
+    assert!(matches!(
+        &batch.mutations[6],
+        Mutation::SetDeferred { deferred: true, .. }
+    ));
+    assert!(matches!(
+        &batch.mutations[8],
+        Mutation::SetAnchored {
+            anchor: Some(solid_gpui_protocol::AnchorKind::TopRight),
+            ..
+        }
+    ));
+    assert_eq!(to_json(&batch), raw);
 }

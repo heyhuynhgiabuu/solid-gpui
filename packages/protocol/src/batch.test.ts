@@ -7,6 +7,7 @@ import keysFixture from "../fixtures/batch-keys-01.json"
 import scrollbarFixture from "../fixtures/batch-scrollbar-01.json"
 import dragFixture from "../fixtures/batch-drag-01.json"
 import canvasFixture from "../fixtures/batch-canvas-01.json"
+import mediaFixture from "../fixtures/batch-media-01.json"
 import animationFixture from "../fixtures/batch-animation-01.json"
 import markdownFixture from "../fixtures/batch-markdown-01.json"
 import { elementId } from "./ids"
@@ -421,5 +422,37 @@ describe("canvas fixture parity (P8)", () => {
       const r = decodeBatch(JSON.stringify({ v: 1, seq: 9, mutations: [items] }))
       expect(r.ok).toBe(false)
     }
+  })
+})
+
+describe("media fixture parity (P10)", () => {
+  test("batch-media-01 parses and re-encodes structurally", () => {
+    const raw = JSON.stringify(mediaFixture)
+    const r = decodeBatch(raw)
+    expect(r.ok).toBe(true)
+    if (r.ok) {
+      expect(JSON.parse(encodeBatch(r.value))).toEqual(mediaFixture)
+      expect(r.value.mutations[4]).toMatchObject({ op: "setSrc", src: "/tmp/photo.png" })
+      expect(r.value.mutations[6]).toMatchObject({ op: "setDeferred", deferred: true })
+      expect(r.value.mutations[8]).toMatchObject({ op: "setAnchored", anchor: "topRight" })
+    }
+  })
+
+  test("setSrc/setDeferred/setAnchored reject malformed input", () => {
+    const bad = [
+      { op: "setSrc", id: 1 },
+      { op: "setSrc", id: 1, src: "" },
+      { op: "setDeferred", id: 1, deferred: "yes" },
+      { op: "setAnchored", id: 1, anchor: "middle" },
+    ]
+    for (const m of bad) {
+      const r = decodeBatch(JSON.stringify({ v: 1, seq: 3, mutations: [m] }))
+      expect(r.ok).toBe(false)
+    }
+    // null anchor clears — legal.
+    const clear = decodeBatch(
+      JSON.stringify({ v: 1, seq: 3, mutations: [{ op: "setAnchored", id: 1, anchor: null }] }),
+    )
+    expect(clear.ok).toBe(true)
   })
 })

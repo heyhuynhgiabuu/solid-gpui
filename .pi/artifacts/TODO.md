@@ -1038,3 +1038,21 @@ status: CLOSED 2026-08-26 (r1 NOT MERGEABLE 1M/3m; fixes b9f66b5; r2 CLEAN + 2 d
       keymap cũ. 2 Minor doc r2 đã sửa (MenuState comment stale, JSDoc
       trùng). Note ghi nhận: dedup keystroke giờ là first-wins silent —
       chấp nhận có chủ ý.
+
+### 2026-08-26 - P10: anchored / deferred / img / svg / image-cache
+status: active
+
+- [x] P10-a recon: svg().data(bytes) render trực tiếp KHÔNG cần AssetSource
+      (hash-cache nội bộ) + tint qua text_color → tái dùng style key "color"
+      sẵn có; img: ImageAssetLoader xử lý Resource::Path bằng fs::read THẲNG
+      (không AssetSource), Uri qua http_client → v1 nhận path tuyệt đối +
+      http(s); deferred(child) là WRAPPER đơn giản (.with_priority);
+      anchored() wrapper với 8 Anchor corners + snap_to_window;
+      image_cache SKIP — window image_cache_stack đã cache sẵn.
+      Scope chốt: 2 element mới (svg/img) + 2 mutation wrapper
+      (SetDeferred/SetAnchored); anchored giữ nguyên trong scope vì chỉ là
+      wrapper rẻ.
+- [ ] P10-b protocol lockstep (element types/mutations moi).
+- [ ] P10-c helper wiring.
+- [ ] P10-d renderer TS + tests + demo.
+- [ ] VERIFY: gates exit codes + independent review.

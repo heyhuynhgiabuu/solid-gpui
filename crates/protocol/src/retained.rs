@@ -41,6 +41,12 @@ pub struct Node {
     /// setDrawList. No children, no interactive props (validation and
     /// rendering agree — the canvas paint path owns everything).
     pub draw_list: Vec<crate::DrawItem>,
+    /// Media source for img elements (absolute path or http(s) URI).
+    pub src: Option<String>,
+    /// Paint this element in the deferred pass (overlay layer, P10).
+    pub deferred: bool,
+    /// Wrap in gpui's anchored overlay pinning this corner (None = off).
+    pub anchored: Option<crate::AnchorKind>,
     /// Key bindings (shortcuts/sequences) — fired as `keys` events while
     /// the element holds focus. Empty = none.
     pub key_bindings: Vec<String>,
@@ -65,6 +71,9 @@ impl Node {
             style: BTreeMap::new(),
             drag_data: None,
             draw_list: Vec::new(),
+            src: None,
+            deferred: false,
+            anchored: None,
             key_bindings: Vec::new(),
             state_styles: BTreeMap::new(),
             text: None,
@@ -147,7 +156,10 @@ impl RetainedTree {
                     Some(state) => {
                         if matches!(
                             node.element_type,
-                            ElementType::Markdown | ElementType::Canvas
+                            ElementType::Markdown
+                                | ElementType::Canvas
+                                | ElementType::Svg
+                                | ElementType::Img
                         ) {
                             return Err(ApplyError::InvalidMutation {
                                 message: format!(
@@ -169,7 +181,10 @@ impl RetainedTree {
                 let node = self.mut_node(*id, "setAnimation")?;
                 if matches!(
                     node.element_type,
-                    ElementType::Markdown | ElementType::Canvas
+                    ElementType::Markdown
+                        | ElementType::Canvas
+                        | ElementType::Svg
+                        | ElementType::Img
                 ) {
                     // Validation and rendering agree: markdown reads only the
                     // static color/backgroundColor/fontSize style — there is no
@@ -237,7 +252,10 @@ impl RetainedTree {
                 let node = self.mut_node(*id, "setDragData")?;
                 if matches!(
                     node.element_type,
-                    ElementType::Markdown | ElementType::Canvas
+                    ElementType::Markdown
+                        | ElementType::Canvas
+                        | ElementType::Svg
+                        | ElementType::Img
                 ) {
                     // Validation and rendering agree: markdown renders a
                     // static helper-owned subtree and fires no events.
@@ -287,11 +305,35 @@ impl RetainedTree {
                 node.draw_list = items.clone();
                 Ok(())
             }
+            Mutation::SetSrc { id, src } => {
+                let node = self.mut_node(*id, "setSrc")?;
+                if node.element_type != ElementType::Img {
+                    return Err(ApplyError::InvalidMutation {
+                        message: format!("setSrc: element {id:?} is not an img element"),
+                    });
+                }
+                node.src = Some(src.clone());
+                Ok(())
+            }
+            Mutation::SetDeferred { id, deferred } => {
+                // Universal overlay lift: any element can defer its paint.
+                let node = self.mut_node(*id, "setDeferred")?;
+                node.deferred = *deferred;
+                Ok(())
+            }
+            Mutation::SetAnchored { id, anchor } => {
+                let node = self.mut_node(*id, "setAnchored")?;
+                node.anchored = *anchor;
+                Ok(())
+            }
             Mutation::SetKeyBindings { id, bindings } => {
                 let node = self.mut_node(*id, "setKeyBindings")?;
                 if matches!(
                     node.element_type,
-                    ElementType::Markdown | ElementType::Canvas
+                    ElementType::Markdown
+                        | ElementType::Canvas
+                        | ElementType::Svg
+                        | ElementType::Img
                 ) {
                     // Validation and rendering agree: markdown renders a
                     // static helper-owned subtree and fires no events.
@@ -306,7 +348,10 @@ impl RetainedTree {
             }
             Mutation::SetText { id, text } => {
                 let node = self.mut_node(*id, "setText")?;
-                if !matches!(node.element_type, ElementType::Text | ElementType::Markdown) {
+                if !matches!(
+                    node.element_type,
+                    ElementType::Text | ElementType::Markdown | ElementType::Svg
+                ) {
                     return Err(ApplyError::InvalidMutation {
                         message: format!(
                             "setText: element {id:?} is not a text or markdown element"
@@ -339,7 +384,10 @@ impl RetainedTree {
                 let node = self.mut_node(*id, "setEventListener")?;
                 if matches!(
                     node.element_type,
-                    ElementType::Markdown | ElementType::Canvas
+                    ElementType::Markdown
+                        | ElementType::Canvas
+                        | ElementType::Svg
+                        | ElementType::Img
                 ) {
                     // Validation and rendering agree: markdown renders a
                     // helper-owned subtree and never wires listeners, so an
@@ -429,6 +477,8 @@ impl RetainedTree {
                 | ElementType::Textarea
                 | ElementType::Markdown
                 | ElementType::Canvas
+                | ElementType::Svg
+                | ElementType::Img
         ) {
             return Err(ApplyError::InvalidMutation {
                 message: format!(

@@ -1294,3 +1294,67 @@ fn window_mode_set_menus_applies_and_replaces() {
     let status = child.wait().expect("wait");
     assert_eq!(status.code(), Some(0), "EOF must exit 0");
 }
+
+#[test]
+fn window_mode_media_elements_and_overlays_apply() {
+    if skip() {
+        return;
+    }
+    let _lock = window_lock();
+    let bin = env!("CARGO_BIN_EXE_solid-gpui-helper");
+    let mut child = Command::new(bin)
+        .arg("--stdio-window")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .spawn()
+        .expect("helper spawns");
+
+    let mut stdin = child.stdin.take().expect("stdin piped");
+    let reader = BufReader::new(child.stdout.take().expect("stdout piped"));
+    let mut lines = reader.lines();
+
+    // Write a tiny real PNG so img paints actual bytes through fs::read.
+    let png_path = std::env::temp_dir().join(format!("solid-gpui-p10-{}.png", std::process::id()));
+    // 1x1 red PNG.
+    let png_bytes: [u8; 69] = [
+        0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44,
+        0x52, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x08, 0x02, 0x00, 0x00, 0x00, 0x90,
+        0x77, 0x53, 0xDE, 0x00, 0x00, 0x00, 0x0C, 0x49, 0x44, 0x41, 0x54, 0x78, 0x9C, 0x63, 0xF8,
+        0xCF, 0xC0, 0x00, 0x00, 0x03, 0x01, 0x01, 0x00, 0xC9, 0xFE, 0x92, 0xEF, 0x00, 0x00, 0x00,
+        0x00, 0x49, 0x45, 0x4E, 0x44, 0xAE, 0x42, 0x60, 0x82,
+    ];
+    std::fs::write(&png_path, png_bytes.as_slice()).expect("write test png");
+
+    let svg_src = "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><circle cx='8' cy='8' r='6'/></svg>";
+    let escaped = svg_src.replace('\'', "&apos;");
+    let batch = format!(
+        concat!(
+            "{{\"v\":1,\"seq\":400,\"mutations\":[",
+            "{{\"op\":\"createElement\",\"id\":1,\"elementType\":\"svg\"}},",
+            "{{\"op\":\"setText\",\"id\":1,\"text\":\"{}\"}},",
+            "{{\"op\":\"setStyle\",\"id\":1,\"style\":{{\"color\":\"#f7768e\",\"height\":24,\"width\":24}}}},",
+            "{{\"op\":\"createElement\",\"id\":2,\"elementType\":\"img\"}},",
+            "{{\"op\":\"setSrc\",\"id\":2,\"src\":\"{}\"}},",
+            "{{\"op\":\"setStyle\",\"id\":2,\"style\":{{\"height\":48,\"width\":48}}}},",
+            "{{\"op\":\"setDeferred\",\"id\":2,\"deferred\":true}},",
+            "{{\"op\":\"createElement\",\"id\":3,\"elementType\":\"div\"}},",
+            "{{\"op\":\"createElement\",\"id\":4,\"elementType\":\"div\"}},",
+            "{{\"op\":\"setAnchored\",\"id\":4,\"anchor\":\"bottomRight\"}},",
+            "{{\"op\":\"appendChild\",\"parentId\":3,\"childId\":4}},",
+            "{{\"op\":\"setRoot\",\"id\":3}}]}}"
+        ),
+        escaped.replace('"', "&quot;"),
+        png_path.display()
+    );
+    writeln!(stdin, "{batch}").unwrap();
+    stdin.flush().unwrap();
+    assert_eq!(
+        lines.next().unwrap().unwrap(),
+        r#"{"type":"ack","seq":400,"applied":12}"#
+    );
+
+    drop(stdin);
+    let status = child.wait().expect("wait");
+    assert_eq!(status.code(), Some(0), "EOF must exit 0");
+    let _ = std::fs::remove_file(&png_path);
+}

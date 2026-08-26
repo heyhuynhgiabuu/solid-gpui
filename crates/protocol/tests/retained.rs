@@ -1187,3 +1187,87 @@ fn canvas_rejects_children_and_interactive_props() {
     .unwrap();
     assert!(tree.get(ElementId(1)).unwrap().draw_list.is_empty());
 }
+
+#[test]
+fn media_elements_store_sources_and_reject_misuse() {
+    let mut tree = RetainedTree::new();
+    tree.apply(&Mutation::CreateElement {
+        id: ElementId(1),
+        element_type: ElementType::Img,
+    })
+    .unwrap();
+    tree.apply(&Mutation::CreateElement {
+        id: ElementId(2),
+        element_type: ElementType::Svg,
+    })
+    .unwrap();
+    tree.apply(&Mutation::CreateElement {
+        id: ElementId(3),
+        element_type: ElementType::Div,
+    })
+    .unwrap();
+
+    // setSrc: img-only, stores and replaces.
+    tree.apply(&Mutation::SetSrc {
+        id: ElementId(1),
+        src: "/tmp/pic.png".into(),
+    })
+    .unwrap();
+    assert_eq!(
+        tree.get(ElementId(1)).unwrap().src.as_deref(),
+        Some("/tmp/pic.png")
+    );
+    let err = tree
+        .apply(&Mutation::SetSrc {
+            id: ElementId(3),
+            src: "x".into(),
+        })
+        .unwrap_err();
+    assert!(err.to_string().contains("not an img"), "{err}");
+
+    // setText carries svg markup (source), rejected on img.
+    tree.apply(&Mutation::SetText {
+        id: ElementId(2),
+        text: "<svg xmlns='http://www.w3.org/2000/svg'/>".into(),
+    })
+    .unwrap();
+    let err = tree
+        .apply(&Mutation::SetText {
+            id: ElementId(1),
+            text: "nope".into(),
+        })
+        .unwrap_err();
+    assert!(err.to_string().contains("not a text"), "{err}");
+
+    // deferred + anchored store/clear universally.
+    tree.apply(&Mutation::SetDeferred {
+        id: ElementId(3),
+        deferred: true,
+    })
+    .unwrap();
+    assert!(tree.get(ElementId(3)).unwrap().deferred);
+    tree.apply(&Mutation::SetAnchored {
+        id: ElementId(3),
+        anchor: Some(solid_gpui_protocol::AnchorKind::BottomRight),
+    })
+    .unwrap();
+    assert_eq!(
+        tree.get(ElementId(3)).unwrap().anchored,
+        Some(solid_gpui_protocol::AnchorKind::BottomRight)
+    );
+    tree.apply(&Mutation::SetAnchored {
+        id: ElementId(3),
+        anchor: None,
+    })
+    .unwrap();
+    assert_eq!(tree.get(ElementId(3)).unwrap().anchored, None);
+
+    // svg/img reject children like canvas/markdown.
+    let err = tree
+        .apply(&Mutation::AppendChild {
+            parent_id: ElementId(2),
+            child_id: ElementId(3),
+        })
+        .unwrap_err();
+    assert!(err.to_string().contains("no child slots"), "{err}");
+}

@@ -6,9 +6,10 @@ use gpui::{
     FocusHandle, FollowMode, Hsla, InputHandler, InteractiveElement, IntoElement, LayoutId,
     ListAlignment, ListState, PaintQuad, ParentElement, PathBuilder, Pixels, Point, Render, Rgba,
     ScrollHandle, SharedString, StatefulInteractiveElement, Style, Styled, TextAlign, TextRun,
-    UTF16Selection, WeakEntity, Window, canvas, div, font, list, point,
-    prelude::FluentBuilder as _, px, rgb, rgba, size,
+    UTF16Selection, WeakEntity, Window, anchored, canvas, deferred, div, font, img, list, point,
+    prelude::FluentBuilder as _, px, rgb, rgba, size, svg,
 };
+use gpui::{ImageSource, Resource};
 use solid_gpui_protocol::EventType;
 use solid_gpui_protocol::Mutation;
 use solid_gpui_protocol::StyleMap;
@@ -1553,6 +1554,49 @@ fn build_element(
     cx: &mut Context<HostView>,
     ctx: &mut RenderCtx,
 ) -> AnyElement {
+    let el = build_element_inner(tree, id, window, cx, ctx);
+    apply_overlays(tree, id, el)
+}
+
+/// Overlay wrappers (P10), outermost last: deferred paints AFTER all
+/// non-deferred ancestors (overlay layer); anchored escapes ancestor
+/// clipping and pins a corner to the render location, snapping to window
+/// edges on overflow. Both compose — deferred(anchored(child)) is the
+/// popover shape.
+fn apply_overlays(tree: &RetainedTree, id: ElementId, el: AnyElement) -> AnyElement {
+    let node = tree.get(id).expect("checked by caller");
+    let mut el = el;
+    if let Some(kind) = node.anchored {
+        use solid_gpui_protocol::AnchorKind as K;
+        let anchor = match kind {
+            K::TopLeft => gpui::Anchor::TopLeft,
+            K::TopRight => gpui::Anchor::TopRight,
+            K::BottomLeft => gpui::Anchor::BottomLeft,
+            K::BottomRight => gpui::Anchor::BottomRight,
+            K::TopCenter => gpui::Anchor::TopCenter,
+            K::BottomCenter => gpui::Anchor::BottomCenter,
+            K::LeftCenter => gpui::Anchor::LeftCenter,
+            K::RightCenter => gpui::Anchor::RightCenter,
+        };
+        el = anchored()
+            .anchor(anchor)
+            .snap_to_window()
+            .child(el)
+            .into_any_element();
+    }
+    if node.deferred {
+        el = deferred(el).into_any_element();
+    }
+    el
+}
+
+fn build_element_inner(
+    tree: &RetainedTree,
+    id: ElementId,
+    window: &mut Window,
+    cx: &mut Context<HostView>,
+    ctx: &mut RenderCtx,
+) -> AnyElement {
     let Some(node) = tree.get(id) else {
         return div().into_any_element();
     };
@@ -1576,6 +1620,12 @@ fn build_element(
     }
     if node.element_type == ElementType::Canvas {
         return build_canvas_element(tree, id, ctx);
+    }
+    if node.element_type == ElementType::Svg {
+        return build_svg_element(tree, id, ctx);
+    }
+    if node.element_type == ElementType::Img {
+        return build_img_element(tree, id, ctx);
     }
     let mut el = div();
     for (key, value) in &node.style {
@@ -1909,6 +1959,43 @@ fn build_scrollbar_element(
 /// the same language must never receive another fence's line-relative spans.
 /// Element styles: `color` overrides body text, `backgroundColor` washes the
 /// wrapper, `fontSize` (14 = 1.0×) scales every metric linearly.
+/// Monochrome SVG icon (P10): the node's `text` IS the raw markup;
+/// gpui renders it from bytes (hash-cached internally). Tinted via the
+/// `color` style key — the same key text uses.
+fn build_svg_element(tree: &RetainedTree, id: ElementId, ctx: &mut RenderCtx) -> AnyElement {
+    let node = tree.get(id).expect("checked by caller");
+    let source: SharedString = SharedString::from(node.text.clone().unwrap_or_default());
+    // Svg impls Styled: width/height/backgroundColor AND the `color` tint
+    // all flow through the same generic applier as every other element.
+    let mut el = svg().data(source.as_bytes());
+    for (key, value) in &node.style {
+        el = apply_style(el, key, &effective_value(ctx, id, key, value));
+    }
+    el.into_any_element()
+}
+
+/// Raster image (P10): `src` is an absolute file path (fs::read directly)
+/// or an http(s) URI (gpui's http client). No asset source involved.
+fn build_img_element(tree: &RetainedTree, id: ElementId, ctx: &mut RenderCtx) -> AnyElement {
+    let node = tree.get(id).expect("checked by caller");
+    let src = node.src.clone().unwrap_or_default();
+    let source: ImageSource = if src.starts_with("http://") || src.starts_with("https://") {
+        ImageSource::Resource(Resource::Uri(src.into()))
+    } else if src.is_empty() {
+        // No source yet: render nothing rather than a broken-image state.
+        return div().into_any_element();
+    } else {
+        ImageSource::Resource(Resource::Path(std::sync::Arc::from(
+            std::path::PathBuf::from(src),
+        )))
+    };
+    let mut el = img(source);
+    for (key, value) in &node.style {
+        el = apply_style(el, key, &effective_value(ctx, id, key, value));
+    }
+    el.into_any_element()
+}
+
 /// Recorded-draw-list canvas (P8): every setDrawList REPLACES the list, so
 /// painting just replays `node.draw_list` in order inside the element's
 /// bounds. Coordinates are canvas-local px; the list is GPU-side — no
