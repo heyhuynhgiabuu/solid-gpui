@@ -1404,6 +1404,39 @@ fn window_mode_media_elements_and_overlays_apply() {
 }
 
 #[test]
+fn window_mode_typed_accessibility_applies_without_a_round_trip() {
+    if skip() {
+        return;
+    }
+    let _lock = window_lock();
+    let bin = env!("CARGO_BIN_EXE_solid-gpui-helper");
+    let mut child = Command::new(bin)
+        .arg("--stdio-window")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .spawn()
+        .expect("helper spawns");
+
+    let mut stdin = child.stdin.take().expect("stdin piped");
+    let reader = BufReader::new(child.stdout.take().expect("stdout piped"));
+    let mut lines = reader.lines();
+    writeln!(
+        stdin,
+        r#"{{"v":1,"seq":510,"mutations":[{{"op":"createElement","id":1,"elementType":"div"}},{{"op":"setAccessibility","id":1,"accessibility":{{"role":"combobox","value":"red","expanded":true}}}},{{"op":"createElement","id":2,"elementType":"div"}},{{"op":"setAccessibility","id":2,"accessibility":{{"role":"listbox"}}}},{{"op":"createElement","id":3,"elementType":"div"}},{{"op":"setAccessibility","id":3,"accessibility":{{"role":"option","selected":true}}}},{{"op":"appendChild","parentId":1,"childId":2}},{{"op":"appendChild","parentId":2,"childId":3}},{{"op":"setRoot","id":1}}]}}"#
+    )
+    .unwrap();
+    stdin.flush().unwrap();
+    assert_eq!(
+        lines.next().unwrap().unwrap(),
+        r#"{"type":"ack","seq":510,"applied":9}"#
+    );
+
+    drop(stdin);
+    let status = child.wait().expect("wait");
+    assert_eq!(status.code(), Some(0), "EOF must exit 0");
+}
+
+#[test]
 fn window_mode_native_tooltip_applies_without_a_round_trip() {
     if skip() {
         return;

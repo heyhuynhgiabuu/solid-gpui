@@ -72,6 +72,23 @@ export const ANCHOR_KINDS: readonly AnchorKind[] = [
   "rightCenter",
 ]
 
+/** Roles supported by the host accessibility bridge for composite controls. */
+export type AccessibilityRole = "combobox" | "listbox" | "option"
+
+export const ACCESSIBILITY_ROLES: readonly AccessibilityRole[] = [
+  "combobox",
+  "listbox",
+  "option",
+]
+
+/** Typed accessibility state applied atomically to one host element. */
+export interface AccessibilityState {
+  readonly role: AccessibilityRole
+  readonly value?: string
+  readonly expanded?: boolean
+  readonly selected?: boolean
+}
+
 /** One recorded draw op in a canvas draw list (P8). Coordinates are
  * absolute px within the canvas bounds; replaced wholesale on each set. */
 export type DrawItem =
@@ -169,6 +186,11 @@ export type Mutation =
   | { readonly op: "setValue"; readonly id: ElementId; readonly value: string }
   | { readonly op: "setTooltip"; readonly id: ElementId; readonly tooltip: string | null }
   | {
+      readonly op: "setAccessibility"
+      readonly id: ElementId
+      readonly accessibility: AccessibilityState | null
+    }
+  | {
       readonly op: "setKeyBindings"
       readonly id: ElementId
       /** Keystroke strings; spaces separate a sequence ("ctrl-x ctrl-s"). */
@@ -261,6 +283,7 @@ export const MUTATION_OPS = [
   "setDragData",
   "setValue",
   "setTooltip",
+  "setAccessibility",
   "setAnimation",
   "setEventListener",
   "setRoot",

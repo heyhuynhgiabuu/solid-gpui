@@ -7,10 +7,9 @@ windows (Metal/Vulkan/DirectX), no webview.
 Solid reactivity → mutation protocol (NDJSON) → Rust helper → GPUI
 ```
 
-Status: **Phase 2 complete through P11; S14 tooltip slice implemented**. Mounts
-Solid 2 trees into native windows and applies fine-grained updates. P12
-compaction was benchmarked but not adopted; select/combobox controls remain
-future work, and this is still a prerelease.
+Status: **Phase 2 complete through P11; S14b select/combobox slice implemented**.
+Mounts Solid 2 trees into native windows and applies fine-grained updates. P12
+compaction was benchmarked but not adopted, and this is still a prerelease.
 
 ## The one trap you must know
 
@@ -90,6 +89,29 @@ h("div", { tooltip: "Save this item", style: { padding: 8 } }, "Save")
 `null`, `undefined`, and an empty string clear the tooltip. Element-valued
 content and custom delay are not supported yet. Text, markdown, canvas, SVG,
 images, and scrollbar wrappers intentionally ignore the prop.
+
+## Select and combobox primitives (S14b)
+
+The `select` and `combobox` namespaces provide composable headless primitives.
+Both use a controlled string value; the combobox trigger is an editable input.
+Content is an in-window anchored/deferred overlay and GPUI receives typed
+`combobox`, `listbox`, and `option` accessibility roles plus live expanded and
+selected state:
+
+```tsx
+<select.Root value={color()} onValueChange={setColor}>
+  <select.Trigger>{color()}</select.Trigger>
+  <select.Content>
+    <select.Item value="red">Red</select.Item>
+    <select.Item value="blue">Blue</select.Item>
+  </select.Content>
+</select.Root>
+```
+
+`combobox.Root` uses the same `Content`/`Item` primitives with an editable
+`combobox.Trigger`. Values are controlled; multi-select, uncontrolled state,
+native popup windows, and outside-click dismissal are not part of S14b. Try the
+real window demo with `bun run example/select`.
 
 ## Window, dialogs, shell (P4)
 

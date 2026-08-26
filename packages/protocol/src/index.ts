@@ -2,6 +2,7 @@ export { elementId, isElementIdValue } from "./ids"
 export type { ElementId } from "./ids"
 export type { StyleKey, StyleMap, StyleValue } from "./style"
 export {
+  ACCESSIBILITY_ROLES,
   ANCHOR_KINDS,
   ANIMATABLE_STYLE_KEYS,
   EASING_NAMES,
@@ -10,6 +11,8 @@ export {
   MUTATION_OPS,
 } from "./mutation"
 export type {
+  AccessibilityRole,
+  AccessibilityState,
   AnchorKind,
   AnimatableStyleKey,
   EasingName,

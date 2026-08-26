@@ -6,10 +6,13 @@ import {
   createRoot as sigRoot,
 } from "solid-js"
 import {
+  ACCESSIBILITY_ROLES,
   ANCHOR_KINDS,
   elementId,
   ANIMATABLE_STYLE_KEYS,
   EASING_NAMES,
+  type AccessibilityRole,
+  type AccessibilityState,
   type ElementType,
   type EasingName,
   type EventType,
@@ -66,6 +69,15 @@ const EVENT_NAMES: Record<string, EventType> = {
  */
 const INPUT_STYLE_PROPS = new Set(["placeholder", "minRows", "maxRows"])
 const TOOLTIP_UNSUPPORTED_TAGS = new Set(["text", "markdown", "canvas", "svg", "img", "scrollbar"])
+const ACCESSIBILITY_UNSUPPORTED_ELEMENT_TYPES = new Set<ElementType>([
+  "text",
+  "list",
+  "markdown",
+  "scrollbar",
+  "canvas",
+  "svg",
+  "img",
+])
 
 /** Host tags the renderer maps to a specific elementType (everything else
  *  is a div). */
@@ -105,6 +117,37 @@ export interface SolidGpuiRenderer {
  *  values ({count()} can be a number, null renders as empty). */
 function textOf(value: unknown): string {
   return value == null ? "" : String(value)
+}
+
+function normalizeAccessibility(value: unknown): AccessibilityState | null | undefined {
+  if (value === null || value === undefined) return null
+  if (typeof value !== "object" || Array.isArray(value)) return undefined
+  const raw = value as Record<string, unknown>
+  if (
+    typeof raw.role !== "string" ||
+    !(ACCESSIBILITY_ROLES as readonly string[]).includes(raw.role)
+  ) {
+    return undefined
+  }
+  const state: {
+    role: AccessibilityRole
+    value?: string
+    expanded?: boolean
+    selected?: boolean
+  } = { role: raw.role as AccessibilityRole }
+  if (raw.value !== undefined) {
+    if (typeof raw.value !== "string") return undefined
+    state.value = raw.value
+  }
+  if (raw.expanded !== undefined) {
+    if (typeof raw.expanded !== "boolean") return undefined
+    state.expanded = raw.expanded
+  }
+  if (raw.selected !== undefined) {
+    if (typeof raw.selected !== "boolean") return undefined
+    state.selected = raw.selected
+  }
+  return state
 }
 
 const TEXT_RUN_STYLES: readonly TextRunStyle[] = ["normal", "italic", "oblique"]
@@ -377,6 +420,29 @@ export function createSolidRenderer(send: Send): SolidGpuiRenderer {
           return
         }
         push({ op: "setStyle", id, style: next })
+        return
+      }
+      if (name === "accessibility") {
+        if (node.kind !== "element") return
+        const elementType = node.tag === "text" ? "text" : (TAG_ELEMENT_TYPES[node.tag] ?? "div")
+        if (ACCESSIBILITY_UNSUPPORTED_ELEMENT_TYPES.has(elementType)) {
+          if (typeof console !== "undefined") {
+            console.warn(
+              `[solid-gpui] <${node.tag}> ignores accessibility — its render path has no typed accessibility state.`,
+            )
+          }
+          return
+        }
+        const accessibility = normalizeAccessibility(value)
+        if (accessibility === undefined) {
+          if (typeof console !== "undefined") {
+            console.warn(
+              "[solid-gpui] accessibility must be null or an object with role combobox|listbox|option and boolean expanded/selected fields",
+            )
+          }
+          return
+        }
+        push({ op: "setAccessibility", id, accessibility })
         return
       }
       if (name === "dragData") {

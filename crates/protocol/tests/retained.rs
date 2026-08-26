@@ -3,8 +3,8 @@
 //! precise errors. Pure data — no gpui, no IO.
 
 use solid_gpui_protocol::{
-    ApplyError, DrawItem, ElementId, ElementType, EventType, Mutation, RetainedTree, StyleMap,
-    StyleState, StyleValue, TextRun, TextRunStyle, from_json,
+    AccessibilityRole, AccessibilityState, ApplyError, DrawItem, ElementId, ElementType, EventType,
+    Mutation, RetainedTree, StyleMap, StyleState, StyleValue, TextRun, TextRunStyle, from_json,
 };
 use std::fs;
 
@@ -620,6 +620,67 @@ fn children_of_input_and_textarea_are_rejected() {
         })
         .unwrap_err();
     assert!(err.to_string().contains("no child slots"), "got: {err}");
+}
+
+#[test]
+fn set_accessibility_stores_typed_state_and_rejects_unsupported_elements() {
+    let mut tree = RetainedTree::new();
+    apply_all(
+        &mut tree,
+        &[
+            Mutation::CreateElement {
+                id: 1.into(),
+                element_type: ElementType::Div,
+            },
+            Mutation::CreateElement {
+                id: 2.into(),
+                element_type: ElementType::Text,
+            },
+        ],
+    )
+    .unwrap();
+
+    tree.apply(&Mutation::SetAccessibility {
+        id: 1.into(),
+        accessibility: Some(AccessibilityState {
+            role: AccessibilityRole::ComboBox,
+            value: Some("red".into()),
+            expanded: Some(true),
+            selected: None,
+        }),
+    })
+    .unwrap();
+    assert_eq!(
+        tree.get(1.into()).unwrap().accessibility,
+        Some(AccessibilityState {
+            role: AccessibilityRole::ComboBox,
+            value: Some("red".into()),
+            expanded: Some(true),
+            selected: None,
+        })
+    );
+    tree.apply(&Mutation::SetAccessibility {
+        id: 1.into(),
+        accessibility: None,
+    })
+    .unwrap();
+    assert_eq!(tree.get(1.into()).unwrap().accessibility, None);
+
+    let err = tree
+        .apply(&Mutation::SetAccessibility {
+            id: 2.into(),
+            accessibility: Some(AccessibilityState {
+                role: AccessibilityRole::Option,
+                value: None,
+                expanded: None,
+                selected: Some(true),
+            }),
+        })
+        .unwrap_err();
+    assert!(
+        err.to_string().contains("typed accessibility"),
+        "got: {err}"
+    );
 }
 
 #[test]

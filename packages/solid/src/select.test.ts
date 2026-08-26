@@ -1,0 +1,212 @@
+import { describe, expect, test } from "bun:test"
+import { createSignal } from "solid-js"
+import type { Mutation, MutationBatch, SolidGpuiEvent } from "@solid-gpui/protocol"
+import {
+  createComponent,
+  createElement,
+  createTextNode,
+  initJsxRuntime,
+  resetJsxRuntime,
+} from "./jsx"
+import type { HostNode, Send } from "./renderer"
+import { combobox, select } from "./select"
+
+function recording(): { send: Send; batches: MutationBatch[] } {
+  const batches: MutationBatch[] = []
+  return {
+    batches,
+    send: async (batch) => {
+      batches.push(batch)
+      return { seq: batch.seq, applied: batch.mutations.length }
+    },
+  }
+}
+
+function event(
+  id: number,
+  eventType: "click" | "keyDown" | "input",
+  fields: { key?: string; value?: string } = {},
+): SolidGpuiEvent {
+  return {
+    type: "event",
+    id,
+    eventType,
+    ...(fields.key === undefined ? {} : { key: fields.key }),
+    ...(fields.value === undefined ? {} : { value: fields.value }),
+  } as SolidGpuiEvent
+}
+
+describe("select primitives", () => {
+  test("opens, navigates with keys, selects a value, and updates typed states", async () => {
+    const rec = recording()
+    const suite = initJsxRuntime(rec.send)
+    const [value, setValue] = createSignal("red")
+    const changes: string[] = []
+    const container = createElement("#root")
+
+    try {
+      const dispose = suite.render(
+        () =>
+          createComponent(select.Root, {
+            get value() {
+              return value()
+            },
+            onValueChange: (next: string) => {
+              changes.push(next)
+              setValue(next)
+            },
+            children: () => [
+              createComponent(select.Trigger, {
+                children: () => createTextNode("Color"),
+              }),
+              createComponent(select.Content, {
+                children: () => [
+                  createComponent(select.Item, {
+                    value: "red",
+                    children: () => createTextNode("Red"),
+                  }),
+                  createComponent(select.Item, {
+                    value: "blue",
+                    children: () => createTextNode("Blue"),
+                  }),
+                ],
+              }),
+            ],
+          }) as HostNode,
+        container,
+      )
+      await suite.flush()
+
+      const triggerId = rec.batches[0]?.mutations.find(
+        (mutation): mutation is Extract<Mutation, { op: "setEventListener" }> =>
+          mutation.op === "setEventListener" && mutation.eventType === "click",
+      )?.id
+      expect(triggerId).toBeDefined()
+      expect(
+        rec.batches[0]?.mutations.some(
+          (mutation) =>
+            mutation.op === "setAccessibility" &&
+            mutation.accessibility?.role === "combobox" &&
+            mutation.accessibility.expanded === false,
+        ),
+      ).toBe(true)
+
+      suite.handler(triggerId!, "click")?.(event(triggerId!, "click"))
+      await suite.flush()
+      const opened = rec.batches.slice(1).flatMap((batch) => batch.mutations)
+      expect(
+        opened.some(
+          (mutation) =>
+            mutation.op === "setAccessibility" &&
+            mutation.accessibility?.role === "listbox",
+        ),
+      ).toBe(true)
+      expect(
+        opened.some(
+          (mutation) =>
+            mutation.op === "setAccessibility" &&
+            mutation.accessibility?.role === "option" &&
+            mutation.accessibility.selected === true,
+        ),
+      ).toBe(true)
+
+      suite.handler(triggerId!, "keyDown")?.(event(triggerId!, "keyDown", { key: "Escape" }))
+      await suite.flush()
+      expect(
+        rec.batches.slice(-1)[0]?.mutations.some(
+          (mutation) =>
+            mutation.op === "setAccessibility" &&
+            mutation.accessibility?.role === "combobox" &&
+            mutation.accessibility.expanded === false,
+        ),
+      ).toBe(true)
+
+      suite.handler(triggerId!, "click")?.(event(triggerId!, "click"))
+      await suite.flush()
+      suite.handler(triggerId!, "keyDown")?.(event(triggerId!, "keyDown", { key: "ArrowDown" }))
+      await suite.flush()
+      suite.handler(triggerId!, "keyDown")?.(event(triggerId!, "keyDown", { key: "Enter" }))
+      await suite.flush()
+
+      expect(changes).toEqual(["blue"])
+      expect(value()).toBe("blue")
+      const all = rec.batches.flatMap((batch) => batch.mutations)
+      expect(
+        all.some(
+          (mutation) =>
+            mutation.op === "setAccessibility" &&
+            mutation.accessibility?.role === "combobox" &&
+            mutation.accessibility.expanded === false &&
+            mutation.accessibility.value === "blue",
+        ),
+      ).toBe(true)
+
+      dispose()
+      await suite.flush()
+    } finally {
+      resetJsxRuntime()
+    }
+  })
+})
+
+describe("combobox primitives", () => {
+  test("uses an editable controlled input and opens on input", async () => {
+    const rec = recording()
+    const suite = initJsxRuntime(rec.send)
+    const [value, setValue] = createSignal("")
+    const changes: string[] = []
+    const container = createElement("#root")
+
+    try {
+      const dispose = suite.render(
+        () =>
+          createComponent(combobox.Root, {
+            get value() {
+              return value()
+            },
+            onValueChange: (next: string) => {
+              changes.push(next)
+              setValue(next)
+            },
+            children: () => createComponent(combobox.Trigger, { placeholder: "Search" }),
+          }) as HostNode,
+        container,
+      )
+      await suite.flush()
+
+      const inputId = rec.batches[0]?.mutations.find(
+        (mutation): mutation is Extract<Mutation, { op: "createElement" }> =>
+          mutation.op === "createElement" && mutation.elementType === "input",
+      )?.id
+      expect(inputId).toBeDefined()
+      expect(
+        rec.batches[0]?.mutations.some(
+          (mutation) =>
+            mutation.op === "setAccessibility" &&
+            mutation.accessibility?.role === "combobox" &&
+            mutation.accessibility.expanded === false,
+        ),
+      ).toBe(true)
+
+      suite.handler(inputId!, "input")?.(event(inputId!, "input", { value: "blu" }))
+      await suite.flush()
+
+      expect(changes).toEqual(["blu"])
+      expect(value()).toBe("blu")
+      expect(
+        rec.batches.flatMap((batch) => batch.mutations).some(
+          (mutation) =>
+            mutation.op === "setAccessibility" &&
+            mutation.accessibility?.role === "combobox" &&
+            mutation.accessibility.expanded === true &&
+            mutation.accessibility.value === "blu",
+        ),
+      ).toBe(true)
+
+      dispose()
+      await suite.flush()
+    } finally {
+      resetJsxRuntime()
+    }
+  })
+})

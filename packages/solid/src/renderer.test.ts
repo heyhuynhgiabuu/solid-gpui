@@ -135,6 +135,69 @@ describe("tooltip", () => {
   })
 })
 
+describe("accessibility", () => {
+  test("accessibility state emits typed role and live properties", async () => {
+    const rec = recording()
+    const { renderer: R, render, flush } = createSolidRenderer(rec.send)
+    const container = R.createElement("#root")
+    let node: ReturnType<typeof R.createElement> | null = null
+    const dispose = render(() => {
+      node = R.createElement("div")
+      return node
+    }, container)
+    await flush()
+
+    R.setProp(node!, "accessibility", {
+      role: "combobox",
+      expanded: true,
+      value: "red",
+    })
+    await flush()
+
+    expect(rec.batches[1]?.mutations).toContainEqual({
+      op: "setAccessibility",
+      id: expect.any(Number),
+      accessibility: { role: "combobox", expanded: true, value: "red" },
+    })
+
+    R.setProp(node!, "accessibility", null)
+    await flush()
+    expect(rec.batches[2]?.mutations).toContainEqual({
+      op: "setAccessibility",
+      id: expect.any(Number),
+      accessibility: null,
+    })
+    dispose()
+    await flush()
+  })
+
+  test("invalid accessibility state is warned and never emitted", async () => {
+    const rec = recording()
+    const { renderer: R, render, flush } = createSolidRenderer(rec.send)
+    const container = R.createElement("#root")
+    let node: ReturnType<typeof R.createElement> | null = null
+    const dispose = render(() => {
+      node = R.createElement("text")
+      return node
+    }, container)
+    await flush()
+
+    const warnings: string[] = []
+    const warn = console.warn
+    console.warn = (message: string) => warnings.push(message)
+    try {
+      R.setProp(node!, "accessibility", { role: "slider" })
+      await flush()
+    } finally {
+      console.warn = warn
+    }
+    expect(rec.batches).toHaveLength(1)
+    expect(warnings).toHaveLength(1)
+    dispose()
+    await flush()
+  })
+})
+
 describe("fine-grained updates", () => {
   test("a signal change sends ONLY the affected setText", async () => {
     const rec = recording()

@@ -5,7 +5,7 @@
  */
 import type { HostNode } from "./renderer"
 import type { Renderer } from "@solidjs/universal"
-import type { StyleMap, TextRun } from "@solid-gpui/protocol"
+import type { AccessibilityState, StyleMap, TextRun } from "@solid-gpui/protocol"
 
 type Child = HostNode | string | number | null | undefined | (() => Child)
 
@@ -16,6 +16,7 @@ export interface H {
       /** Static bag, or a function of signals for a reactive bag. */
       style?: StyleMap | (() => StyleMap)
       runs?: TextRun[] | (() => TextRun[])
+      accessibility?: AccessibilityState | null | (() => AccessibilityState | null)
       onClick?: () => void
       [key: string]: unknown
     },
@@ -30,7 +31,7 @@ export function makeH(R: Renderer<HostNode>): H {
     const el = R.createElement(tag)
     for (const [name, value] of Object.entries(props)) {
       if (
-        (name === "style" || name === "source" || name === "runs") &&
+        (name === "style" || name === "source" || name === "runs" || name === "accessibility") &&
         typeof value === "function"
       ) {
         // Reactive style bag, markdown source, or text runs (compiled-JSX
@@ -43,14 +44,14 @@ export function makeH(R: Renderer<HostNode>): H {
         // runs under them — importing solid-js separately once resolved a
         // mismatched build and crashed the reaction context
         // ([REACTIVITY_HALTED]).
-        let current: StyleMap | string | TextRun[] | undefined
+        let current: StyleMap | string | TextRun[] | AccessibilityState | null | undefined
         R.effect(
           () => {
             // Compute reads the signals (tracked). It returns void on
             // purpose: older Solid 2 runners stored a non-function return in the
             // effect's cleanup slot and calls it on the next run
             // ([REACTIVITY_HALTED] crash); the commit reads via closure.
-            current = (value as () => StyleMap | string | TextRun[])()
+            current = (value as () => StyleMap | string | TextRun[] | AccessibilityState | null)()
           },
           () => {
             if (current !== undefined) R.setProp(el, name, current)

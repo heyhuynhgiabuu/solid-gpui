@@ -1,5 +1,6 @@
 import { isElementIdValue, type ElementId } from "./ids"
 import {
+  ACCESSIBILITY_ROLES,
   ANCHOR_KINDS,
   ANIMATABLE_STYLE_KEYS,
   EASING_NAMES,
@@ -7,6 +8,8 @@ import {
   EVENT_TYPES,
   MUTATION_OPS,
   STYLE_STATES,
+  type AccessibilityRole,
+  type AccessibilityState,
   type DrawItem,
   type ElementType,
   type EventType,
@@ -157,6 +160,48 @@ function decodeTextRun(p: string, value: unknown): Result<TextRun, ProtocolError
       ...(underline !== undefined ? { underline } : {}),
     },
   }
+}
+
+function decodeAccessibilityState(
+  p: string,
+  value: unknown,
+): Result<AccessibilityState, ProtocolError> {
+  if (!isDict(value)) return { ok: false, error: shape(p, "expected an object") }
+  const role = value.role
+  if (
+    typeof role !== "string" ||
+    !(ACCESSIBILITY_ROLES as readonly string[]).includes(role)
+  ) {
+    return {
+      ok: false,
+      error: shape(`${p}.role`, `expected one of ${ACCESSIBILITY_ROLES.join("|")}`),
+    }
+  }
+  const state: {
+    role: AccessibilityRole
+    value?: string
+    expanded?: boolean
+    selected?: boolean
+  } = { role: role as AccessibilityRole }
+  if (value.value !== undefined) {
+    if (typeof value.value !== "string") {
+      return { ok: false, error: shape(`${p}.value`, "expected a string") }
+    }
+    state.value = value.value
+  }
+  if (value.expanded !== undefined) {
+    if (typeof value.expanded !== "boolean") {
+      return { ok: false, error: shape(`${p}.expanded`, "expected a boolean") }
+    }
+    state.expanded = value.expanded
+  }
+  if (value.selected !== undefined) {
+    if (typeof value.selected !== "boolean") {
+      return { ok: false, error: shape(`${p}.selected`, "expected a boolean") }
+    }
+    state.selected = value.selected
+  }
+  return { ok: true, value: state }
 }
 
 function requireId(
@@ -412,6 +457,19 @@ function decodeMutation(m: Dict, p: string): Result<Mutation, ProtocolError> {
         return { ok: false, error: shape(`${p}.tooltip`, "expected a non-empty string or null") }
       }
       return { ok: true, value: { op, id: idR.value, tooltip: tooltip ?? null } }
+    }
+    case "setAccessibility": {
+      const idR = id()
+      if (!idR.ok) return idR
+      if (m.accessibility === undefined) {
+        return { ok: false, error: shape(`${p}.accessibility`, "expected an object or null") }
+      }
+      if (m.accessibility === null) {
+        return { ok: true, value: { op, id: idR.value, accessibility: null } }
+      }
+      const state = decodeAccessibilityState(`${p}.accessibility`, m.accessibility)
+      if (!state.ok) return state
+      return { ok: true, value: { op, id: idR.value, accessibility: state.value } }
     }
     case "setEventListener": {
       const idR = id()

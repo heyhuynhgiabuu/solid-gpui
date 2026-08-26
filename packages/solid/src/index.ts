@@ -6,3 +6,11 @@ export { makeH } from "./h"
 export type { H } from "./h"
 export { appWindow, dialog, shell } from "./desktop"
 export { list } from "./list"
+export { combobox, Combobox, select, Select } from "./select"
+export type {
+  ComboboxTriggerProps,
+  SelectContentProps,
+  SelectItemProps,
+  SelectRootProps,
+  SelectTriggerProps,
+} from "./select"

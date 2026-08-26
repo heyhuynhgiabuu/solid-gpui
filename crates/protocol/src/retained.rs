@@ -26,8 +26,8 @@
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 use crate::{
-    ApplyError, ElementId, ElementType, EventType, Mutation, StyleMap, StyleState, StyleValue,
-    TextRun,
+    AccessibilityState, ApplyError, ElementId, ElementType, EventType, Mutation, StyleMap,
+    StyleState, StyleValue, TextRun,
 };
 
 pub const MAX_DEPTH: usize = 256;
@@ -68,6 +68,9 @@ pub struct Node {
     /// Native GPUI tooltip text. Present only on interactive elements that
     /// the helper can render as a stateful element; no child node is created.
     pub tooltip: Option<String>,
+    /// Typed AccessKit state for composite controls. Present only on host
+    /// elements whose helper render path is stateful.
+    pub accessibility: Option<AccessibilityState>,
     pub children: Vec<ElementId>,
     pub parent: Option<ElementId>,
     pub listeners: BTreeSet<EventType>,
@@ -89,6 +92,7 @@ impl Node {
             text_runs: None,
             value: None,
             tooltip: None,
+            accessibility: None,
             children: Vec::new(),
             parent: None,
             listeners: BTreeSet::new(),
@@ -451,6 +455,21 @@ impl RetainedTree {
                     });
                 }
                 node.tooltip = tooltip.clone();
+                Ok(())
+            }
+            Mutation::SetAccessibility { id, accessibility } => {
+                let node = self.mut_node(*id, "setAccessibility")?;
+                if !matches!(
+                    node.element_type,
+                    ElementType::Div | ElementType::Input | ElementType::Textarea
+                ) {
+                    return Err(ApplyError::InvalidMutation {
+                        message: format!(
+                            "setAccessibility: element {id:?} does not support typed accessibility"
+                        ),
+                    });
+                }
+                node.accessibility = accessibility.clone();
                 Ok(())
             }
             Mutation::SetEventListener {

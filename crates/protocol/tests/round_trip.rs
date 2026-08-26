@@ -1,6 +1,6 @@
 use solid_gpui_protocol::{
-    ApplyError, Command, DrawItem, ElementId, ElementType, Event, EventType, Mutation,
-    MutationBatch, MutationHandler, ProtocolError, Reply, ReplyCode, RetainedTree,
+    AccessibilityRole, ApplyError, Command, DrawItem, ElementId, ElementType, Event, EventType,
+    Mutation, MutationBatch, MutationHandler, ProtocolError, Reply, ReplyCode, RetainedTree,
     command_from_json, command_to_json, event_from_json, event_to_json, from_json, reply_from_json,
     reply_to_json, to_json,
 };
@@ -22,6 +22,12 @@ fn tooltip_fixture() -> String {
     let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../../packages/protocol/fixtures/batch-tooltip-01.json");
     fs::read_to_string(path).expect("tooltip fixture readable")
+}
+
+fn accessibility_fixture() -> String {
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../packages/protocol/fixtures/batch-accessibility-01.json");
+    fs::read_to_string(path).expect("accessibility fixture readable")
 }
 
 struct Recording {
@@ -102,6 +108,56 @@ fn tooltip_fixture_parses_and_round_trips() {
             .and_then(|node| node.tooltip.as_deref()),
         None
     );
+}
+
+#[test]
+fn input_listener_event_type_is_accepted() {
+    let batch = from_json(
+        r#"{"v":1,"seq":1,"mutations":[{"op":"createElement","id":1,"elementType":"input"},{"op":"setEventListener","id":1,"eventType":"input","enabled":true}]}"#,
+    )
+    .expect("input listener event type is part of the closed set");
+    assert!(matches!(
+        batch.mutations[1],
+        Mutation::SetEventListener {
+            event_type: EventType::Input,
+            enabled: true,
+            ..
+        }
+    ));
+}
+
+#[test]
+fn accessibility_fixture_parses_and_round_trips() {
+    let json = accessibility_fixture();
+    let batch = from_json(&json).expect("accessibility fixture parses");
+    assert_eq!(batch.seq, 70);
+    assert!(matches!(
+        &batch.mutations[1],
+        Mutation::SetAccessibility { accessibility: Some(state), .. }
+            if state.role == AccessibilityRole::ComboBox
+                && state.expanded == Some(true)
+                && state.value.as_deref() == Some("red")
+    ));
+    assert_eq!(to_json(&batch), json.trim_end());
+    let mut tree = RetainedTree::new();
+    for mutation in &batch.mutations {
+        tree.apply(mutation).expect("accessibility fixture applies");
+    }
+    assert_eq!(tree.root(), Some(ElementId(1)));
+}
+
+#[test]
+fn accessibility_decoder_rejects_missing_and_malformed_states() {
+    for raw in [
+        r#"{"v":1,"seq":1,"mutations":[{"op":"setAccessibility","id":1}]}"#,
+        r#"{"v":1,"seq":1,"mutations":[{"op":"setAccessibility","id":1,"accessibility":{"role":"slider"}}]}"#,
+        r#"{"v":1,"seq":1,"mutations":[{"op":"setAccessibility","id":1,"accessibility":{"role":"option","selected":"yes"}}]}"#,
+    ] {
+        assert!(
+            from_json(raw).is_err(),
+            "malformed accessibility accepted: {raw}"
+        );
+    }
 }
 
 #[test]

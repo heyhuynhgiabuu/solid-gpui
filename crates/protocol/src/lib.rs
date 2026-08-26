@@ -16,6 +16,7 @@ pub const PROTOCOL_VERSION: u32 = 1;
 
 pub const EVENT_TYPES: &[&str] = &[
     "click",
+    "input",
     "mouseDown",
     "mouseUp",
     "mouseEnter",
@@ -292,6 +293,32 @@ pub enum AnchorKind {
     RightCenter,
 }
 
+/// Accessibility roles supported by the composite-control bridge. This is a
+/// deliberately small closed set: every role must map to a real GPUI/AccessKit
+/// role in the helper.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum AccessibilityRole {
+    #[serde(rename = "combobox")]
+    ComboBox,
+    #[serde(rename = "listbox")]
+    ListBox,
+    #[serde(rename = "option")]
+    Option,
+}
+
+/// Typed accessibility state applied atomically to one host element.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AccessibilityState {
+    pub role: AccessibilityRole,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub value: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub expanded: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub selected: Option<bool>,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "op", rename_all = "camelCase")]
 pub enum Mutation {
@@ -417,6 +444,13 @@ pub enum Mutation {
     SetTooltip {
         id: ElementId,
         tooltip: Option<String>,
+    },
+    /// Apply or clear the small typed accessibility state used by composite
+    /// controls. The helper maps it directly to GPUI's AccessKit fields.
+    #[serde(rename_all = "camelCase")]
+    SetAccessibility {
+        id: ElementId,
+        accessibility: Option<AccessibilityState>,
     },
     #[serde(rename_all = "camelCase")]
     SetEventListener {
@@ -888,6 +922,7 @@ const KNOWN_OPS: &[&str] = &[
     "setDragData",
     "setValue",
     "setTooltip",
+    "setAccessibility",
     "setAnimation",
     "setEventListener",
     "setRoot",
@@ -953,6 +988,12 @@ fn from_value(v: serde_json::Value) -> Result<MutationBatch, ProtocolError> {
             if op == "setTooltip" && !mo.contains_key("tooltip") {
                 return Err(ProtocolError::InvalidShape {
                     path: format!("{p}.tooltip"),
+                    message: "missing field".into(),
+                });
+            }
+            if op == "setAccessibility" && !mo.contains_key("accessibility") {
+                return Err(ProtocolError::InvalidShape {
+                    path: format!("{p}.accessibility"),
                     message: "missing field".into(),
                 });
             }
@@ -1037,6 +1078,7 @@ fn from_value(v: serde_json::Value) -> Result<MutationBatch, ProtocolError> {
             | Mutation::SetTextRuns { id, .. }
             | Mutation::SetValue { id, .. }
             | Mutation::SetTooltip { id, .. }
+            | Mutation::SetAccessibility { id, .. }
             | Mutation::SetAnimation { id, .. }
             | Mutation::SetEventListener { id, .. }
             | Mutation::SetRoot { id } => (id.0 == 0).then_some("id"),

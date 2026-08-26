@@ -12,6 +12,7 @@ import animationFixture from "../fixtures/batch-animation-01.json"
 import markdownFixture from "../fixtures/batch-markdown-01.json"
 import textRunsFixture from "../fixtures/batch-text-runs-01.json"
 import tooltipFixture from "../fixtures/batch-tooltip-01.json"
+import accessibilityFixture from "../fixtures/batch-accessibility-01.json"
 import { elementId } from "./ids"
 import { decodeBatch, encodeBatch } from "./batch"
 import type { MutationBatch } from "./batch"
@@ -411,6 +412,54 @@ describe("tooltip fixture parity", () => {
     )
     expect(r.ok).toBe(false)
     if (!r.ok) expect(r.error).toMatchObject({ kind: "invalidShape", path: "mutations[0].tooltip" })
+  })
+})
+
+describe("accessibility fixture parity", () => {
+  test("batch-accessibility-01 parses and preserves typed states", () => {
+    const raw = JSON.stringify(accessibilityFixture)
+    const r = decodeBatch(raw)
+    expect(r.ok).toBe(true)
+    if (r.ok) {
+      expect(r.value.mutations).toContainEqual({
+        op: "setAccessibility",
+        id: elementId(1),
+        accessibility: { role: "combobox", expanded: true, value: "red" },
+      })
+      expect(encodeBatch(r.value)).toBe(raw)
+    }
+  })
+
+  test("null clears accessibility and malformed states are rejected", () => {
+    const cleared = decodeBatch(
+      JSON.stringify({
+        v: 1,
+        seq: 71,
+        mutations: [{ op: "setAccessibility", id: 1, accessibility: null }],
+      }),
+    )
+    expect(cleared.ok).toBe(true)
+    if (cleared.ok) expect(cleared.value.mutations[0]).toEqual({ op: "setAccessibility", id: elementId(1), accessibility: null })
+
+    const cases = [
+      { accessibility: {}, path: "mutations[0].accessibility.role" },
+      { accessibility: { role: "slider" }, path: "mutations[0].accessibility.role" },
+      { accessibility: { role: "option", selected: "yes" }, path: "mutations[0].accessibility.selected" },
+      { accessibility: { role: "option", value: 1 }, path: "mutations[0].accessibility.value" },
+    ]
+    for (const item of cases) {
+      const r = decodeBatch(
+        JSON.stringify({ v: 1, seq: 72, mutations: [{ op: "setAccessibility", id: 1, accessibility: item.accessibility }] }),
+      )
+      expect(r.ok).toBe(false)
+      if (!r.ok) expect(r.error).toMatchObject({ kind: "invalidShape", path: item.path })
+    }
+
+    const missing = decodeBatch(
+      JSON.stringify({ v: 1, seq: 73, mutations: [{ op: "setAccessibility", id: 1 }] }),
+    )
+    expect(missing.ok).toBe(false)
+    if (!missing.ok) expect(missing.error).toMatchObject({ kind: "invalidShape", path: "mutations[0].accessibility" })
   })
 })
 

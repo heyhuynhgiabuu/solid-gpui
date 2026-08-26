@@ -15,7 +15,9 @@ use solid_gpui_protocol::EventType;
 use solid_gpui_protocol::Mutation;
 use solid_gpui_protocol::StyleMap;
 use solid_gpui_protocol::StyleState;
-use solid_gpui_protocol::{DrawItem, ElementId, ElementType, Event, RetainedTree, StyleValue};
+use solid_gpui_protocol::{
+    AccessibilityRole, DrawItem, ElementId, ElementType, Event, RetainedTree, StyleValue,
+};
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 use std::io::Write;
@@ -1792,6 +1794,7 @@ fn element_needs_stateful(
         || wants_focus
         || !node.state_styles.is_empty()
         || node.tooltip.is_some()
+        || node.accessibility.is_some()
         || node.drag_data.as_ref().is_some_and(|d| !d.is_empty())
         || tree_listens_for_drop(node)
 }
@@ -2483,6 +2486,34 @@ fn apply_interactive(
     // State layers last: they are style refinements over whatever the base
     // style + interactivity produced, and need the stateful element id.
     el = apply_state_styles(el, node);
+    apply_accessibility(el, node)
+}
+
+/// Apply the closed accessibility state to the same stateful element used for
+/// input and pointer/key interactivity. GPUI exposes these fields through
+/// AccessKit; keeping the mapping here means the wire never carries a role the
+/// helper cannot render.
+fn apply_accessibility(
+    mut el: gpui::Stateful<Div>,
+    node: &solid_gpui_protocol::Node,
+) -> gpui::Stateful<Div> {
+    let Some(state) = node.accessibility.as_ref() else {
+        return el;
+    };
+    el = el.role(match state.role {
+        AccessibilityRole::ComboBox => gpui::Role::ComboBox,
+        AccessibilityRole::ListBox => gpui::Role::ListBox,
+        AccessibilityRole::Option => gpui::Role::ListBoxOption,
+    });
+    if let Some(value) = state.value.as_ref() {
+        el = el.aria_value(value.clone());
+    }
+    if let Some(expanded) = state.expanded {
+        el = el.aria_expanded(expanded);
+    }
+    if let Some(selected) = state.selected {
+        el = el.aria_selected(selected);
+    }
     el
 }
 
@@ -3650,7 +3681,7 @@ mod tests {
 #[cfg(test)]
 mod element_needs_stateful_tests {
     use super::*;
-    use solid_gpui_protocol::StyleMap;
+    use solid_gpui_protocol::{AccessibilityRole, AccessibilityState, StyleMap};
 
     fn node_with_state(state: Option<StyleState>) -> solid_gpui_protocol::Node {
         // Build via the retained tree's public apply API (Node::new is
@@ -3744,6 +3775,35 @@ mod element_needs_stateful_tests {
         .unwrap();
         let cleared = tree.get(ElementId(1)).unwrap().clone();
         assert!(!element_needs_stateful(&cleared, false, false, false));
+    }
+
+    #[test]
+    fn accessibility_forces_stateful_path_and_maps_accesskit_fields() {
+        let mut tree = solid_gpui_protocol::RetainedTree::new();
+        tree.apply(&Mutation::CreateElement {
+            id: ElementId(1),
+            element_type: ElementType::Div,
+        })
+        .unwrap();
+        tree.apply(&Mutation::SetAccessibility {
+            id: ElementId(1),
+            accessibility: Some(AccessibilityState {
+                role: AccessibilityRole::ComboBox,
+                value: Some("red".into()),
+                expanded: Some(true),
+                selected: None,
+            }),
+        })
+        .unwrap();
+        let node = tree.get(ElementId(1)).unwrap().clone();
+        assert!(element_needs_stateful(&node, false, false, false));
+
+        let element = apply_accessibility(div().id(1usize), &node);
+        assert_eq!(element.a11y_role(), Some(gpui::Role::ComboBox));
+        let mut a11y = gpui::accesskit::Node::new(gpui::Role::ComboBox);
+        element.write_a11y_info(&mut a11y);
+        assert_eq!(a11y.value(), Some("red"));
+        assert_eq!(a11y.is_expanded(), Some(true));
     }
 
     #[test]

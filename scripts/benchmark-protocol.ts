@@ -23,6 +23,7 @@ const FIXTURES = [
   "batch-01.json",
   "batch-animation-01.json",
   "batch-canvas-01.json",
+  "batch-accessibility-01.json",
   "batch-drag-01.json",
   "batch-keys-01.json",
   "batch-list-01.json",
@@ -57,9 +58,10 @@ const OP_CODES: { readonly [K in MutationOp]: number } = {
   setDragData: 13,
   setValue: 14,
   setTooltip: 15,
-  setAnimation: 16,
-  setEventListener: 17,
-  setRoot: 18,
+  setAccessibility: 16,
+  setAnimation: 17,
+  setEventListener: 18,
+  setRoot: 19,
 }
 
 const OP_NAMES: readonly MutationOp[] = MUTATION_OPS
@@ -82,6 +84,7 @@ const OP_FIELDS: { readonly [K in MutationOp]: readonly string[] } = {
   setDragData: ["id", "data"],
   setValue: ["id", "value"],
   setTooltip: ["id", "tooltip"],
+  setAccessibility: ["id", "accessibility"],
   setAnimation: ["id", "target", "transitionMs", "easing"],
   setEventListener: ["id", "eventType", "enabled"],
   setRoot: ["id"],
