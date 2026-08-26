@@ -721,3 +721,51 @@ describe("media + overlays (P10)", () => {
     expect(anchored[0]?.anchor).toBeNull()
   })
 })
+
+describe("helper-owned refusal extended to svg/img (P10 r1)", () => {
+  test("svg children, svg onClick, img hoverStyle are refused client-side", async () => {
+    const rec = recording()
+    const { renderer: R, render, flush } = createSolidRenderer(rec.send)
+    const container = R.createElement("#root")
+    let icon: ReturnType<typeof R.createElement> | null = null
+    let photo: ReturnType<typeof R.createElement> | null = null
+    const dispose = render(() => {
+      const root = R.createElement("div")
+      icon = R.createElement("svg")
+      photo = R.createElement("img")
+      R.insert(root, icon, null, null)
+      R.insert(root, photo, null, null)
+      return root
+    }, container)
+    await flush()
+    const before = rec.batches.length
+
+    // Children inside svg: shadow-only, no wire attach.
+    const fakeChild = R.createElement("div")
+    R.insert(icon!, fakeChild, null, null)
+
+    const warn = console.warn
+    const calls: string[] = []
+    console.warn = (m: string) => calls.push(m)
+    try {
+      R.setProp(icon!, "onClick", () => {})
+      R.setProp(photo!, "hoverStyle", { backgroundColor: "#fff" })
+      R.setProp(photo!, "dragData", { x: 1 })
+      R.setProp(photo!, "keys", { "cmd-i": () => {} })
+      await flush()
+    } finally {
+      console.warn = warn
+    }
+    dispose()
+
+    const muts = rec.batches.slice(before).flatMap((b) => b.mutations)
+    expect(muts.some((m) => m.op === "appendChild")).toBe(false)
+    expect(muts.some((m) => m.op === "setEventListener")).toBe(false)
+    expect(
+      muts.some((m) => m.op === "setStyle" && "state" in m && m.state !== undefined),
+    ).toBe(false)
+    expect(muts.some((m) => m.op === "setDragData")).toBe(false)
+    expect(muts.some((m) => m.op === "setKeyBindings")).toBe(false)
+    expect(calls.length).toBeGreaterThanOrEqual(4)
+  })
+})

@@ -1965,9 +1965,18 @@ fn build_scrollbar_element(
 fn build_svg_element(tree: &RetainedTree, id: ElementId, ctx: &mut RenderCtx) -> AnyElement {
     let node = tree.get(id).expect("checked by caller");
     let source: SharedString = SharedString::from(node.text.clone().unwrap_or_default());
+    // gpui's Svg paints NOTHING without a text color (style.text.color is
+    // Option and unpainted when None), so a missing `color` style must get
+    // an explicit default — black, matching plain text elements. Without
+    // this the icon silently disappears.
+    let has_color = node.style.contains_key("color")
+        || node.state_styles.values().any(|m| m.contains_key("color"));
+    let mut el = svg().data(source.as_bytes());
+    if !has_color {
+        el = el.text_color(Hsla::default());
+    }
     // Svg impls Styled: width/height/backgroundColor AND the `color` tint
     // all flow through the same generic applier as every other element.
-    let mut el = svg().data(source.as_bytes());
     for (key, value) in &node.style {
         el = apply_style(el, key, &effective_value(ctx, id, key, value));
     }
@@ -1976,6 +1985,11 @@ fn build_svg_element(tree: &RetainedTree, id: ElementId, ctx: &mut RenderCtx) ->
 
 /// Raster image (P10): `src` is an absolute file path (fs::read directly)
 /// or an http(s) URI (gpui's http client). No asset source involved.
+/// Failure mode: a missing/unreadable path fails ASYNC in gpui's loader
+/// (broken-image state, no panic, no event) — deliberately not validated
+/// at setSrc time (TOCTOU race; the file can vanish between check and
+/// paint). No `.image_cache()` here on purpose: img() falls back to the
+/// window image-cache stack, which already deduplicates decoded frames.
 fn build_img_element(tree: &RetainedTree, id: ElementId, ctx: &mut RenderCtx) -> AnyElement {
     let node = tree.get(id).expect("checked by caller");
     let src = node.src.clone().unwrap_or_default();

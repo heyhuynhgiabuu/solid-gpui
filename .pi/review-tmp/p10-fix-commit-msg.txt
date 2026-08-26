@@ -1,0 +1,31 @@
+fix(helper): P10 r1 - client-side refusal for svg/img, decode parity, svg default tint
+
+Major (r1 mt9w8so2): the renderer's refuse-client-side pattern covered
+markdown/canvas only, while Rust apply now rejects children AND
+interactive props on svg/img too - so the most natural DOM usage
+(<svg><path/></svg>, <svg onClick>, <img hoverStyle>) emitted ops the
+helper rejects, and the resulting applyFailed permanently poisoned the
+renderer. A shared HELPER_OWNED_TAGS predicate (markdown/canvas/svg/
+img) now drives insertNode child refusal, removeNode shadow-only
+cleanup, and every interactive guard: event listeners, state layers,
+dragData, keys, transitionMs animation. Canvas gains the prop guards
+it was missing since P8 (same root cause). Warnings name the actual
+tag instead of hardcoding markdown.
+
+Minor: setSrc empty-string is now a shape error in Rust apply too,
+mirroring the TS decoder exactly (clearing an img source is not a
+thing - destroy the element).
+
+Minor: gpui paints NOTHING for an svg without a text color, so a
+missing `color` style silently hid icons. build_svg_element now falls
+back to black (matching plain text elements) when neither base nor
+state styles carry a color.
+
+Notes closed: img broken-path failure mode documented at the builder
+(TOC TOU race; async broken-image state, no panic/event); deliberate
+absence of .image_cache() documented there too; demo switches to
+new.URL(...) pathname resolution per the fileURLToPath standard.
+
+New renderer test pins the refusal surface end-to-end: no appendChild/
+setEventListener/state-style/setDragData/setKeyBindings ops escape for
+svg/img misuse, with warnings observable.

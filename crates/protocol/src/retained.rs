@@ -312,6 +312,14 @@ impl RetainedTree {
                         message: format!("setSrc: element {id:?} is not an img element"),
                     });
                 }
+                if src.is_empty() {
+                    // Mirror the TS decoder: empty is a shape error, not a
+                    // clear (clearing an img source isn't a thing — destroy
+                    // the element instead).
+                    return Err(ApplyError::InvalidMutation {
+                        message: format!("setSrc: src must be non-empty ({id:?})"),
+                    });
+                }
                 node.src = Some(src.clone());
                 Ok(())
             }

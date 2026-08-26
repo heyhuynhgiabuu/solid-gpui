@@ -145,6 +145,13 @@ export function createSolidRenderer(send: Send): SolidGpuiRenderer {
    *  destroy each one explicitly — the helper's destroy of an ancestor walks
    * WIRE children only and would leak them forever. */
   const refusedChildren = new Set<number>()
+
+  /** Elements whose rendered subtree is entirely helper-owned (P10): the
+   * wire rejects children AND interactive props on them, and an applyFailed
+   * poisons the session — so the renderer refuses client-side instead of
+   * emitting ops it knows are invalid. Mirrors retained.rs's reject lists. */
+  const HELPER_OWNED_TAGS = new Set(["markdown", "canvas", "svg", "img"])
+  const isHelperOwned = (tag: string): boolean => HELPER_OWNED_TAGS.has(tag)
   const handlers = new Map<string, (event: SolidGpuiEvent) => void>()
   /** Per-binding shortcut handlers, keyed `${nodeId}:${binding}`. */
   const keyHandlers = new Map<string, (event: SolidGpuiEvent) => void>()
@@ -164,7 +171,7 @@ export function createSolidRenderer(send: Send): SolidGpuiRenderer {
   }
 
   const removeNodeImpl = (parent: HostNode, node: HostNode): void => {
-    if (parent.kind === "element" && parent.tag === "markdown") {
+    if (parent.kind === "element" && isHelperOwned(parent.tag)) {
       // Children refused by insertNode live ONLY in the shadow bookkeeping
       // (no wire attach ever happened), so removal is shadow-only — emitting
       // removeChild would fail helper-side validation (not a child) and
@@ -256,10 +263,15 @@ export function createSolidRenderer(send: Send): SolidGpuiRenderer {
       }
       if (name === "hoverStyle" || name === "activeStyle" || name === "dragOverStyle") {
         // State layer (P1-c): value is a style map applied on top of the
-        // base when gpui reports hover/active. Markdown renders helper-side
-        // and rejects state layers — emitting would ack-fail and poison the
-        // session (validation and rendering agree), so drop it here instead.
-        if (node.tag === "markdown") return
+        // base when gpui reports hover/active. Helper-owned elements reject
+        // state layers (validation and rendering agree) — emitting would
+        // ack-fail and poison the session, so drop it here instead.
+        if (isHelperOwned(node.tag)) {
+          if (typeof console !== "undefined") {
+            console.warn(`[solid-gpui] <${node.tag}> ignores ${name} — it renders a helper-owned subtree.`)
+          }
+          return
+        }
         const state =
           name === "hoverStyle" ? "hover" : name === "activeStyle" ? "active" : "dragOver"
         const layer = expandShorthands((value ?? {}) as StyleMap)
@@ -270,12 +282,13 @@ export function createSolidRenderer(send: Send): SolidGpuiRenderer {
         const next = expandShorthands((value ?? {}) as StyleMap)
         const prev = node.lastStyle
         node.lastStyle = next
-        if (node.transitionMs && prev && node.tag === "markdown") {
-          // Helper rejects setAnimation on markdown (static styles only);
-          // emitting it would poison the session. Static setStyle below.
+        if (node.transitionMs && prev && isHelperOwned(node.tag)) {
+          // Helper rejects setAnimation on helper-owned elements (static
+          // styles only); emitting it would poison the session. Static
+          // setStyle below.
           if (typeof console !== "undefined") {
             console.warn(
-              "[solid-gpui] <markdown> ignores transitionMs — it renders a static markdown document.",
+              `[solid-gpui] <${node.tag}> ignores transitionMs — it renders a helper-owned subtree.`,
             )
           }
         } else if (node.transitionMs && prev) {
@@ -328,12 +341,12 @@ export function createSolidRenderer(send: Send): SolidGpuiRenderer {
       }
       if (name === "dragData") {
         // Drag source (P7): any JSON payload; stringified for the wire
-        // (empty string clears the source). Markdown refuses like all
-        // interactive props.
-        if (node.tag === "markdown") {
+        // (empty string clears the source). Helper-owned elements refuse
+        // like all interactive props.
+        if (isHelperOwned(node.tag)) {
           if (typeof console !== "undefined") {
             console.warn(
-              "[solid-gpui] <markdown> ignores dragData — it fires no events.",
+              `[solid-gpui] <${node.tag}> ignores dragData — it fires no events.`,
             )
           }
           return
@@ -347,10 +360,10 @@ export function createSolidRenderer(send: Send): SolidGpuiRenderer {
         // Shortcut/sequence map: { "cmd-k": fn, "ctrl-x ctrl-s": fn }.
         // Bindings travel as one setKeyBindings; firing reports back as a
         // `keys` event whose key field names the matched binding.
-        if (node.tag === "markdown") {
+        if (isHelperOwned(node.tag)) {
           if (typeof console !== "undefined") {
             console.warn(
-              "[solid-gpui] <markdown> ignores keys — it renders a static document and fires no events.",
+              `[solid-gpui] <${node.tag}> ignores keys — it renders a static document and fires no events.`,
             )
           }
           return
@@ -399,15 +412,15 @@ export function createSolidRenderer(send: Send): SolidGpuiRenderer {
         push({ op: "setKeyBindings", id, bindings })
         return
       }
-      if (node.tag === "markdown" && EVENT_NAMES[name]) {
-        // Mirror the helper's honest contract: markdown accepts only
-        // style/source; listeners never fire helper-side, so emitting one
-        // would be acked-rejected (applyFailed) and poison the session.
+      if (isHelperOwned(node.tag) && EVENT_NAMES[name]) {
+        // Mirror the helper's honest contract: helper-owned elements accept
+        // only style/content; listeners never fire helper-side, so emitting
+        // one would be acked-rejected (applyFailed) and poison the session.
         // (transitionMs/transitionEasing return before this point; the
         // animation path is guarded inside the style branch above.)
         if (typeof console !== "undefined") {
           console.warn(
-            `[solid-gpui] <markdown> ignores ${String(name)} — it renders a static markdown document (style/source only).`,
+            `[solid-gpui] <${node.tag}> ignores ${String(name)} — it renders a helper-owned subtree.`,
           )
         }
         return
@@ -496,10 +509,11 @@ export function createSolidRenderer(send: Send): SolidGpuiRenderer {
     },
 
     insertNode(parent: HostNode, node: HostNode, anchor?: HostNode) {
-      if (parent.kind === "element" && (parent.tag === "markdown" || parent.tag === "canvas")) {
-        // The helper owns the markdown subtree; canvas paints a recorded
-        // draw list. Both reject attach on the wire (applyFailed poisons
-        // the session). Refuse
+      if (parent.kind === "element" && isHelperOwned(parent.tag)) {
+        // The helper owns these subtrees (markdown document, canvas draw
+        // list, svg markup, img source). All reject attach on the wire
+        // (applyFailed poisons the session). Refuse children client-side
+        // instead of emitting an op we know is invalid.
         // children client-side instead of emitting an op we know is invalid.
         // The node is still recorded in the shadow bookkeeping: dispose walks
         // the shadow tree and destroys these ids (they exist helper-side via
@@ -508,7 +522,7 @@ export function createSolidRenderer(send: Send): SolidGpuiRenderer {
         // universal believes about the tree.
         if (typeof console !== "undefined") {
           console.warn(
-            "[solid-gpui] <markdown> takes a `source` prop; children are not rendered and were dropped.",
+            `[solid-gpui] <${parent.tag}> takes a content prop (source/src); children are not rendered and were dropped.`,
           )
         }
         const entry = shadow.get(parent.id)!

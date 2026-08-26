@@ -61,7 +61,7 @@ function Tree() {
         ))}
       </div>
       <img
-        src={import.meta.dir + "/assets/media-sample.png"}
+        src={new URL("./assets/media-sample.png", import.meta.url).pathname}
         style={{ width: 220, height: 140, borderRadius: 10, backgroundColor: "#181825" }}
         deferred
       />
