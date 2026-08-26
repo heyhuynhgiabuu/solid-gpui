@@ -400,6 +400,18 @@ describe("tooltip fixture parity", () => {
     expect(r.ok).toBe(false)
     if (!r.ok) expect(r.error).toMatchObject({ kind: "invalidShape", path: "mutations[0].tooltip" })
   })
+
+  test("missing tooltip field is invalid", () => {
+    const r = decodeBatch(
+      JSON.stringify({
+        v: 1,
+        seq: 54,
+        mutations: [{ op: "setTooltip", id: 1 }],
+      }),
+    )
+    expect(r.ok).toBe(false)
+    if (!r.ok) expect(r.error).toMatchObject({ kind: "invalidShape", path: "mutations[0].tooltip" })
+  })
 })
 
 describe("style-state fixture parity", () => {

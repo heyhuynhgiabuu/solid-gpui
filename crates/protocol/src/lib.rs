@@ -416,7 +416,6 @@ pub enum Mutation {
     #[serde(rename_all = "camelCase")]
     SetTooltip {
         id: ElementId,
-        #[serde(default)]
         tooltip: Option<String>,
     },
     #[serde(rename_all = "camelCase")]
@@ -950,6 +949,12 @@ fn from_value(v: serde_json::Value) -> Result<MutationBatch, ProtocolError> {
             })?;
             if !KNOWN_OPS.contains(&op) {
                 return Err(ProtocolError::UnknownOp { got: op.into() });
+            }
+            if op == "setTooltip" && !mo.contains_key("tooltip") {
+                return Err(ProtocolError::InvalidShape {
+                    path: format!("{p}.tooltip"),
+                    message: "missing field".into(),
+                });
             }
             if op == "setEventListener"
                 && let Some(et) = mo.get("eventType")

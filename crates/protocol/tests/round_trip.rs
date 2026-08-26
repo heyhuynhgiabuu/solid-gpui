@@ -116,6 +116,16 @@ fn tooltip_decoder_rejects_empty_text() {
 }
 
 #[test]
+fn tooltip_decoder_rejects_missing_text() {
+    let error = from_json(r#"{"v":1,"seq":1,"mutations":[{"op":"setTooltip","id":1}]}"#)
+        .expect_err("missing tooltip must be rejected");
+    assert!(matches!(
+        error,
+        ProtocolError::InvalidShape { ref path, .. } if path.contains("tooltip")
+    ));
+}
+
+#[test]
 fn text_runs_decoder_rejects_invalid_segments() {
     for (field, value) in [("text", "\"\""), ("weight", "99")] {
         let json = format!(
