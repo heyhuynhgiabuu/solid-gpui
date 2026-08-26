@@ -659,3 +659,26 @@
 - gpui: MenuAction derive Action #[action(no_json)] — không cần schemars/
   serde; một on_action global handler cho MỌI instance (payload trong struct);
   Unbind(name) tồn tại nhưng clear+rebind đơn giản hơn.
+
+## P10 — svg/img media + overlays (2026-08-26)
+
+- **Hsla::default() = alpha 0** (derive(Default) trên 4 f32) — "màu mặc
+  định" nào cũng phải set a=1.0 tường minh. gpui tự fallback text không
+  nhãn sang One Dark light hsla(221,11%,86%,1); helper không set theme nên
+  hardcode màu đó + cite fallback_themes.rs là cách nhất quán. Svg KHÔNG có
+  text.color thì KHÔNG paint gì (Option gate).
+- **Element type mới = refusal surface mới**: HELPER_OWNED_TAGS (renderer)
+  phải mở rộng CÙNG LÚC với reject lists Rust (retained.rs) — insertNode,
+  events, state layers, dragData, keys, transitionMs. Canvas từng thiếu
+  prop guards từ P8 mà không ai thấy đến P10 r1 — checklist: thêm element
+  helper-owned → cập nhật cả HAI phía trong một commit.
+- **svg().data(bytes)** render không cần AssetSource (hash-cache nội bộ);
+  img file path đi Resource::Path → fs::read thẳng; Uri qua http client.
+  img path sai fail ASYNC (broken-image, no panic/event) — không validate
+  lúc setSrc (TOCTOU).
+- **Overlay wrapper pattern**: build_element = inner + apply_overlays;
+  anchored BÊN TRONG deferred (deferred(anchored(x)) = popover). Mọi nhánh
+  early-return phải chảy qua wrapper.
+- URL.pathname KHÔNG percent-decode — luôn fileURLToPath(new.URL(...)).
+- Demo <text>string</text> đã dính lỗi attach 3 LẦN (P7/P8/P10): text
+  element nhận nội dung qua PROP, string child trong JSX chỉ hợp trên div.

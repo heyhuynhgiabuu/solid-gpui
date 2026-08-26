@@ -1040,7 +1040,8 @@ status: CLOSED 2026-08-26 (r1 NOT MERGEABLE 1M/3m; fixes b9f66b5; r2 CLEAN + 2 d
       chấp nhận có chủ ý.
 
 ### 2026-08-26 - P10: anchored / deferred / img / svg / image-cache
-status: active
+status: CLOSED 2026-08-26 (r1 NOT MERGEABLE: Major refusal-gap svg/img;
+r2 NOT MERGEABLE: tint fallback alpha-0; fixes c3b25a8+225d09a; r3 CLEAN)
 
 - [x] P10-a recon: svg().data(bytes) render trực tiếp KHÔNG cần AssetSource
       (hash-cache nội bộ) + tint qua text_color → tái dùng style key "color"
@@ -1055,5 +1056,9 @@ status: active
 - [x] P10-b protocol lockstep (element types/mutations moi).
 - [x] P10-c helper wiring.
 - [x] P10-d renderer TS + tests + demo.
-- [~] VERIFY: gates exit-code xanh (bun 165 · cargo 34+37 / 83+21 GUI ·
-      tsc · clippy/fmt) + demo example/media chay sach; DANG review doc lap.
+- [x] VERIFY: 3 vòng review. r1: Major — renderer refusal (anti-poison)
+      không cover svg/img → misuse tự nhiên poison session; fix
+      HELPER_OWNED_TAGS chung cho MỌI guard + canvas được bù guards thiếu
+      từ P8. r2: Major — fallback Hsla::default() là ALPHA-0 (derive trên 4
+      f32) vẫn invisible; fix = One Dark text OPAQUE hsla(221,.11,.86,1)
+      khớp default hiệu lực của gpui (cite fallback_themes.rs). r3 CLEAN.
