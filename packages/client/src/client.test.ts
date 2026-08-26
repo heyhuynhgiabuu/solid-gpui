@@ -120,3 +120,51 @@ describe("duplicate seq guard", () => {
     await helper.close()
   })
 })
+
+describe("wire safety through the real helper (transport mode)", () => {
+  test("version-mismatch batch rejects with decodeFailed (seq-less routing)", async () => {
+    if (skip()) return
+    const helper = spawnHelper({ binary })
+    // Deliberate protocol violation: v=2 is not expressible in the MutationBatch
+    // type, so the cast marks the test's intent to probe the wire boundary.
+    const err = await helper
+      .sendBatch({ v: 2, seq: 3, mutations: [] } as never)
+      .then(
+        () => null,
+        (e) => e,
+      )
+    expect(err).toBeInstanceOf(ReplyError)
+    expect((err as ReplyError).code).toBe("decodeFailed")
+    expect((err as ReplyError).message).toContain("version")
+    // The helper survived the bad line and still closes cleanly.
+    await helper.close()
+    expect((await helper.exited).code).toBe(0)
+  })
+
+  test("valid batch after the mismatch is still acked (helper not poisoned)", async () => {
+    if (skip()) return
+    const helper = spawnHelper({ binary })
+    await expect(
+      helper.sendBatch({ v: 2, seq: 3, mutations: [] } as never),
+    ).rejects.toThrow(ReplyError)
+    const ack = await helper.sendBatch(await fixtureBatch())
+    expect(ack).toEqual({ seq: 42, applied: 12 })
+    await helper.close()
+  })
+
+  test("transport-mode command rejects with a seq-correlated unsupported error", async () => {
+    if (skip()) return
+    const helper = spawnHelper({ binary })
+    const err = await helper
+      .sendCommand({ type: "getStats", seq: 9 })
+      .then(
+        () => null,
+        (e) => e,
+      )
+    expect(err).toBeInstanceOf(ReplyError)
+    expect((err as ReplyError).code).toBe("unsupported")
+    expect((err as ReplyError).message).toMatch(/getStats/)
+    await helper.close()
+    expect((await helper.exited).code).toBe(0)
+  })
+})

@@ -84,3 +84,96 @@ fn stdio_round_trip_ack_and_error() {
     let status = child.wait().expect("wait for exit");
     assert_eq!(status.code(), Some(0), "EOF must exit 0");
 }
+
+/// Wire-safety probe: every malformed/unknown/version-mismatched input must
+/// produce a structured decodeFailed error reply (seq null — an untrusted
+/// line carries no usable seq) and NEVER kill the helper. Each failure phase
+/// is followed by a valid batch ack to prove the process stays alive, then
+/// EOF exits 0.
+#[test]
+fn stdio_rejects_malformed_input_but_stays_alive() {
+    if skip() {
+        return;
+    }
+    let bin = env!("CARGO_BIN_EXE_solid-gpui-helper");
+    let mut child = Command::new(bin)
+        .arg("--stdio")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .spawn()
+        .expect("helper spawns in --stdio mode");
+
+    let mut stdin = child.stdin.take().expect("stdin piped");
+    let stdout = child.stdout.take().expect("stdout piped");
+    let mut reader = BufReader::new(stdout);
+
+    let fixture_raw = std::fs::read_to_string(
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../packages/protocol/fixtures/batch-01.json"),
+    )
+    .expect("fixture readable");
+    let fixture = to_json(&from_json(&fixture_raw).expect("fixture parses"));
+
+    // Each phase: send a malformed line, expect a seq-null decodeFailed error
+    // naming the cause, then send a valid batch and expect its ack — the
+    // helper survived the garbage and processed the next line.
+    let phases: Vec<(&str, &str)> = vec![
+        // Invalid JSON: the reader itself must not crash.
+        ("{not json", "invalid JSON"),
+        // Wrong protocol version.
+        (r#"{"v":2,"seq":3,"mutations":[]}"#, "version"),
+        // Missing protocol version field.
+        (r#"{"seq":3,"mutations":[]}"#, "missing field"),
+        // Unknown mutation op.
+        (
+            r#"{"v":1,"seq":3,"mutations":[{"op":"teleport","id":1}]}"#,
+            "teleport",
+        ),
+        // Unknown element type.
+        (
+            r#"{"v":1,"seq":3,"mutations":[{"op":"createElement","id":1,"elementType":"vaporwave"}]}"#,
+            "element type",
+        ),
+        // Unknown event type.
+        (
+            r#"{"v":1,"seq":3,"mutations":[{"op":"setEventListener","id":1,"eventType":"hover","enabled":true}]}"#,
+            "event type",
+        ),
+        // Zero is never a valid element id.
+        (
+            r#"{"v":1,"seq":3,"mutations":[{"op":"createElement","id":0,"elementType":"div"}]}"#,
+            "element ids",
+        ),
+    ];
+    for (bad_line, expected) in phases {
+        writeln!(stdin, "{bad_line}").expect("write bad line");
+        stdin.flush().expect("flush");
+        let mut line = String::new();
+        reader.read_line(&mut line).expect("read error reply");
+        let trimmed = line.trim();
+        assert!(
+            trimmed.starts_with(r#"{"type":"error","seq":null,"code":"decodeFailed""#),
+            "expected seq-null decodeFailed, got {trimmed}"
+        );
+        assert!(
+            trimmed.contains(expected),
+            "error must name the cause ({expected:?}), got {trimmed}"
+        );
+
+        // Process still alive: the next valid line is acked normally.
+        writeln!(stdin, "{fixture}").expect("write valid batch");
+        stdin.flush().expect("flush");
+        let mut line = String::new();
+        reader.read_line(&mut line).expect("read ack");
+        assert_eq!(
+            line.trim(),
+            r#"{"type":"ack","seq":42,"applied":12}"#,
+            "helper must survive a malformed line"
+        );
+    }
+
+    // EOF on stdin ends the process cleanly.
+    drop(stdin);
+    let status = child.wait().expect("wait for exit");
+    assert_eq!(status.code(), Some(0), "EOF must exit 0");
+}

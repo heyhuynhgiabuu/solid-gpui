@@ -77,6 +77,23 @@ fn window_mode_applies_batches_and_correlates_errors() {
         "message should name the cause: {err}"
     );
 
+    // 2b. Honest partial-apply count: the batch applies its first mutation,
+    // then fails on the second — the error must name exactly how many
+    // mutations landed before the failure (the ack's applied count lies
+    // otherwise, AGENTS invariant 1).
+    let partial = r#"{"v":1,"seq":8,"mutations":[{"op":"createElement","id":30,"elementType":"div"},{"op":"appendChild","parentId":99,"childId":30}]}"#;
+    writeln!(stdin, "{partial}").unwrap();
+    stdin.flush().unwrap();
+    let err = lines.next().unwrap().expect("error line 2");
+    assert!(
+        err.contains(r#""seq":8"#) && err.contains("applyFailed"),
+        "correlated error expected, got {err}"
+    );
+    assert!(
+        err.contains("after 1 mutations"),
+        "partial apply must be counted honestly, got {err}"
+    );
+
     // 3. EOF quits the app cleanly.
     drop(stdin);
     let status = child.wait().expect("wait");
@@ -1462,6 +1479,120 @@ fn window_mode_native_tooltip_applies_without_a_round_trip() {
     assert_eq!(
         lines.next().unwrap().unwrap(),
         r#"{"type":"ack","seq":500,"applied":3}"#
+    );
+
+    drop(stdin);
+    let status = child.wait().expect("wait");
+    assert_eq!(status.code(), Some(0), "EOF must exit 0");
+}
+
+/// Wire-level tree-safety probe: self-ancestor, ancestor-into-descendant
+/// (cycle), and over-depth attaches must each produce a STRUCTURED
+/// seq-correlated applyFailed reply while the helper process survives and
+/// keeps processing later lines — no panic, no stack overflow, no silent
+/// ack. Phases share one window (each window test is slow and the suite
+/// lock serializes them anyway).
+#[test]
+fn window_mode_rejects_cycles_self_ancestor_and_depth() {
+    if skip() {
+        return;
+    }
+    let _lock = window_lock();
+    let bin = env!("CARGO_BIN_EXE_solid-gpui-helper");
+    let mut child = Command::new(bin)
+        .arg("--stdio-window")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .spawn()
+        .expect("helper spawns");
+
+    let mut stdin = child.stdin.take().expect("stdin piped");
+    let reader = BufReader::new(child.stdout.take().expect("stdout piped"));
+    let mut lines = reader.lines();
+
+    // Phase 1 — self-ancestor: a div appended to itself. The first two
+    // mutations apply (create + setRoot), the third fails: honest count.
+    let self_ancestor = concat!(
+        r#"{"v":1,"seq":31,"mutations":["#,
+        r#"{"op":"createElement","id":1,"elementType":"div"},"#,
+        r#"{"op":"setRoot","id":1},"#,
+        r#"{"op":"appendChild","parentId":1,"childId":1}]}"#,
+    );
+    writeln!(stdin, "{self_ancestor}").unwrap();
+    stdin.flush().unwrap();
+    let err = lines.next().unwrap().expect("self-ancestor error line");
+    assert!(
+        err.contains(r#""type":"error""#)
+            && err.contains(r#""seq":31"#)
+            && err.contains("applyFailed"),
+        "structured applyFailed expected, got {err}"
+    );
+    assert!(err.contains("itself"), "got {err}");
+    assert!(err.contains("after 2 mutations"), "honest count, got {err}");
+
+    // Phase 2 — cycle: the parentless ROOT appended into its own descendant
+    // (the Slice 4 review Major hole). Create + attach apply, the cyclic
+    // attach fails.
+    let cycle = concat!(
+        r#"{"v":1,"seq":32,"mutations":["#,
+        r#"{"op":"createElement","id":2,"elementType":"div"},"#,
+        r#"{"op":"appendChild","parentId":1,"childId":2},"#,
+        r#"{"op":"appendChild","parentId":2,"childId":1}]}"#,
+    );
+    writeln!(stdin, "{cycle}").unwrap();
+    stdin.flush().unwrap();
+    let err = lines.next().unwrap().expect("cycle error line");
+    assert!(
+        err.contains(r#""seq":32"#) && err.contains("applyFailed"),
+        "structured applyFailed expected, got {err}"
+    );
+    assert!(err.contains("ancestor"), "got {err}");
+    assert!(err.contains("after 2 mutations"), "honest count, got {err}");
+
+    // Phase 3 — depth: 258 nested divs (258 attach attempts). MAX_DEPTH =
+    // 256, so the depth attempt fails AFTER 258 creates + 255 attaches applied. The
+    // depth guard bounds the ancestor walk — no stack overflow — and the
+    // failure is a normal reply, not a crash. Ids are offset past the
+    // elements phases 1–2 left in the shared retained tree.
+    let mut depth_mutations = Vec::new();
+    for i in 1000..=1257u32 {
+        depth_mutations.push(format!(
+            r#"{{"op":"createElement","id":{i},"elementType":"div"}}"#
+        ));
+    }
+    for i in 1001..=1258u32 {
+        depth_mutations.push(format!(
+            r#"{{"op":"appendChild","parentId":{},"childId":{i}}}"#,
+            i - 1
+        ));
+    }
+    let depth_batch = format!(
+        r#"{{"v":1,"seq":33,"mutations":[{}]}}"#,
+        depth_mutations.join(",")
+    );
+    writeln!(stdin, "{depth_batch}").unwrap();
+    stdin.flush().unwrap();
+    let err = lines.next().unwrap().expect("depth error line");
+    assert!(
+        err.contains(r#""seq":33"#) && err.contains("applyFailed"),
+        "structured applyFailed expected, got {err}"
+    );
+    assert!(err.contains("depth"), "got {err}");
+    assert!(
+        err.contains("after 513 mutations"),
+        "258 creates + 255 attaches must be counted, got {err}"
+    );
+
+    // The process survived every rejection: a later valid batch (a style
+    // update on the phase-1 root — ids in the shared tree, no collisions)
+    // still applies normally and EOF still exits 0.
+    let alive = r#"{"v":1,"seq":42,"mutations":[{"op":"setStyle","id":1,"style":{"height":10}}]}"#;
+    writeln!(stdin, "{alive}").unwrap();
+    stdin.flush().unwrap();
+    assert_eq!(
+        lines.next().unwrap().unwrap(),
+        r#"{"type":"ack","seq":42,"applied":1}"#,
+        "helper must survive cycle/depth rejections"
     );
 
     drop(stdin);

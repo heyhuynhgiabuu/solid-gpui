@@ -806,13 +806,14 @@ export function createSolidRenderer(send: Send): SolidGpuiRenderer {
     for (let round = 0; round < 100; round++) {
       flushSolid()
       await Promise.resolve()
+      if (poisoned) throw new Error(`renderer poisoned by a failed batch: ${poisoned}`)
       if (queue.length === 0) {
         // One extra pump: a just-scheduled stage may only land now.
         flushSolid()
         await Promise.resolve()
+        if (poisoned) throw new Error(`renderer poisoned by a failed batch: ${poisoned}`)
         if (queue.length === 0) return
       }
-      if (poisoned) throw new Error(`renderer poisoned by a failed batch: ${poisoned}`)
       const batch: MutationBatch = { v: 1, seq: ++seq, mutations: queue.splice(0) }
       try {
         await send(batch)

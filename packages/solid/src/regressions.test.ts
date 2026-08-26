@@ -91,6 +91,31 @@ describe("send-failure policy (review major)", () => {
   })
 })
 
+describe("poisoned renderer (wire-safety slice)", () => {
+  test("rejects even an empty flush after a failed batch", async () => {
+    let fail = false
+    const rec = recording()
+    const send: Send = async (batch) => {
+      if (fail) throw new Error("helper exploded")
+      return rec.send(batch)
+    }
+    const { renderer: R, render, flush } = createSolidRenderer(send)
+    const container = R.createElement("#root")
+    const dispose = render(() => R.createElement("div"), container)
+    await flush()
+
+    fail = true
+    R.createElement("div")
+    await expect(flush()).rejects.toThrow(/helper exploded|poisoned/i)
+
+    // The failed batch was spliced before send, so this flush has no queued
+    // mutations. The poison contract still rejects it instead of silently
+    // making a poisoned renderer look usable.
+    await expect(flush()).rejects.toThrow(/poisoned/i)
+    dispose()
+  })
+})
+
 describe("remount without dispose (review minor)", () => {
   test("second mount destroys the previous root before setRoot", async () => {
     const rec = recording()
@@ -255,6 +280,172 @@ describe("markdown refusal bookkeeping (review Major 2)", () => {
       .flatMap((b) => b.mutations)
       .filter((m) => m.op === "appendChild" && "childId" in m && m.childId === stray!.id)
     expect(attaches.length).toBe(1)
+    dispose()
+  })
+})
+
+describe("cross-flush detach/reattach (wire-safety slice)", () => {
+  const opsOf = (b: MutationBatch | undefined) => (b ? b.mutations.map((m) => m.op) : [])
+
+  test("detach in one flush, reattach in a LATER flush reuses the same node", async () => {
+    const rec = recording()
+    const { renderer: R, render, flush, removeNode, firstChild } =
+      createSolidRenderer(rec.send)
+    const container = R.createElement("#root")
+    let parent: HostNode | undefined, child: HostNode | undefined
+    const dispose = render(() => {
+      parent = R.createElement("div")
+      child = R.createElement("div")
+      R.insertNode(parent, child)
+      return parent
+    }, container)
+    await flush()
+    const childId = child!.id
+    const createCount = rec.batches
+      .flatMap((b) => b.mutations)
+      .filter((m) => m.op === "createElement").length
+
+    // Detach in flush N.
+    removeNode(parent!, child!)
+    await flush()
+    expect(opsOf(rec.batches.at(-1))).toEqual(["removeChild"])
+
+    // A later microtask passes before the reattach (the upstream hazard was
+    // drop-in-one-flush, re-create-in-another).
+    await Promise.resolve()
+
+    // Reattach in flush N+1: the SAME node object with the SAME id must come
+    // back — no createElement, no destroyElement (an upstream-style
+    // drop-on-detach renderer would destroy here and re-create on reattach).
+    R.insertNode(parent!, child!)
+    await flush()
+    expect(opsOf(rec.batches.at(-1))).toEqual(["appendChild"])
+    expect(child!.id).toBe(childId)
+    const laterCreates = rec.batches
+      .flatMap((b) => b.mutations)
+      .filter((m) => m.op === "createElement" || m.op === "destroyElement")
+    expect(laterCreates.length).toBe(createCount) // only the original creates
+    expect(firstChild(parent!)).toBe(child!)
+    dispose()
+  })
+
+  test("detach from one parent, attach to another in a later flush (cross-parent move)", async () => {
+    const rec = recording()
+    const { renderer: R, render, flush, removeNode } = createSolidRenderer(rec.send)
+    const container = R.createElement("#root")
+    let root: HostNode | undefined, p: HostNode | undefined, q: HostNode | undefined, c: HostNode | undefined
+    const dispose = render(() => {
+      root = R.createElement("div")
+      p = R.createElement("div")
+      q = R.createElement("div")
+      R.insertNode(root, p)
+      R.insertNode(root, q)
+      c = R.createElement("div")
+      R.insertNode(p, c)
+      return root
+    }, container)
+    await flush()
+    const cid = c!.id
+
+    removeNode(p!, c!)
+    await flush()
+    expect(opsOf(rec.batches.at(-1))).toEqual(["removeChild"])
+
+    await Promise.resolve()
+
+    R.insertNode(q!, c!)
+    await flush()
+    const last = rec.batches.at(-1)!
+    expect(opsOf(last)).toEqual(["appendChild"])
+    const op = last.mutations[0] as Extract<Mutation, { op: "appendChild" }>
+    // Wire ids are branded ElementId; compare numerically like the existing
+    // parentId/childId casts in this file.
+    expect(op.parentId as unknown as number).toBe(q!.id)
+    expect(op.childId as unknown as number).toBe(c!.id)
+    expect(c!.id).toBe(cid) // identity survives the cross-parent move
+    const destroys = rec.batches
+      .flatMap((b) => b.mutations)
+      .filter((m) => m.op === "destroyElement")
+    expect(destroys).toEqual([])
+    dispose()
+  })
+
+  test("keyed reorder across separate flushes emits only insertBefore, identity preserved", async () => {
+    const rec = recording()
+    const { renderer: R, render, flush, firstChild, nextSibling } =
+      createSolidRenderer(rec.send)
+    const container = R.createElement("#root")
+    let parent: HostNode | undefined, a: HostNode | undefined, b: HostNode | undefined, c: HostNode | undefined
+    const dispose = render(() => {
+      parent = R.createElement("div")
+      a = R.createElement("div")
+      b = R.createElement("div")
+      c = R.createElement("div")
+      R.insertNode(parent, a)
+      R.insertNode(parent, b)
+      R.insertNode(parent, c)
+      return parent
+    }, container)
+    await flush()
+    const ids = [a!.id, b!.id, c!.id]
+
+    // universal's reconcileArrays keyed-move branch, spread across separate
+    // flushes: insertNode(parent, existingNode, anchor) per move.
+    R.insertNode(parent!, c!, a!)
+    await flush()
+    expect(opsOf(rec.batches.at(-1))).toEqual(["insertBefore"])
+
+    await Promise.resolve()
+
+    R.insertNode(parent!, b!, a!)
+    await flush()
+    expect(opsOf(rec.batches.at(-1))).toEqual(["insertBefore"])
+
+    // Shadow order after [A,B,C] → C before A → B before A: [C,B,A].
+    const order = [
+      firstChild(parent!)!.id,
+      nextSibling(firstChild(parent!)!)!.id,
+      nextSibling(nextSibling(firstChild(parent!)!)!)!.id,
+    ]
+    expect(order).toEqual([c!.id, b!.id, a!.id])
+    expect([a!.id, b!.id, c!.id]).toEqual(ids) // no re-created nodes
+    const postMountCreates = rec.batches
+      .slice(1)
+      .flatMap((b) => b.mutations)
+      .filter((m) => m.op === "createElement" || m.op === "destroyElement")
+    expect(postMountCreates).toEqual([])
+    dispose()
+  })
+
+  test("detach does NOT drop the element: listener wiring survives reattach", async () => {
+    const rec = recording()
+    const { renderer: R, render, flush, removeNode, handler } =
+      createSolidRenderer(rec.send)
+    const container = R.createElement("#root")
+    const fn = () => {}
+    let parent: HostNode | undefined, child: HostNode | undefined
+    const dispose = render(() => {
+      parent = R.createElement("div")
+      child = R.createElement("div")
+      R.setProp(child, "onClick", fn)
+      R.insertNode(parent, child)
+      return parent
+    }, container)
+    await flush()
+    expect(handler(child!.id, "click")).toBe(fn)
+
+    removeNode(parent!, child!)
+    await flush()
+    // The wire said removeChild; the element must stay alive and wired
+    // (a drop-on-detach renderer would have cleared the registry here).
+    expect(handler(child!.id, "click")).toBe(fn)
+
+    await Promise.resolve()
+
+    R.insertNode(parent!, child!)
+    await flush()
+    // Reattach needs no re-registration: the same listener answers.
+    expect(handler(child!.id, "click")).toBe(fn)
     dispose()
   })
 })
