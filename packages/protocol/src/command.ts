@@ -5,6 +5,41 @@ import type { ProtocolError, Result } from "./batch"
  * the command name; the demuxer matches it against this closed set after the
  * reply and event decoders decline.
  */
+/** Native macOS selectors a menu item can wire to (closed set). */
+export type OsActionName = "cut" | "copy" | "paste" | "selectAll" | "undo" | "redo"
+
+export const OS_ACTIONS: readonly OsActionName[] = [
+  "cut",
+  "copy",
+  "paste",
+  "selectAll",
+  "undo",
+  "redo",
+]
+
+/** One entry in an application menu (P9); tagged via `type` on the wire. */
+export type MenuItemSpec =
+  | {
+      readonly type: "item"
+      readonly label: string
+      /** Stable identifier echoed to JS in the menu event. */
+      readonly id: string
+      /** Keystroke shown next to the label and bound globally. */
+      readonly keystroke?: string
+      readonly disabled?: boolean
+      readonly checked?: boolean
+      /** Native selector: macOS performs it; no JS event fires for that pick. */
+      readonly osAction?: OsActionName
+    }
+  | { readonly type: "separator" }
+  | { readonly type: "submenu"; readonly name: string; readonly items: readonly MenuItemSpec[] }
+
+/** One application menu; every setMenus replaces the bar wholesale. */
+export type MenuSpec = {
+  readonly name: string
+  readonly items: readonly MenuItemSpec[]
+}
+
 export type SolidGpuiCommand =
   | { readonly type: "getStats"; readonly seq: number }
   | { readonly type: "captureFrame"; readonly seq: number; readonly path: string }
@@ -13,6 +48,12 @@ export type SolidGpuiCommand =
   | { readonly type: "focusElement"; readonly seq: number; readonly id: number }
   | { readonly type: "simulateInput"; readonly seq: number; readonly id: number; readonly text: string }
   | { readonly type: "listInfo"; readonly seq: number; readonly id: number }
+  | {
+      readonly type: "setMenus"
+      readonly seq: number
+      /** Replaces the whole application menu bar. */
+      readonly menus: readonly MenuSpec[]
+    }
   | { readonly type: "setTitle"; readonly seq: number; readonly title: string }
   | { readonly type: "windowAction"; readonly seq: number; readonly action: WindowActionName }
   | {
@@ -85,6 +126,7 @@ export function decodeCommand(json: string): Result<SolidGpuiCommand, ProtocolEr
     "focusElement",
     "simulateInput",
     "listInfo",
+    "setMenus",
     "setTitle",
     "windowAction",
     "dialogMessage",
@@ -152,6 +194,16 @@ export function decodeCommand(json: string): Result<SolidGpuiCommand, ProtocolEr
       return { ok: false, error: shape("id", "listInfo needs an integer id") }
     }
     return { ok: true, value: { type: "listInfo", seq: parsed.seq, id } }
+  }
+  if (type === "setMenus") {
+    if (!Array.isArray(parsed.menus)) {
+      return { ok: false, error: shape("menus", "expected an array") }
+    }
+    for (const item of parsed.menus) {
+      const r = decodeMenuSpec(item)
+      if (!r.ok) return r
+    }
+    return { ok: true, value: { type: "setMenus", seq: parsed.seq, menus: parsed.menus as never } }
   }
   if (type === "setTitle") {
     if (typeof parsed.title !== "string" || parsed.title.length === 0) {
@@ -351,5 +403,85 @@ export function encodeCommand(command: SolidGpuiCommand): string {
       index: command.index,
     })
   }
+  if (command.type === "setMenus") {
+    // Field-order-exact: optionals only when present (mirrors Rust
+    // skip_serializing_if), so byte-comparison fixtures stay possible.
+    return JSON.stringify({
+      type: "setMenus",
+      seq: command.seq,
+      menus: command.menus.map((menu) => ({
+        name: menu.name,
+        items: menu.items.map(wireMenuItem),
+      })),
+    })
+  }
   return JSON.stringify({ type: "getStats", seq: command.seq })
+}
+
+function wireMenuItem(item: MenuItemSpec): unknown {
+  if (item.type === "separator") return { type: "separator" }
+  if (item.type === "submenu") {
+    return { type: "submenu", name: item.name, items: item.items.map(wireMenuItem) }
+  }
+  return {
+    type: "item",
+    label: item.label,
+    id: item.id,
+    ...(item.keystroke !== undefined ? { keystroke: item.keystroke } : {}),
+    ...(item.disabled !== undefined ? { disabled: item.disabled } : {}),
+    ...(item.checked !== undefined ? { checked: item.checked } : {}),
+    ...(item.osAction !== undefined ? { osAction: item.osAction } : {}),
+  }
+}
+
+function decodeMenuItemSpec(item: unknown): Result<unknown, ProtocolError> {
+  if (!isDict(item)) return { ok: false, error: shape("menus.items", "expected an object") }
+  switch (item.type) {
+    case "separator":
+      return { ok: true, value: undefined }
+    case "submenu": {
+      if (typeof item.name !== "string" || !Array.isArray(item.items)) {
+        return { ok: false, error: shape("menus.submenu", "needs string name and items array") }
+      }
+      for (const child of item.items) {
+        const r = decodeMenuItemSpec(child)
+        if (!r.ok) return r
+      }
+      return { ok: true, value: undefined }
+    }
+    case "item": {
+      if (typeof item.label !== "string" || typeof item.id !== "string" || item.id.length === 0) {
+        return { ok: false, error: shape("menus.item", "needs string label and non-empty id") }
+      }
+      if (item.keystroke !== undefined && typeof item.keystroke !== "string") {
+        return { ok: false, error: shape("menus.item.keystroke", "expected a string") }
+      }
+      for (const flag of ["disabled", "checked"] as const) {
+        if (item[flag] !== undefined && typeof item[flag] !== "boolean") {
+          return { ok: false, error: shape(`menus.item.${flag}`, "expected a boolean") }
+        }
+      }
+      if (item.osAction !== undefined && !OS_ACTIONS.includes(item.osAction as OsActionName)) {
+        return { ok: false, error: shape("menus.item.osAction", `expected one of ${OS_ACTIONS.join("|")}`) }
+      }
+      return { ok: true, value: undefined }
+    }
+    default:
+      return { ok: false, error: shape("menus.items.type", 'expected "item", "separator", or "submenu"') }
+  }
+}
+
+function decodeMenuSpec(spec: unknown): Result<unknown, ProtocolError> {
+  if (!isDict(spec)) return { ok: false, error: shape("menus", "expected an object") }
+  if (typeof spec.name !== "string" || spec.name.length === 0) {
+    return { ok: false, error: shape("menus.name", "expected a non-empty string") }
+  }
+  if (!Array.isArray(spec.items)) {
+    return { ok: false, error: shape("menus.items", "expected an array") }
+  }
+  for (const item of spec.items) {
+    const r = decodeMenuItemSpec(item)
+    if (!r.ok) return r
+  }
+  return { ok: true, value: undefined }
 }

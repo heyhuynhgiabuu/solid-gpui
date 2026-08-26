@@ -1,5 +1,6 @@
 import { spawnHelper, type HelperConnection } from "@solid-gpui/client"
 import { appWindow, dialog as dialogApi, shell as shellApi, type CommandChannel } from "./desktop"
+import { createMenus, type MenuSpecInput } from "./menus"
 
 const bindWindow = (c: CommandChannel) => ({
   setTitle: (title: string) => appWindow.setTitle(c, title),
@@ -35,6 +36,8 @@ export interface RenderHandle {
   dialog: ReturnType<typeof bindDialogs>
   /** OS integrations bound to this connection. */
   shell: ReturnType<typeof bindShell>
+  /** Application menu bar (P9). */
+  menus: { set: (specs: readonly MenuSpecInput[]) => Promise<void> }
   renderer: SolidGpuiRenderer
   container: HostNode
   /** Remount a new tree in the same window/connection (bun --hot pattern).
@@ -95,6 +98,7 @@ export async function mount(
   }
   options.onSuite?.(suite)
   const h = makeH(renderer)
+  const menus = createMenus(connection)
   const container = renderer.createElement("#root")
   let activeDispose = render(() => code(h), container)
   await flush()
@@ -102,6 +106,11 @@ export async function mount(
   // flush. flush() pumps Solid's scheduler until the queue settles, so it is
   // safe to call immediately after the synchronous handler returns.
   connection.onEvent((event) => {
+    // Menu events are app-level (P9): the menu registry owns them.
+    if (event.type === "menu") {
+      menus.handleEvent(event)
+      return
+    }
     const fn = handler(event.id, event.eventType)
     if (fn === undefined) {
       console.warn(
@@ -152,5 +161,9 @@ export async function mount(
     window: bindWindow(connection),
     dialog: bindDialogs(connection),
     shell: bindShell(connection),
+    /** Application menu bar (P9): set replaces the whole bar. */
+    menus: {
+      set: (specs: readonly MenuSpecInput[]) => menus.set(specs),
+    },
   }
 }

@@ -170,6 +170,7 @@ fn key_down_event_fixture_parses_and_emits_exactly() {
         .to_string();
     let event = event_from_json(&raw).expect("event parses");
     match &event {
+        Event::Menu { .. } => panic!("expected an input event"),
         Event::Input {
             id,
             event_type,
@@ -662,4 +663,94 @@ fn canvas_batch_fixture_parses_both_ways() {
         other => panic!("expected setDrawList, got {other:?}"),
     }
     assert_eq!(to_json(&batch), raw);
+}
+
+#[test]
+fn set_menus_command_and_menu_event_round_trip() {
+    // Command: full spec surface — item w/ all optionals, separator,
+    // submenu, os_action.
+    let command = Command::SetMenus {
+        seq: 77,
+        menus: vec![solid_gpui_protocol::MenuSpec {
+            name: "File".into(),
+            items: vec![
+                solid_gpui_protocol::MenuItemSpec::Item {
+                    label: "Open…".into(),
+                    id: "file.open".into(),
+                    keystroke: Some("cmd-o".into()),
+                    disabled: None,
+                    checked: None,
+                    os_action: None,
+                },
+                solid_gpui_protocol::MenuItemSpec::Separator,
+                solid_gpui_protocol::MenuItemSpec::Item {
+                    label: "Copy".into(),
+                    id: "edit.copy".into(),
+                    keystroke: None,
+                    disabled: Some(false),
+                    checked: Some(true),
+                    os_action: Some(solid_gpui_protocol::OsActionKind::Copy),
+                },
+                solid_gpui_protocol::MenuItemSpec::Submenu {
+                    name: "Export".into(),
+                    items: vec![solid_gpui_protocol::MenuItemSpec::Item {
+                        label: "PDF".into(),
+                        id: "export.pdf".into(),
+                        keystroke: None,
+                        disabled: Some(true),
+                        checked: None,
+                        os_action: None,
+                    }],
+                },
+            ],
+        }],
+    };
+    let json = command_to_json(&command);
+    assert!(json.contains("\"type\":\"setMenus\""), "{json}");
+    assert!(json.contains("\"keystroke\":\"cmd-o\""), "{json}");
+    let parsed = command_from_json(&json).expect("re-parses");
+    assert_eq!(parsed, command);
+
+    // Optionals stay off the wire when absent.
+    let minimal = Command::SetMenus {
+        seq: 1,
+        menus: vec![solid_gpui_protocol::MenuSpec {
+            name: "m".into(),
+            items: vec![solid_gpui_protocol::MenuItemSpec::Item {
+                label: "L".into(),
+                id: "x".into(),
+                keystroke: None,
+                disabled: None,
+                checked: None,
+                os_action: None,
+            }],
+        }],
+    };
+    let mj = command_to_json(&minimal);
+    assert!(
+        !mj.contains("keystroke") && !mj.contains("disabled"),
+        "{mj}"
+    );
+
+    // Menu event wire shape + accessors.
+    let event = Event::Menu {
+        item_id: "file.open".into(),
+    };
+    let ej = event_to_json(&event);
+    assert_eq!(ej, r#"{"type":"menu","itemId":"file.open"}"#);
+    assert_eq!(event_from_json(&ej).unwrap(), event);
+    assert_eq!(event.element_id(), None);
+    assert_eq!(event.event_type(), None);
+
+    // Input events still report their element.
+    let input = Event::Input {
+        id: ElementId(9),
+        event_type: EventType::Click,
+        x: None,
+        y: None,
+        key: None,
+        modifiers: None,
+        value: None,
+    };
+    assert_eq!(input.element_id(), Some(ElementId(9)));
 }

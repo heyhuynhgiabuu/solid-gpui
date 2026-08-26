@@ -168,9 +168,149 @@ fn utf16_substring(s: &str, range: Range<usize>) -> String {
     String::from_utf16(&units).unwrap_or_default()
 }
 
+/// Dynamic menu action (P9): one wrapper type carries the item's stable id;
+/// the global on_action handler forwards picks to JS as `menu` events.
+#[derive(Clone, PartialEq, Debug, Default, gpui::Action)]
+#[action(no_json)]
+struct MenuAction {
+    item_id: String,
+}
+
+/// Global state for menu registration: whether the on_action handler is
+/// installed and which keystroke→item bindings were already bound (bind_keys
+/// has no removal API — rebinding every setMenus would accumulate).
+#[derive(Default)]
+struct MenuState {
+    handler_installed: bool,
+    bound: HashSet<String>,
+}
+
+impl gpui::Global for MenuState {}
+
+fn menu_binding_key(keystroke: &str, item_id: &str) -> String {
+    format!("{keystroke}\u{1f}{item_id}")
+}
+
+/// Replace the application menu bar wholesale (P9). Registers the shared
+/// action handler once; binds new keystrokes only.
+pub fn apply_menus(cx: &mut App, specs: &[solid_gpui_protocol::MenuSpec]) {
+    let state = cx.default_global::<MenuState>();
+    if !state.handler_installed {
+        state.handler_installed = true;
+        cx.on_action::<MenuAction>(|action, _cx| {
+            crate::host::write_event_line(&Event::Menu {
+                item_id: action.item_id.clone(),
+            });
+        });
+    }
+
+    let mut key_bindings = Vec::new();
+    let state = cx.global_mut::<MenuState>();
+    for spec in specs {
+        collect_key_bindings(&spec.items, &mut key_bindings, &mut state.bound);
+    }
+    if !key_bindings.is_empty() {
+        cx.bind_keys(key_bindings);
+    }
+    cx.set_menus(specs.iter().map(build_menu));
+}
+
+fn collect_key_bindings(
+    items: &[solid_gpui_protocol::MenuItemSpec],
+    out: &mut Vec<gpui::KeyBinding>,
+    bound: &mut HashSet<String>,
+) {
+    for item in items {
+        match item {
+            solid_gpui_protocol::MenuItemSpec::Item {
+                keystroke: Some(k),
+                id,
+                ..
+            } => {
+                let key = menu_binding_key(k, id);
+                if bound.insert(key) {
+                    out.push(gpui::KeyBinding::new(
+                        k.as_str(),
+                        MenuAction {
+                            item_id: id.clone(),
+                        },
+                        None,
+                    ));
+                }
+            }
+            solid_gpui_protocol::MenuItemSpec::Item { .. }
+            | solid_gpui_protocol::MenuItemSpec::Separator => {}
+            solid_gpui_protocol::MenuItemSpec::Submenu { items, .. } => {
+                collect_key_bindings(items, out, bound);
+            }
+        }
+    }
+}
+
+fn build_menu(spec: &solid_gpui_protocol::MenuSpec) -> gpui::Menu {
+    gpui::Menu {
+        name: SharedString::from(spec.name.as_str()),
+        items: spec.items.iter().map(build_menu_item).collect(),
+        disabled: false,
+    }
+}
+
+fn build_menu_item(item: &solid_gpui_protocol::MenuItemSpec) -> gpui::MenuItem {
+    match item {
+        solid_gpui_protocol::MenuItemSpec::Separator => gpui::MenuItem::separator(),
+        solid_gpui_protocol::MenuItemSpec::Submenu { name, items } => {
+            gpui::MenuItem::submenu(gpui::Menu {
+                name: SharedString::from(name.as_str()),
+                items: items.iter().map(build_menu_item).collect(),
+                disabled: false,
+            })
+        }
+        solid_gpui_protocol::MenuItemSpec::Item {
+            label,
+            id,
+            keystroke: _,
+            disabled,
+            checked,
+            os_action,
+        } => {
+            let mut menu_item = gpui::MenuItem::action(
+                SharedString::from(label.as_str()),
+                MenuAction {
+                    item_id: id.clone(),
+                },
+            );
+            if checked.unwrap_or(false) {
+                menu_item = menu_item.checked(true);
+            }
+            if disabled.unwrap_or(false) {
+                menu_item = menu_item.disabled(true);
+            }
+            if let Some(os_action) = os_action {
+                use solid_gpui_protocol::OsActionKind;
+                let native = match os_action {
+                    OsActionKind::Cut => gpui::OsAction::Cut,
+                    OsActionKind::Copy => gpui::OsAction::Copy,
+                    OsActionKind::Paste => gpui::OsAction::Paste,
+                    OsActionKind::SelectAll => gpui::OsAction::SelectAll,
+                    OsActionKind::Undo => gpui::OsAction::Undo,
+                    OsActionKind::Redo => gpui::OsAction::Redo,
+                };
+                return gpui::MenuItem::os_action(
+                    SharedString::from(label.as_str()),
+                    MenuAction {
+                        item_id: id.clone(),
+                    },
+                    native,
+                );
+            }
+            menu_item
+        }
+    }
+}
+
 /// Write one event line to stdout under the process-global lock (the stdin
 /// thread uses the same lock, scoped per write — deadlock invariant).
-fn write_event_line(event: &Event) {
+pub fn write_event_line(event: &Event) {
     let line = solid_gpui_protocol::event_to_json(event);
     let mut out = std::io::stdout().lock();
     let _ = writeln!(out, "{line}");
@@ -3059,6 +3199,7 @@ mod tests {
         };
         let event = key_event(ElementId(9), EventType::KeyDown, &ks);
         match &event {
+            Event::Menu { .. } => panic!("expected an input event"),
             Event::Input {
                 id,
                 event_type,
@@ -3163,6 +3304,7 @@ mod tests {
         let ev = events.borrow();
         assert_eq!(ev.len(), 1);
         match &ev[0] {
+            Event::Menu { .. } => panic!("expected an input event"),
             Event::Input {
                 event_type, value, ..
             } => {
@@ -3426,9 +3568,14 @@ mod input_commit_tests {
         let sink_events = events.clone();
         let mut view = HostView::new();
         view.sink = Rc::new(move |e: &Event| {
+            // Menu events carry no element payload; the input-commit tests
+            // only observe Input events.
             let Event::Input {
                 event_type, value, ..
-            } = e;
+            } = e
+            else {
+                return;
+            };
             sink_events.borrow_mut().push((*event_type, value.clone()));
         });
         let id = ElementId(1);

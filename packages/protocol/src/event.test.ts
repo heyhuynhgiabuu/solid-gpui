@@ -85,6 +85,23 @@ describe("input event type (P2 split)", () => {
       JSON.stringify({ type: "event", id: 3, eventType: "input", value: "ab" }),
     )
     expect(r.ok).toBe(true)
-    if (r.ok) expect(r.value.eventType).toBe("input")
+    if (r.ok && r.value.type === "event") expect(r.value.eventType).toBe("input")
+    else if (r.ok) throw new Error("expected an input event")
+  })
+})
+
+describe("menu events (P9)", () => {
+  test("menu event decodes with itemId", () => {
+    const r = decodeEvent(JSON.stringify({ type: "menu", itemId: "file.open" }))
+    expect(r.ok).toBe(true)
+    if (r.ok) {
+      expect(r.value.type).toBe("menu")
+      if (r.value.type === "menu") expect(r.value.itemId).toBe("file.open")
+    }
+  })
+  test("menu event rejects empty/missing itemId", () => {
+    for (const bad of [{ type: "menu" }, { type: "menu", itemId: "" }]) {
+      expect(decodeEvent(JSON.stringify(bad)).ok).toBe(false)
+    }
   })
 })

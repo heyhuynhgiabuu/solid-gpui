@@ -166,3 +166,70 @@ describe("scrollToItem (P5)", () => {
     expect(badIx.ok).toBe(false)
   })
 })
+
+describe("setMenus (P9)", () => {
+  test("decode accepts the full spec surface and rejects malformed specs", () => {
+    const ok = decodeCommand(
+      JSON.stringify({
+        type: "setMenus",
+        seq: 5,
+        menus: [
+          {
+            name: "File",
+            items: [
+              { type: "item", label: "Open…", id: "file.open", keystroke: "cmd-o" },
+              { type: "separator" },
+              { type: "item", label: "Copy", id: "edit.copy", osAction: "copy", checked: true },
+              { type: "submenu", name: "Export", items: [{ type: "item", label: "PDF", id: "export.pdf" }] },
+            ],
+          },
+        ],
+      }),
+    )
+    expect(ok.ok).toBe(true)
+
+    const bad = [
+      { type: "setMenus", seq: 1, menus: "nope" },
+      { type: "setMenus", seq: 1, menus: [{ name: "", items: [] }] },
+      { type: "setMenus", seq: 1, menus: [{ name: "m", items: [{ type: "blob" }] }] },
+      { type: "setMenus", seq: 1, menus: [{ name: "m", items: [{ type: "item", label: "L", id: "" }] }] },
+      { type: "setMenus", seq: 1, menus: [{ name: "m", items: [{ type: "item", label: "L", id: "x", osAction: "quit" }] }] },
+    ]
+    for (const b of bad) expect(decodeCommand(JSON.stringify(b)).ok).toBe(false)
+  })
+
+  test("encode round-trips through decode with optionals exact (real encoder)", () => {
+    // The P4 lesson: exercise encodeCommand itself, not JSON.stringify of
+    // the caller's object.
+    const encoded = encodeCommand({
+      type: "setMenus",
+      seq: 9,
+      menus: [
+        {
+          name: "Edit",
+          items: [
+            { type: "item", label: "Copy", id: "edit.copy", keystroke: "cmd-c", osAction: "copy" },
+            { type: "separator" },
+            { type: "submenu", name: "More", items: [{ type: "separator" }] },
+          ],
+        },
+      ],
+    })
+    const r = decodeCommand(encoded)
+    expect(r.ok).toBe(true)
+    if (r.ok) {
+      expect(r.value.type).toBe("setMenus")
+      if (r.value.type === "setMenus") {
+        expect(r.value.menus[0]?.items[0]).toMatchObject({
+          type: "item",
+          label: "Copy",
+          id: "edit.copy",
+          keystroke: "cmd-c",
+          osAction: "copy",
+        })
+        expect(r.value.menus[0]?.items[0]).not.toHaveProperty("disabled")
+        expect(r.value.menus[0]?.items[2]?.type).toBe("submenu")
+      }
+    }
+  })
+})

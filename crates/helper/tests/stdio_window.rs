@@ -1231,3 +1231,51 @@ fn window_mode_canvas_draw_list_applies_and_replaces() {
     let status = child.wait().expect("wait");
     assert_eq!(status.code(), Some(0), "EOF must exit 0");
 }
+
+#[test]
+fn window_mode_set_menus_applies_and_replaces() {
+    if skip() {
+        return;
+    }
+    let _lock = window_lock();
+    let bin = env!("CARGO_BIN_EXE_solid-gpui-helper");
+    let mut child = Command::new(bin)
+        .arg("--stdio-window")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .spawn()
+        .expect("helper spawns");
+
+    let mut stdin = child.stdin.take().expect("stdin piped");
+    let reader = BufReader::new(child.stdout.take().expect("stdout piped"));
+    let mut lines = reader.lines();
+
+    // Full menu spec through the command channel: item with keystroke,
+    // separator, os_action item, nested submenu. The result reply proves
+    // Menu/MenuAction/KeyBinding/os_action construction survives a real app.
+    let set_menus = concat!(
+        r#"{"type":"setMenus","seq":300,"menus":[{"name":"File","items":["#,
+        r#"{"type":"item","label":"Open…","id":"file.open","keystroke":"cmd-o"},"#,
+        r#"{"type":"separator"},"#,
+        r#"{"type":"item","label":"Copy","id":"edit.copy","osAction":"copy","checked":true},"#,
+        r#"{"type":"submenu","name":"Export","items":[{"type":"item","label":"PDF","id":"export.pdf","disabled":true}]}]}]}"#
+    );
+    writeln!(stdin, "{set_menus}").unwrap();
+    stdin.flush().unwrap();
+    assert_eq!(
+        lines.next().unwrap().unwrap(),
+        r#"{"type":"result","seq":300,"value":{"applied":true}}"#
+    );
+
+    // Replace wholesale (empty bar) also applies.
+    writeln!(stdin, r#"{{"type":"setMenus","seq":301,"menus":[]}}"#).unwrap();
+    stdin.flush().unwrap();
+    assert_eq!(
+        lines.next().unwrap().unwrap(),
+        r#"{"type":"result","seq":301,"value":{"applied":true}}"#
+    );
+
+    drop(stdin);
+    let status = child.wait().expect("wait");
+    assert_eq!(status.code(), Some(0), "EOF must exit 0");
+}

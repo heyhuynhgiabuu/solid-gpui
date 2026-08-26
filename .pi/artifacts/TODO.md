@@ -1020,3 +1020,15 @@ status: CLOSED 2026-08-26 (r1 NOT MERGEABLE: helper không biên dịch do
       destructuring đúng + TS round-trip/reject tests; gates verify lại bằng
       EXIT CODE tường minh (cargo/bun/tsc/fmt/clippy đều exit=0). r2
       (mt9rmigb) CLEAN. Bài học exit-code-gates vào MEMORY.
+
+### 2026-08-26 - P9: menu bar (macOS)
+status: active
+
+- [ ] P9-a recon: gpui Menu/MenuItem/set_menus (app vs window level), action
+      dispatch model (typed actions vs runtime names), keystroke wiring,
+      separator/role support; quyết định đường event-back-to-JS.
+- [ ] P9-b protocol: surface chốt sau recon (nghi hướng command-channel cho
+      set + event mới cho click) + lockstep + fixture.
+- [ ] P9-c helper: dựng menu thật + forward click về JS.
+- [ ] P9-d renderer TS + tests + demo.
+- [ ] VERIFY: gates (exit codes!) + independent review (retry contract).

@@ -23,6 +23,10 @@ export type SolidGpuiEvent = {
   readonly modifiers?: KeyModifiers
   /** New document value for change events (input/textarea edits). */
   readonly value?: string
+} | {
+  /** App-level menu pick (P9): targets no element; carries the item id. */
+  readonly type: "menu"
+  readonly itemId: string
 }
 
 const isInt = (v: unknown): v is number => typeof v === "number" && Number.isInteger(v)
@@ -51,7 +55,13 @@ export function decodeEvent(json: string): Result<SolidGpuiEvent, ProtocolError>
     }
   }
   if (!isDict(parsed)) return { ok: false, error: shape("$", "expected an object") }
-  if (parsed.type !== "event") return { ok: false, error: shape("type", 'expected "event"') }
+  if (parsed.type === "menu") {
+    if (typeof parsed.itemId !== "string" || parsed.itemId.length === 0) {
+      return { ok: false, error: shape("itemId", "expected a non-empty string") }
+    }
+    return { ok: true, value: { type: "menu", itemId: parsed.itemId } }
+  }
+  if (parsed.type !== "event") return { ok: false, error: shape("type", 'expected "event" or "menu"') }
 
   if (!isInt(parsed.id) || parsed.id < 1 || parsed.id > 0xffff_ffff) {
     return { ok: false, error: shape("id", "expected an integer in 1..=4294967295") }

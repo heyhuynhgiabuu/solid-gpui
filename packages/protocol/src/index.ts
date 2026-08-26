@@ -19,7 +19,12 @@ export type {
 export { decodeBatch, encodeBatch } from "./batch"
 export type { MutationBatch, ProtocolError, Result } from "./batch"
 export { decodeCommand, encodeCommand } from "./command"
-export type { SolidGpuiCommand } from "./command"
+export type {
+  SolidGpuiCommand,
+  MenuSpec,
+  MenuItemSpec,
+  OsActionName,
+} from "./command"
 export { decodeEvent } from "./event"
 export type { SolidGpuiEvent } from "./event"
 export type { JsonValue } from "./reply"

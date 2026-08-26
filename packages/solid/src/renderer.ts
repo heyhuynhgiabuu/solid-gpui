@@ -384,6 +384,7 @@ export function createSolidRenderer(send: Send): SolidGpuiRenderer {
         }
         if (bindings.length > 0) {
           handlers.set(`${nodeId}:keys`, (event) => {
+            if (event.type !== "event") return
             const fn = keyHandlers.get(`${nodeId}:${event.key ?? ""}`)
             fn?.(event)
           })

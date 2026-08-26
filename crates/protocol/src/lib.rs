@@ -393,6 +393,63 @@ pub enum ReplyCode {
 /// Commands correlate by their own `seq`, sharing no counter with batches.
 /// The `type` field carries the command name itself — the demultiplexer
 /// matches it against this closed set after reply/event decoders decline.
+/// One application menu with its items (P9). Replaced wholesale by every
+/// setMenus call.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MenuSpec {
+    pub name: String,
+    pub items: Vec<MenuItemSpec>,
+}
+
+/// One entry in a menu. Tagged on the wire via `"type"`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "camelCase")]
+pub enum MenuItemSpec {
+    /// A clickable action; fires a `menu` event with this item's `id`.
+    #[serde(rename_all = "camelCase")]
+    Item {
+        label: String,
+        /// Stable identifier echoed to JS when picked.
+        id: String,
+        /// Keystroke shown next to the label ("cmd-o"); also bound so the
+        /// shortcut works globally. Omit for no shortcut.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        keystroke: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        disabled: Option<bool>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        checked: Option<bool>,
+        /// Native macOS edit behavior (cut/copy/paste/…): macOS performs the
+        /// selector itself and NO menu event reaches JS for that pick.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        os_action: Option<OsActionKind>,
+    },
+    Separator,
+    #[serde(rename_all = "camelCase")]
+    Submenu {
+        name: String,
+        items: Vec<MenuItemSpec>,
+    },
+}
+
+/// Native selectors macOS can wire a menu item to (closed set).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum OsActionKind {
+    #[serde(rename = "cut")]
+    Cut,
+    #[serde(rename = "copy")]
+    Copy,
+    #[serde(rename = "paste")]
+    Paste,
+    #[serde(rename = "selectAll")]
+    SelectAll,
+    #[serde(rename = "undo")]
+    Undo,
+    #[serde(rename = "redo")]
+    Redo,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "camelCase")]
 pub enum Command {
@@ -441,6 +498,14 @@ pub enum Command {
     ListInfo {
         seq: u32,
         id: ElementId,
+    },
+
+    /// Replace the application menu bar wholesale (P9, macOS). Menu item
+    /// clicks come back as `menu` events carrying the item's stable `id`.
+    #[serde(rename_all = "camelCase")]
+    SetMenus {
+        seq: u32,
+        menus: Vec<MenuSpec>,
     },
 
     /// Set the window's title bar text.
@@ -530,6 +595,7 @@ pub fn command_from_json(s: &str) -> Result<Command, ProtocolError> {
         type_str,
         Some("getStats")
             | Some("captureFrame")
+            | Some("setMenus")
             | Some("setTitle")
             | Some("windowAction")
             | Some("dialogMessage")
@@ -633,20 +699,30 @@ pub enum Event {
         #[serde(skip_serializing_if = "Option::is_none")]
         value: Option<String>,
     },
+    /// A menu item was picked (P9; app-level menus have no element).
+    #[serde(rename = "menu", rename_all = "camelCase")]
+    Menu {
+        /// The picked item's stable identifier from the setMenus spec.
+        item_id: String,
+    },
 }
 
 impl Event {
-    /// The element the event targets.
-    pub fn element_id(&self) -> ElementId {
+    /// The element the event targets, if it is an element-scoped event
+    /// (menu events are app-level and target nothing).
+    pub fn element_id(&self) -> Option<ElementId> {
         match self {
-            Event::Input { id, .. } => *id,
+            Event::Input { id, .. } => Some(*id),
+            Event::Menu { .. } => None,
         }
     }
 
-    /// The event type discriminator (mirrors the wire's `eventType`).
-    pub fn event_type(&self) -> EventType {
+    /// The event type discriminator (mirrors the wire's `eventType`);
+    /// None for non-Input events.
+    pub fn event_type(&self) -> Option<EventType> {
         match self {
-            Event::Input { event_type, .. } => *event_type,
+            Event::Input { event_type, .. } => Some(*event_type),
+            Event::Menu { .. } => None,
         }
     }
 }

@@ -98,6 +98,7 @@ fn command_ident(command: &solid_gpui_protocol::Command) -> (u32, &'static str) 
         solid_gpui_protocol::Command::FocusElement { seq, .. } => (*seq, "focusElement"),
         solid_gpui_protocol::Command::SimulateInput { seq, .. } => (*seq, "simulateInput"),
         solid_gpui_protocol::Command::ListInfo { seq, .. } => (*seq, "listInfo"),
+        solid_gpui_protocol::Command::SetMenus { seq, .. } => (*seq, "setMenus"),
         solid_gpui_protocol::Command::SetTitle { seq, .. } => (*seq, "setTitle"),
         solid_gpui_protocol::Command::WindowAction { seq, .. } => (*seq, "windowAction"),
         solid_gpui_protocol::Command::DialogMessage { seq, .. } => (*seq, "dialogMessage"),
@@ -414,6 +415,18 @@ fn run_stdio_window() {
                                 code: ReplyCode::Unsupported,
                                 message: format!("window closed: {e}"),
                             }),
+
+                        solid_gpui_protocol::Command::SetMenus { seq, menus } => {
+                            // AsyncApp::update is infallible in this gpui
+                            // (panics on a gone app instead of erroring).
+                            cx.update(|cx| {
+                                crate::host::apply_menus(cx, &menus);
+                                Reply::Result {
+                                    seq,
+                                    value: serde_json::json!({ "applied": true }),
+                                }
+                            })
+                        }
 
                         solid_gpui_protocol::Command::SetTitle { seq, title } => window
                             .update(cx, |_view, window, _cx| {

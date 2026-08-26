@@ -1202,5 +1202,30 @@
     "rawStatus": "blocked",
     "resultValid": true,
     "completedAt": 1787728351792
+  },
+  {
+    "id": "mt9rmigb-faf7",
+    "agentType": "reviewer",
+    "description": "P8 canvas review r2",
+    "sessionName": "task-mt9rmigb-faf7",
+    "startedAt": 1787728898201,
+    "paneId": "w3:pFF",
+    "handle": {
+      "backend": "herdr",
+      "resourceId": "w3:pFF",
+      "socketPath": "/Users/huynhgiabuu/.config/herdr/herdr.sock",
+      "terminalId": "term_659ee11a6a5c0e",
+      "agentName": "reviewer-mt9rmigb",
+      "foregroundProcessGroupId": 44760
+    },
+    "piDir": "/Users/huynhgiabuu/dev/projects/solid-gpui/.pi",
+    "dir": "/Users/huynhgiabuu/dev/projects/solid-gpui/.pi/artifacts/tasks",
+    "cwd": "/Users/huynhgiabuu/dev/projects/solid-gpui",
+    "status": "done",
+    "background": true,
+    "reportedStatus": "success",
+    "rawStatus": "success",
+    "resultValid": true,
+    "completedAt": 1787728971915
   }
 ]
