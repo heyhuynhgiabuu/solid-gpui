@@ -619,3 +619,24 @@
   class bug P3 (đã có test từ M4 giờ).
 - Reviewer chết giữa chừng 2 lần trong phiên (P3, P7): pattern retry với
   "verdict PHẢI là message cuối + budget exploration" hoạt động ổn.
+
+## P8 — canvas draw list (2026-08-26)
+
+- **KHÔNG filter gates bằng rg trong chuỗi &&**: `cargo test ... | rg
+  "test result: ok"` nuốt compile failure (rg không match → im lặng), và
+  commit đã land với helper KHÔNG BIÊN DỊCH. Independent reviewer bắt được.
+  Luôn verify bằng exit code: `cmd > log 2>&1; echo exit=$?` rồi đọc log.
+  (Safety filter còn chặn /tmp cho log — dùng .pi/review-tmp/.)
+- **slice::as_chunks::<N>() trả TUPLE** (&[[T; N]], &[T]) — destructuring
+  trước khi .iter(). Clippy gợi ý as_chunks thay chunks_exact(2) nhưng API
+  là tuple, không fluent chain được.
+- **Fixture mới phải có parity test TS NGAY TRONG slice** (không chỉ Rust
+  round-trip) — hợp đồng cross-language là CẢ HAI suite parse mọi fixture;
+  r1 đã bắt thiếu batch-canvas-01.json phía TS. Checklist: fixture + Rust
+  round_trip test + TS toEqual/shape test, cùng một commit.
+- **TAG_ELEMENT_TYPES từng thiếu scrollbar** (P6 gap): element JSX lạ rơi
+  vào `?? "div"` SILENT — thêm ElementType mới phải thêm tag map cùng lúc.
+- gpui: shape_line nằm trên WindowTextSystem (window.text_system()), KHÔNG
+  phải App::text_system() (Arc đó không có paint caches); PaintQuad là
+  struct công khai (không có free fn quad()); TextRun không có field
+  metadata trong bản pinned này.
