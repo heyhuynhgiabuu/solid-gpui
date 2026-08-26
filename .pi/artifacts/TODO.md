@@ -943,7 +943,7 @@ axis/drag/scroll_handle APIs) and our track_scroll/scroll handle plumbing.
       34+82+17 (smoke xanh lại) · clippy/fmt. P6 CLOSED.
 
 ### 2026-08-26 - P7: drag & drop + tooltips
-status: active
+status: CLOSED 2026-08-26 (r1 NOT CLEAN 1M/3m → fixes 0b3aa5f; tooltip deferred to its own slice)
 
 Goal: per roadmap P7 — dragData prop (any JSON) starts a drag with the
 element as its own preview; onDragStart/onDrop events; dragOverStyle state
@@ -975,4 +975,15 @@ positioning.
       thứ 3 của state layers; 2 tests renderer (wire shape + clear) + GUI
       smoke (ack 7 ops + clear ack) + fixture parity TS. Demo để P7-review
       quyết có cần thêm.
-- [ ] VERIFY: gates + independent review
+- [x] VERIFY: gates + independent review — reviewer đầu (mt9p4kl7) chết
+      giữa chừng lần nữa; retry (mt9p8e7x) hoàn tất. Verdict NOT CLEAN:
+      M1 preview chip dùng rgb() với hex 8-digit — TRAP CÓ SẴN trong
+      AGENTS.md (rgb drop top byte + ép alpha 1.0), chip "translucent" thành
+      opaque + sai hue trên MỌI drag; M2 escaping smoke sai (2 backslash →
+      payload mangled trên wire, test pass vì chỉ assert ack); M3 thiếu
+      retained unit setDragData; M4 gate-sync drag/drop chưa có test (class
+      bug P3). Invariants A–F PASS hết (D gate-sync confirm đúng code, chỉ
+      thiếu test; sink-in-drag-dispatch an toàn — constructor chạy ở
+      MouseMove phase như on_click, không phải paint). Fixes 0b3aa5f: rgba(),
+      escape đúng \", unit M3+M4, dead-code N1. Gates: bun 151/151 · cargo
+      32+83+18. P7 CLOSED (drag&drop); tooltip = slice riêng khi cần.

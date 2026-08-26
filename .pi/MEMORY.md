@@ -597,3 +597,25 @@
 - Smoke mode --smoke <ms> là công cụ nhanh nhất phát hiện debug_assert /
   panic-at-startup: cargo test smoke suite sẽ ĐỎ, đừng để CI skip (GUI skip
   flag) che mất.
+
+## P7 — drag & drop (2026-08-26)
+
+- **Trap AGENTS.md lại ám**: rgb(0x313244e6) 8-digit — rgb drop top byte VÀ
+  ép alpha=1.0. Mọi literal màu 8-digit phải rgba() dù chỉ là cosmetic chip.
+  Rà bằng rg 'rgb\(0x[0-9a-fA-F]{8}' khi review màu.
+- **Rust string escaping trong GUI smoke**: payload JSON lồng vào format!
+  cần \\" — 'replace("\"", "\\\\\\\\")' cho HAI backslash (sai); dùng raw
+  string r#"\\""# cho một backslash + quote. Escape-test bằng cách in payload
+  ra stdout test một lần trước khi tin.
+- **gpui drop matching là TypeId**: mọi drag source/target phải chia MỘT
+  wrapper type (DragPayload(String)) — payload content thuộc về JS, helper
+  opaque. on_drag constructor chạy lúc gesture bắt đầu = miễn phí dragStart
+  emitter; on_drop chạy ở MouseUp phase (event-dispatch như on_click, KHÔNG
+  phải paint — sink an toàn).
+- **encodeBatch TS là JSON.stringify generic** — mutation mới KHÔNG cần
+  encode case riêng (chỉ command channel có encode thủ công); chỉ cần decode
+  validation. Sinh đôi P4 chỉ áp cho command.
+- **on_drag là StatefulInteractiveElement** — drag wiring cần gate-sync như
+  class bug P3 (đã có test từ M4 giờ).
+- Reviewer chết giữa chừng 2 lần trong phiên (P3, P7): pattern retry với
+  "verdict PHẢI là message cuối + budget exploration" hoạt động ổn.
