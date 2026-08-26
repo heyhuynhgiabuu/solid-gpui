@@ -767,7 +767,7 @@ Recon first — v1 already has tabIndex/autofocus/focus/blur/keyDown/keyUp.
       79+31+15 · tsc ×3 · clippy/fmt sạch. P3 CLOSED.
 
 ### 2026-08-26 - P4: window/dialog/shell commands
-status: active
+status: CLOSED 2026-08-26 (r1 NOT MERGEABLE → fixes in a50a335)
 
 Goal: desktop-app surface per roadmap P4 — appWindow.{setTitle, minimize,
 zoom, toggleFullscreen, activate}, dialog.{message, openFile, saveFile},
@@ -805,7 +805,19 @@ connection (render() handle exposes it).
       1_000_000+ disjoint với batch counter); RenderHandle sugar
       (handle.window/dialog/shell bound); 5 tests qua fake channel + mọi
       command round-trip decodeCommand (lockstep shape); README section
-- [ ] VERIFY: gates + independent review
+- [x] VERIFY: gates + independent review — r1 (mt9liwgo-b1c3) NOT MERGEABLE:
+      B1 encodeCommand không có 7 branch mới — MỌI command P4 lên wire thành
+      {type:getStats} (client là path duy nhất; test cũ dùng JSON.stringify
+      nên không bao giờ đụng encoder — bài học encode/decode phải test ĐÔI);
+      M1 serde enum-level rename_all không rename variant FIELDS →
+      suggestedName bị drop im lặng (Option hấp thụ unknown key) + re-encode
+      hiện null thừa → variant-level camelCase + skip_serializing_if toàn
+      optional; m0 empty answers mở NSAlert không đóng được → throw ở API.
+      Fixes a50a335: 8 encode regression tests (không fallthrough getStats),
+      Rust round-trip pin camelCase CẢ HAI chiều. Pre-checks của tôi (D
+      transport-mode Unsupported từ trước, C re-entrancy tuần tự job loop)
+      được reviewer xác nhận. Gates: bun 144/144 · cargo 32+79+15 · clippy/
+      fmt. P4 CLOSED.
 
 ### 2026-08-26 - P4 session note (artifact refresh)
 status: active (same work as P4 block above — this line just refreshes tracking)
@@ -815,4 +827,16 @@ status: active (same work as P4 block above — this line just refreshes trackin
 - [ ] P4-d: desktop.ts written (appWindow/dialog/shell over connection);
       remaining: handle sugar in render(), tests (fake-connection pattern),
       index exports, README section
-- [ ] VERIFY: gates + independent review
+- [x] VERIFY: gates + independent review — r1 (mt9liwgo-b1c3) NOT MERGEABLE:
+      B1 encodeCommand không có 7 branch mới — MỌI command P4 lên wire thành
+      {type:getStats} (client là path duy nhất; test cũ dùng JSON.stringify
+      nên không bao giờ đụng encoder — bài học encode/decode phải test ĐÔI);
+      M1 serde enum-level rename_all không rename variant FIELDS →
+      suggestedName bị drop im lặng (Option hấp thụ unknown key) + re-encode
+      hiện null thừa → variant-level camelCase + skip_serializing_if toàn
+      optional; m0 empty answers mở NSAlert không đóng được → throw ở API.
+      Fixes a50a335: 8 encode regression tests (không fallthrough getStats),
+      Rust round-trip pin camelCase CẢ HAI chiều. Pre-checks của tôi (D
+      transport-mode Unsupported từ trước, C re-entrancy tuần tự job loop)
+      được reviewer xác nhận. Gates: bun 144/144 · cargo 32+79+15 · clippy/
+      fmt. P4 CLOSED.

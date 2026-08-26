@@ -525,3 +525,28 @@
 - gpui keymap (bind_keys + Box<dyn Action>) là action-dispatch tĩnh — không
   hợp closure động JS. Matcher chuỗi thuần + focus-scoped listener là thiết
   kế thay thế đúng hướng (r1 xác nhận hướng, bắt lỗi implementation).
+
+## P4 — desktop commands (2026-08-26)
+
+- **encodeCommand là mặt SỐNG CÒN của command channel mà test cũ không
+  chạm**: decodeCommand được test, encodeCommand thì fallthrough silently
+  thành {type:getStats} — 7 lệnh mới toàn bộ chết trên client thật. Bài học
+  quy tắc: THÊM command type = cập nhật decode + encode + closed-name list
+  (3 chỗ) CÙNG commit; test encode kiểu "assert NOT fallthrough" cho từng
+  type. Test dùng JSON.stringify thay encodeCommand là test sai seam.
+- **Serde enum-level rename_all KHÔNG rename variant fields** (AGENTS.md
+  đã cảnh báo từ trước mà vẫn dính): DialogSaveFile.suggested_name decode
+  camelCase input thành None im lặng vì Option hấp thụ unknown key. Mọi
+  variant có field đa từ CẦN #[serde(rename_all)] variant-level. Lộ thêm:
+  Option field re-encode thành "field":null — canonical wire (TS omit)
+  cần skip_serializing_if trên TẤT CẢ optional fields.
+- **AsyncApp::update trả R trực tiếp, KHÔNG Result** (khác Window::update)
+  — dispatch arms phải match theo đúng loại context.
+- **Dialog macOS là async callback** (ConcreteBlock + oneshot,
+  gpui_macos/platform.rs:777) — await không block main thread; job loop tuần
+  tự khiến prompt re-entrancy panic của gpui unreachable từ command channel.
+  Nhưng dialog 0 nút = NSAlert không đóng được → session treo vĩnh viễn:
+  validate số nút ở API boundary TRƯỚC khi mở dialog.
+- GUI smoke ack-only lại che lỗi (như P3 B1): command cần smoke assert
+  RESULT payload, không chỉ ack/apply. Round-trip test phải đi qua CẢ
+  encoder thật (encodeCommand) lẫn decoder thật (command_from_json).
