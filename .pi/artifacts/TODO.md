@@ -1,5 +1,20 @@
 # TODO
 
+### 2026-08-24 - Phase 0: architecture due diligence for Solid + GPUI OSS repo
+status: done (2026-08-24 — Q1–Q3 decided, spec frozen; community probe moved to Phase 1 block)
+
+- [x] Research the prior-art bridge repo (architecture, license gap, npm traction, fork burden) — prior session
+- [x] Analyze fork embed patch (`MacPlatform::new_embedded` + `pump_events`, 1 file, +316/−31)
+- [x] Verify upstream PR zed-industries/zed#63077 status: open, not merged, bot-review only, created 2026-08-22
+- [x] Verify licensing: `gpui` + platform subcrates are Apache-2.0; Zed repo carries dual LICENSE-APACHE/LICENSE-GPL
+- [x] User decision Q1: process architecture → **C: out-of-process helper** (ADR 002, 2026-08-24)
+- [x] User decision Q2: repo license → **Apache-2.0** (ADR 003, 2026-08-24)
+- [x] User decision Q3: repo name → **solid-gpui** (local dir `gpuis` still to be renamed by user; renaming under a live session breaks cwd)
+- [x] Freeze Phase 1 spec + slices in PLAN.md after Q1–Q3 (spec frozen 2026-08-24)
+- [x] Community probe (r/solidjs, Solid Discord) — drafts written (casual
+      tone, 3 variants) in .pi/artifacts/community-post-draft.md (27dc273);
+      posting itself is the user's action. 2026-08-25.
+
 ### 2026-08-24 - Slice 6: event backchannel (GPUI clicks → Solid handlers)
 status: Phase 1 CLOSED 2026-08-24 (reviewer: mergeable, 0 blocker/major).
 Three reviewer minors fixed in a39c08f (handler-throw containment, SIGINT
@@ -33,6 +48,35 @@ Design notes: events are async server-push (not request/response) — separate
 wire family from Reply; helper writes directly under the global stdout lock;
 client tries decodeReply then decodeEvent per line. bun --hot remount works via
 setRoot-replace semantics (previous root destroyed on second mount).
+
+Cross-ref: PLAN.md#2026-08-24---solid--gpui-oss-repo-spec-frozen-2026-08-24-after-q1q3
+
+### 2026-08-24 - Slice 5: Solid renderer (@solid-gpui/solid)
+status: done (2026-08-24, commits 250e7e2 + review fixes b8e5c42)
+
+Seam under test: `createSolidRenderer({ send })` — universal-renderer methods map to
+protocol mutations; `send` injectable (RecordingSend in unit tests, real helper
+connection in demo). JSX via automatic runtime through our jsx-runtime (no
+babel-preset-solid in bun).
+
+- [x] Verify solid-js 2.0.0-rc.1 universal API surface — createRenderer in
+      @solidjs/universal (separate pkg now); solid-js main has no renderer;
+      **critical discovery**: node/worker/deno conditions → SSR stubs, need
+      --conditions=browser (upstream issue #2569)
+- [x] RED: unit test — exact mount sequence + minimal-diff updates (5 tests,
+      all failing on stub/absent renderer)
+- [x] GREEN: renderer + flush (drains solid queue first) + own dispose
+      lifecycle (universal dev-build render lacks cleanupNodes — shadow guard)
+      + makeH hyperscript (JSX needs babel/vite — documented limitation)
+- [x] Integration demo: real helper window renders Solid tree — **user saw the
+      counter window** (Count: 0→3 fine-grained ticks, button color toggle)
+- [x] VERIFY: commit 250e7e2; review mt6ywxoq→mt6z73l2-35e4 verdict
+      findings-should-fix (1 critical: shadow dup entries on keyed moves;
+      3 majors: send-failure loss, live conditions trap in root test,
+      broken jsx-runtime export; minors/notes) — ALL fixed in b8e5c42 with
+      regression tests (For-move+clear unique removals, poison policy,
+      remount destroy, container tracking); README added; root test script
+      browser-conditioned. Slice 5 CLOSED.
 
 Cross-ref: PLAN.md#2026-08-24---solid--gpui-oss-repo-spec-frozen-2026-08-24-after-q1q3
 
