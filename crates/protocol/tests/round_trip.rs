@@ -518,3 +518,27 @@ fn style_state_batch_fixture_parses_both_ways() {
     // Re-encode is byte-identical (canonical compact form).
     assert_eq!(to_json(&batch), raw);
 }
+
+#[test]
+fn keys_batch_fixture_parses_both_ways() {
+    let raw = fs::read_to_string(fixture_path("batch-keys-01.json"))
+        .expect("fixture readable")
+        .trim()
+        .to_string();
+    let batch = from_json(&raw).expect("batch parses");
+    match &batch.mutations[1] {
+        Mutation::SetKeyBindings { id, bindings } => {
+            assert_eq!(*id, 1.into());
+            assert_eq!(bindings.len(), 2);
+            assert_eq!(bindings[1], "ctrl-x ctrl-s");
+        }
+        other => panic!("expected setKeyBindings, got {other:?}"),
+    }
+    match &batch.mutations[2] {
+        Mutation::SetEventListener { event_type, .. } => {
+            assert!(matches!(event_type, solid_gpui_protocol::EventType::Keys));
+        }
+        other => panic!("expected setEventListener, got {other:?}"),
+    }
+    assert_eq!(to_json(&batch), raw);
+}

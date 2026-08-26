@@ -34,6 +34,9 @@ pub const MAX_DEPTH: usize = 256;
 pub struct Node {
     pub element_type: ElementType,
     pub style: StyleMap,
+    /// Key bindings (shortcuts/sequences) — fired as `keys` events while
+    /// the element holds focus. Empty = none.
+    pub key_bindings: Vec<String>,
     /// State-layer styles (hover/active) layered on top of `style` when the
     /// helper reports the matching interaction state. Markdown nodes reject
     /// state layers entirely — their render path is helper-owned and would
@@ -53,6 +56,7 @@ impl Node {
         Node {
             element_type,
             style: BTreeMap::new(),
+            key_bindings: Vec::new(),
             state_styles: BTreeMap::new(),
             text: None,
             value: None,
@@ -212,6 +216,20 @@ impl RetainedTree {
                     node.style
                         .insert(key.clone(), StyleValue::Number(to_number));
                 }
+                Ok(())
+            }
+            Mutation::SetKeyBindings { id, bindings } => {
+                let node = self.mut_node(*id, "setKeyBindings")?;
+                if node.element_type == ElementType::Markdown {
+                    // Validation and rendering agree: markdown renders a
+                    // static helper-owned subtree and fires no events.
+                    return Err(ApplyError::InvalidMutation {
+                        message: format!(
+                            "setKeyBindings: markdown elements fire no events ({id:?})"
+                        ),
+                    });
+                }
+                node.key_bindings = bindings.clone();
                 Ok(())
             }
             Mutation::SetText { id, text } => {

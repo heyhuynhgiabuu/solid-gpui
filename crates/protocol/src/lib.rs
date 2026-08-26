@@ -27,6 +27,7 @@ pub const EVENT_TYPES: &[&str] = &[
     "scroll",
     "change",
     "submit",
+    "keys",
 ];
 
 pub const ELEMENT_TYPES: &[&str] = &["div", "text", "input", "textarea", "list", "markdown"];
@@ -86,6 +87,9 @@ pub enum EventType {
     Scroll,
     Change,
     Submit,
+    /// A `keys` binding fired (shortcut/sequence match). The event's `key`
+    /// field carries the matched binding string ("cmd-k", "ctrl-x ctrl-s").
+    Keys,
 }
 
 /// A style value is a JSON number (kept exact via `serde_json::Number`) or a
@@ -214,6 +218,15 @@ pub enum Mutation {
         transition_ms: u32,
         /// One of linear|easeIn|easeOut|easeInOut; None means easeOut.
         easing: Option<String>,
+    },
+    /// Install the element's key bindings (shortcuts/sequences). Each entry
+    /// is a keystroke string; spaces separate a sequence ("ctrl-x ctrl-s").
+    /// Bindings fire while the element holds focus (elements with bindings
+    /// become focusable); the fired binding reports back as a `keys` event.
+    #[serde(rename_all = "camelCase")]
+    SetKeyBindings {
+        id: ElementId,
+        bindings: Vec<String>,
     },
     #[serde(rename_all = "camelCase")]
     SetValue {
@@ -530,6 +543,7 @@ const KNOWN_OPS: &[&str] = &[
     "insertBefore",
     "setStyle",
     "setText",
+    "setKeyBindings",
     "setValue",
     "setAnimation",
     "setEventListener",
@@ -634,6 +648,7 @@ fn from_value(v: serde_json::Value) -> Result<MutationBatch, ProtocolError> {
             Mutation::CreateElement { id, .. }
             | Mutation::DestroyElement { id }
             | Mutation::SetStyle { id, .. }
+            | Mutation::SetKeyBindings { id, .. }
             | Mutation::SetText { id, .. }
             | Mutation::SetValue { id, .. }
             | Mutation::SetAnimation { id, .. }

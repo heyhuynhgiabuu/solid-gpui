@@ -474,3 +474,71 @@ describe("onInput/onChange split (P2 G1)", () => {
     // DOM contract documented: input fires per edit, change commits on blur.
   })
 })
+
+describe("keys prop (P3)", () => {
+  test("keys map installs bindings + keys listener; events dispatch per binding", async () => {
+    const rec = recording()
+    const { renderer: R, render, flush, handler } = createSolidRenderer(rec.send)
+    const container = R.createElement("#root")
+    let node: ReturnType<typeof R.createElement> | null = null
+    const fired: string[] = []
+    const dispose = render(() => {
+      const root = R.createElement("div")
+      node = root
+      return root
+    }, container)
+    await flush()
+
+    R.setProp(node!, "keys", {
+      "cmd-k": () => fired.push("cmd-k"),
+      "ctrl-x ctrl-s": () => fired.push("ctrl-x ctrl-s"),
+    })
+    await flush()
+
+    const muts = rec.batches.flatMap((b) => b.mutations)
+    const kb = muts.find((m): m is Extract<Mutation, { op: "setKeyBindings" }> => m.op === "setKeyBindings")
+    expect(kb?.bindings).toEqual(["cmd-k", "ctrl-x ctrl-s"])
+    expect(
+      muts.some(
+        (m): m is Extract<Mutation, { op: "setEventListener" }> =>
+          m.op === "setEventListener" && m.eventType === "keys" && m.enabled,
+      ),
+    ).toBe(true)
+
+    // Event routing: the helper reports the fired binding in `key`.
+    const dispatch = handler((node as unknown as { id: number }).id, "keys")
+    expect(typeof dispatch).toBe("function")
+    dispatch?.({ type: "event", id: 1, eventType: "keys", x: null, y: null, key: "cmd-k", modifiers: null, value: null } as never)
+    dispatch?.({ type: "event", id: 1, eventType: "keys", x: null, y: null, key: "ctrl-x ctrl-s", modifiers: null, value: null } as never)
+    expect(fired).toEqual(["cmd-k", "ctrl-x ctrl-s"])
+    dispose()
+  })
+
+  test("clearing keys removes bindings and the listener", async () => {
+    const rec = recording()
+    const { renderer: R, render, flush } = createSolidRenderer(rec.send)
+    const container = R.createElement("#root")
+    let node: ReturnType<typeof R.createElement> | null = null
+    const dispose = render(() => {
+      const root = R.createElement("div")
+      node = root
+      return root
+    }, container)
+    await flush()
+
+    R.setProp(node!, "keys", { escape: () => {} })
+    R.setProp(node!, "keys", undefined)
+    await flush()
+    dispose()
+
+    const muts = rec.batches.flatMap((b) => b.mutations)
+    const kb = muts.filter((m): m is Extract<Mutation, { op: "setKeyBindings" }> => m.op === "setKeyBindings")
+    expect(kb[kb.length - 1]?.bindings).toEqual([])
+    expect(
+      muts.some(
+        (m): m is Extract<Mutation, { op: "setEventListener" }> =>
+          m.op === "setEventListener" && m.eventType === "keys" && !m.enabled,
+      ),
+    ).toBe(true)
+  })
+})

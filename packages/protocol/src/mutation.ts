@@ -29,6 +29,8 @@ export type EventType =
   | "scroll"
   | "change"
   | "submit"
+  /** A `keys` binding fired; the event's key field carries the binding. */
+  | "keys"
 
 /**
  * Closed set of style-STATE layers: the helper must know every state to wire
@@ -52,6 +54,7 @@ export const EVENT_TYPES: readonly EventType[] = [
   "scroll",
   "change",
   "submit",
+  "keys",
 ]
 
 export const ELEMENT_TYPES: readonly ElementType[] = [
@@ -79,6 +82,12 @@ export type Mutation =
     }
   | { readonly op: "setText"; readonly id: ElementId; readonly text: string }
   | { readonly op: "setValue"; readonly id: ElementId; readonly value: string }
+  | {
+      readonly op: "setKeyBindings"
+      readonly id: ElementId
+      /** Keystroke strings; spaces separate a sequence ("ctrl-x ctrl-s"). */
+      readonly bindings: readonly string[]
+    }
   | {
       readonly op: "setAnimation"
       readonly id: ElementId
@@ -127,6 +136,7 @@ export const MUTATION_OPS = [
   "insertBefore",
   "setStyle",
   "setText",
+  "setKeyBindings",
   "setValue",
   "setAnimation",
   "setEventListener",

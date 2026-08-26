@@ -1,0 +1,1 @@
+{"v":1,"seq":22,"mutations":[{"op":"createElement","id":1,"elementType":"div"},{"op":"setKeyBindings","id":1,"bindings":["cmd-k","ctrl-x ctrl-s"]},{"op":"setEventListener","id":1,"eventType":"keys","enabled":true},{"op":"setRoot","id":1}]}

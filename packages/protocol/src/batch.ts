@@ -204,6 +204,20 @@ function decodeMutation(m: Dict, p: string): Result<Mutation, ProtocolError> {
         },
       }
     }
+    case "setKeyBindings": {
+      const idR = id()
+      if (!idR.ok) return idR
+      const bindings = m.bindings
+      if (!Array.isArray(bindings)) {
+        return { ok: false, error: shape(`${p}.bindings`, "expected an array") }
+      }
+      for (const [i, b] of bindings.entries()) {
+        if (typeof b !== "string" || b.trim().length === 0) {
+          return { ok: false, error: shape(`${p}.bindings[${i}]`, "expected a non-empty string") }
+        }
+      }
+      return { ok: true, value: { op, id: idR.value, bindings } }
+    }
     case "setText": {
       const idR = id()
       if (!idR.ok) return idR

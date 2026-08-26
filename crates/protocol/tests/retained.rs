@@ -897,3 +897,47 @@ fn state_styles_layer_and_markdown_rejects_them() {
     })
     .unwrap();
 }
+
+#[test]
+fn key_bindings_store_and_markdown_rejects() {
+    let mut tree = RetainedTree::new();
+    tree.apply(&Mutation::CreateElement {
+        id: ElementId(1),
+        element_type: ElementType::Div,
+    })
+    .unwrap();
+    tree.apply(&Mutation::CreateElement {
+        id: ElementId(2),
+        element_type: ElementType::Markdown,
+    })
+    .unwrap();
+
+    tree.apply(&Mutation::SetKeyBindings {
+        id: ElementId(1),
+        bindings: vec!["cmd-k".into(), "ctrl-x ctrl-s".into()],
+    })
+    .unwrap();
+    assert_eq!(
+        tree.get(ElementId(1)).unwrap().key_bindings,
+        vec!["cmd-k".to_string(), "ctrl-x ctrl-s".to_string()]
+    );
+
+    // Replace, and empty clears.
+    tree.apply(&Mutation::SetKeyBindings {
+        id: ElementId(1),
+        bindings: vec![],
+    })
+    .unwrap();
+    assert!(tree.get(ElementId(1)).unwrap().key_bindings.is_empty());
+
+    let err = tree
+        .apply(&Mutation::SetKeyBindings {
+            id: ElementId(2),
+            bindings: vec!["cmd-k".into()],
+        })
+        .unwrap_err();
+    assert!(
+        err.to_string().contains("markdown"),
+        "markdown key bindings must be rejected: {err}"
+    );
+}

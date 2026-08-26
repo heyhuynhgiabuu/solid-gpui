@@ -139,6 +139,8 @@ export function createSolidRenderer(send: Send): SolidGpuiRenderer {
    * WIRE children only and would leak them forever. */
   const refusedChildren = new Set<number>()
   const handlers = new Map<string, (event: SolidGpuiEvent) => void>()
+  /** Per-binding shortcut handlers, keyed `${nodeId}:${binding}`. */
+  const keyHandlers = new Map<string, (event: SolidGpuiEvent) => void>()
   let topNode: HostNode | null = null
   let poisoned: string | null = null
   let disposedAll: (() => void) | null = null
@@ -314,6 +316,42 @@ export function createSolidRenderer(send: Send): SolidGpuiRenderer {
           return
         }
         push({ op: "setStyle", id, style: next })
+        return
+      }
+      if (name === "keys") {
+        // Shortcut/sequence map: { "cmd-k": fn, "ctrl-x ctrl-s": fn }.
+        // Bindings travel as one setKeyBindings; firing reports back as a
+        // `keys` event whose key field names the matched binding.
+        if (node.tag === "markdown") {
+          if (typeof console !== "undefined") {
+            console.warn(
+              "[solid-gpui] <markdown> ignores keys — it renders a static document and fires no events.",
+            )
+          }
+          return
+        }
+        const nodeId = node.id
+        const map = (value ?? {}) as Record<string, unknown>
+        const bindings: string[] = []
+        for (const k of Object.keys(map)) {
+          // Drop stale entries first (re-set replaces the whole map).
+          keyHandlers.delete(`${nodeId}:${k}`)
+          if (typeof map[k] === "function") {
+            bindings.push(k)
+            keyHandlers.set(`${nodeId}:${k}`, map[k] as (event: SolidGpuiEvent) => void)
+          }
+        }
+        if (bindings.length > 0) {
+          handlers.set(`${nodeId}:keys`, (event) => {
+            const fn = keyHandlers.get(`${nodeId}:${event.key ?? ""}`)
+            fn?.(event)
+          })
+          push({ op: "setEventListener", id, eventType: "keys", enabled: true })
+        } else {
+          handlers.delete(`${nodeId}:keys`)
+          push({ op: "setEventListener", id, eventType: "keys", enabled: false })
+        }
+        push({ op: "setKeyBindings", id, bindings })
         return
       }
       if (node.tag === "markdown" && EVENT_NAMES[name]) {
@@ -495,6 +533,7 @@ export function createSolidRenderer(send: Send): SolidGpuiRenderer {
       if (topNode && shadow.has(topNode.id)) {
         destroySubtree(topNode)
         handlers.clear()
+        keyHandlers.clear()
         topNode = null
       }
     }

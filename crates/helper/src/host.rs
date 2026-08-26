@@ -210,6 +210,120 @@ fn edit_input(
     new_value
 }
 
+/// Canonical single-keystroke string: modifier order ctrl-alt-shift-cmd,
+/// key lowercased ("ctrl-shift-p", "cmd-k", "escape").
+fn canonical_keystroke(ks: &gpui::Keystroke) -> String {
+    let mut out = String::new();
+    if ks.modifiers.control {
+        out.push_str("ctrl-");
+    }
+    if ks.modifiers.alt {
+        out.push_str("alt-");
+    }
+    if ks.modifiers.shift {
+        out.push_str("shift-");
+    }
+    if ks.modifiers.platform {
+        out.push_str("cmd-");
+    }
+    out.push_str(&ks.key.to_lowercase());
+    out
+}
+
+/// Parse one binding token into canonical form. Modifier aliases:
+/// control→ctrl, meta/platform/super→cmd, option→alt. None when the token
+/// has no key part.
+fn canonical_token(token: &str) -> Option<String> {
+    let mut key = String::new();
+    let mut ctrl = false;
+    let mut alt = false;
+    let mut shift = false;
+    let mut cmd = false;
+    for part in token.split('-').filter(|p| !p.is_empty()) {
+        match part.to_lowercase().as_str() {
+            "ctrl" | "control" => ctrl = true,
+            "alt" | "option" => alt = true,
+            "shift" => shift = true,
+            "cmd" | "meta" | "platform" | "super" => cmd = true,
+            _ => {
+                if !key.is_empty() {
+                    return None; // two key parts ("a-b") — not a keystroke
+                }
+                key = part.to_lowercase();
+            }
+        }
+    }
+    if key.is_empty() {
+        return None;
+    }
+    let mut out = String::new();
+    if ctrl {
+        out.push_str("ctrl-");
+    }
+    if alt {
+        out.push_str("alt-");
+    }
+    if shift {
+        out.push_str("shift-");
+    }
+    if cmd {
+        out.push_str("cmd-");
+    }
+    out.push_str(&key);
+    Some(out)
+}
+
+/// A binding parsed into its canonical keystroke sequence.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct KeyBindingSeq(pub Vec<String>);
+
+pub fn parse_binding(binding: &str) -> Option<KeyBindingSeq> {
+    let mut seq = Vec::new();
+    for token in binding.split_whitespace() {
+        seq.push(canonical_token(token)?);
+    }
+    (!seq.is_empty()).then_some(KeyBindingSeq(seq))
+}
+
+/// Sequence state machine: `pending` is (binding index, keystrokes matched).
+/// Returns the index of the binding that FIRED on this keystroke, if any.
+/// A mismatch resets the pending sequence but still fresh-matches the
+/// current keystroke (chords share no memory).
+pub fn advance_binding(
+    bindings: &[KeyBindingSeq],
+    pending: &mut Option<(usize, usize)>,
+    keystroke: &str,
+) -> Option<usize> {
+    if let Some((bi, matched)) = *pending {
+        let Some(seq) = bindings.get(bi) else {
+            // Stale index (the binding list changed mid-sequence): reset and
+            // fresh-match rather than aborting silently.
+            *pending = None;
+            return advance_binding(bindings, pending, keystroke);
+        };
+        if keystroke == seq.0[matched] {
+            if matched + 1 == seq.0.len() {
+                *pending = None;
+                return Some(bi);
+            }
+            *pending = Some((bi, matched + 1));
+            return None;
+        }
+        // Mismatch: drop the pending sequence, fall through to fresh match.
+        *pending = None;
+    }
+    for (i, seq) in bindings.iter().enumerate() {
+        if keystroke == seq.0[0] {
+            if seq.0.len() == 1 {
+                return Some(i);
+            }
+            *pending = Some((i, 1));
+            return None;
+        }
+    }
+    None
+}
+
 pub struct HostView {
     pub tree: RetainedTree,
     /// Build-time samples for the debug overlay and the getStats command.
@@ -232,6 +346,8 @@ pub struct HostView {
     /// frame platform InputHandler so edits persist across frames (the
     /// handler itself is rebuilt every frame by the IME anchor).
     input_states: InputStates,
+    /// In-progress key-binding sequences: (binding index, keystrokes matched).
+    key_pending: Rc<RefCell<HashMap<ElementId, (usize, usize)>>>,
     /// Writes one event line to stdout; handed to the InputHandler so a
     /// user edit can cross the wire without a HostView borrow.
     sink: Rc<dyn Fn(&Event)>,
@@ -268,6 +384,7 @@ impl HostView {
             focus_subscribed: HashSet::new(),
             autofocus_pending: None,
             input_states: Rc::new(RefCell::new(HashMap::new())),
+            key_pending: Rc::new(RefCell::new(HashMap::new())),
             sink: Rc::new(write_event_line),
             list_states: HashMap::new(),
             list_render_counts: HashMap::new(),
@@ -416,6 +533,19 @@ impl HostView {
     /// Push a submit event (input Enter / textarea Shift+Enter).
     fn emit_submit(&self, id: ElementId) {
         self.emit_event(id, EventType::Submit, None, None, None, None, None);
+    }
+
+    /// Push a fired key-binding event (the original binding string).
+    fn emit_keys(&self, id: ElementId, binding: &str) {
+        self.emit_event(
+            id,
+            EventType::Keys,
+            None,
+            None,
+            Some(binding.to_string()),
+            None,
+            None,
+        );
     }
 
     /// DOM-style onChange commit: fire one change event carrying the current
@@ -1265,7 +1395,11 @@ fn build_element(
         _ => None,
     };
     let has_autofocus = node.style.contains_key("autoFocus");
-    let wants_focus = tab_index.is_some() || has_focus || has_key || has_autofocus;
+    let wants_focus = tab_index.is_some()
+        || has_focus
+        || has_key
+        || has_autofocus
+        || !node.key_bindings.is_empty();
     if !element_needs_stateful(node, axis.is_some(), has_click, wants_focus) {
         return el.into_any_element();
     }
@@ -1456,6 +1590,48 @@ fn apply_interactive(
             view.emit_click(id, event);
         });
         el = el.on_click(listener);
+    }
+    if !node.key_bindings.is_empty() {
+        // Shortcuts/sequences: a listener ON THE FOCUSED ELEMENT, so bindings
+        // never compete with other elements' key handlers. Bindings are read
+        // from the tree at event time (a re-render may have replaced them);
+        // pending-sequence progress lives on the view. Unparseable entries
+        // are filtered in lockstep so the fired index maps to the raw string.
+        let listener = cx.listener(move |view, event: &gpui::KeyDownEvent, _window, _cx| {
+            let Some(node) = view.tree.get(id) else {
+                return;
+            };
+            let raw: Vec<String> = node.key_bindings.clone();
+            if raw.is_empty() {
+                return;
+            }
+            let parsed_ok: Vec<String> = raw
+                .iter()
+                .filter(|b| parse_binding(b).is_some())
+                .cloned()
+                .collect();
+            let parsed: Vec<KeyBindingSeq> =
+                parsed_ok.iter().filter_map(|b| parse_binding(b)).collect();
+            let ks = canonical_keystroke(&event.keystroke);
+            let fired = {
+                let mut guard = view.key_pending.borrow_mut();
+                let mut pm = guard.get(&id).copied();
+                let r = advance_binding(&parsed, &mut pm, &ks);
+                match pm {
+                    Some(v) => {
+                        guard.insert(id, v);
+                    }
+                    None => {
+                        guard.remove(&id);
+                    }
+                }
+                r
+            };
+            if let Some(binding) = fired.and_then(|fi| parsed_ok.get(fi)) {
+                view.emit_keys(id, binding);
+            }
+        });
+        el = el.on_key_down(listener);
     }
     // State layers last: they are style refinements over whatever the base
     // style + interactivity produced, and need the stateful element id.
@@ -2729,5 +2905,76 @@ mod input_commit_tests {
     fn commit_for_unknown_id_is_a_noop() {
         let (view, _) = host_with_input("hi");
         view.commit_input_if_dirty(ElementId(99));
+    }
+}
+
+#[cfg(test)]
+mod key_binding_tests {
+    use super::*;
+
+    fn seqs(bindings: &[&str]) -> Vec<KeyBindingSeq> {
+        bindings.iter().map(|b| parse_binding(b).unwrap()).collect()
+    }
+
+    #[test]
+    fn tokens_canonicalize_aliases_and_case() {
+        assert_eq!(
+            canonical_token("Ctrl-Shift-P").as_deref(),
+            Some("ctrl-shift-p")
+        );
+        assert_eq!(canonical_token("Meta-K").as_deref(), Some("cmd-k"));
+        assert_eq!(canonical_token("Option-F").as_deref(), Some("alt-f"));
+        assert_eq!(canonical_token("escape").as_deref(), Some("escape"));
+        assert_eq!(
+            canonical_token("ctrl").as_deref(),
+            None,
+            "modifier-only is not a keystroke"
+        );
+        assert!(canonical_token("a-b").is_none(), "two key parts rejected");
+    }
+
+    #[test]
+    fn single_binding_fires_on_exact_keystroke() {
+        let b = seqs(&["cmd-k", "escape"]);
+        let mut pending = None;
+        assert_eq!(advance_binding(&b, &mut pending, "escape"), Some(1));
+        assert_eq!(advance_binding(&b, &mut pending, "cmd-k"), Some(0));
+        assert!(pending.is_none());
+        // Wrong key never fires.
+        assert!(advance_binding(&b, &mut pending, "x").is_none());
+    }
+
+    #[test]
+    fn sequence_requires_order_and_resets_on_mismatch() {
+        let b = seqs(&["ctrl-x ctrl-s"]);
+        let mut pending = None;
+        assert_eq!(advance_binding(&b, &mut pending, "ctrl-x"), None);
+        assert_eq!(pending, Some((0, 1)));
+        // Wrong second key: reset, and this key fresh-matches nothing.
+        assert_eq!(advance_binding(&b, &mut pending, "z"), None);
+        assert!(pending.is_none());
+        // Correct order fires on completion.
+        assert_eq!(advance_binding(&b, &mut pending, "ctrl-x"), None);
+        assert_eq!(advance_binding(&b, &mut pending, "ctrl-s"), Some(0));
+    }
+
+    #[test]
+    fn canonical_keystroke_matches_binding_form() {
+        let ks = gpui::Keystroke {
+            modifiers: gpui::Modifiers {
+                control: true,
+                shift: true,
+                ..Default::default()
+            },
+            key: "P".into(),
+            key_char: None,
+        };
+        assert_eq!(canonical_keystroke(&ks), "ctrl-shift-p");
+        let b = seqs(&["control-shift-p"]);
+        let mut pending = None;
+        assert_eq!(
+            advance_binding(&b, &mut pending, &canonical_keystroke(&ks)),
+            Some(0)
+        );
     }
 }

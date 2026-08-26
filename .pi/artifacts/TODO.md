@@ -725,3 +725,21 @@ closes correctness gaps found by adversarial typing tests.
       stale (M1), platform-range-ordering question documented (M4). Notes:
       emit_key vẫn bypass sink (pre-existing), controlled inputs không bao
       giờ emit change (deliberate, đã ghi nhận). P2 CLOSED.
+
+### 2026-08-26 - P3: focus + keys (shortcuts via keymap, scoped key events)
+status: active
+
+Goal: desktop-app shortcuts work like desktop apps: a `keys` prop resolves
+through gpui's keymap (sequences like "ctrl-x ctrl-s") instead of competing
+with every onKeyDown; focusable/tabIndex scoping of key events verified.
+Recon first — v1 already has tabIndex/autofocus/focus/blur/keyDown/keyUp.
+
+- [ ] P3-a recon: current focus+key paths (tab navigation, keyDown routing,
+      focus handles) + pinned gpui keymap machinery (key_context, actions,
+      bind_keys, KeyBinding sequences) — cited path:line; decide the wire
+      surface for `keys` (event types? style-adjacent prop? commands?)
+- [ ] P3-b protocol surface for keys (lockstep TS+Rust, fixtures)
+- [ ] P3-c helper: keymap wiring per element (scoped focusable /
+      application-wide otherwise), event reporting the fired binding
+- [ ] P3-d renderer/JSX prop routing + tests
+- [ ] VERIFY: gates + independent review
