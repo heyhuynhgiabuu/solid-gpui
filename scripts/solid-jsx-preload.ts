@@ -1,12 +1,12 @@
 /**
- * Bun preload plugin: compile .tsx through babel-preset-solid
+ * Bun preload plugin: compile .tsx through @solidjs/babel-plugin
  * { generate: "universal", moduleName: "@solid-gpui/solid/jsx" }.
  *
  * Usage (dev DX — no bundler config needed):
  *   bun --conditions=browser --preload ./scripts/solid-jsx-preload.ts run examples/counter.tsx
  */
 import { transformSync } from "@babel/core"
-import preset from "babel-preset-solid"
+import solidPlugin from "@solidjs/babel-plugin"
 
 await Bun.plugin({
   name: "solid-gpui-jsx",
@@ -15,8 +15,8 @@ await Bun.plugin({
       const source = await Bun.file(args.path).text()
       const out = transformSync(source, {
         filename: args.path,
-        presets: [
-          [preset, { moduleName: "@solid-gpui/solid/jsx", generate: "universal" }],
+        plugins: [
+          [solidPlugin, { moduleName: "@solid-gpui/solid/jsx", generate: "universal" }],
         ],
         parserOpts: { plugins: ["jsx", "typescript"] },
       })

@@ -1092,3 +1092,45 @@ status: done (2026-08-26; commit 5e13f7d; independent review mt9yz59o-1d31 CLEAN
       serde rather than bespoke paths; `runs: () => null` preserves prior runs,
       matching the existing style-bag precedent. Visual pixels were not
       compared; P11 remains complete within its stated smoke-test scope.
+
+### 2026-08-26 - Solid 2 rc.3 compatibility migration
+status: done | updated: 2026-08-26
+
+- [x] Verify the version-matched rc.3 runtime, universal renderer, and JSX
+      compiler contract against this repository; capture a failing RED probe
+      before production changes. Exact installed runtime/universal/web/compiler
+      packages resolve to 2.0.0-rc.3; the missing-plugin compile-surface probe
+      was observed RED before installation.
+- [x] Upgrade the Solid dependency graph and migrate the Bun JSX preload and
+      compile-surface test without changing the GPUI protocol contract. The
+      official `@solidjs/babel-plugin` replaced `babel-preset-solid`; the
+      compiler-generated `memo` helper is exported from `@solid-gpui/solid/jsx`.
+- [x] Run the full TypeScript, JSX/demo, and package verification gates; record
+      any rc.3 incompatibility or intentional pin. The green run is recorded
+      below; a later rerun also exposed the existing GUI frame-server limitation.
+- [x] Obtain an independent review, resolve findings, and close this task only
+      after all checklist items and verification gates are green. Independent
+      reviewer `mta1z9zq-a07c` returned CLEAN/MERGEABLE with no blocker, major,
+      or important findings.
+
+#### Run report
+
+- `bun install --frozen-lockfile` — exit 0; lockfile unchanged.
+- `bun run test` — previously green at 171 pass / 0 fail, including the real
+  window perf test; after the memo regression fix, the non-GUI rerun was 170
+  pass / 1 skipped with `SOLID_GPUI_SKIP_GUI_TESTS=1`.
+- `bun run typecheck`, `bun run smoke:node`, `bun run check:release`, and
+  `bun run pack:all` — exit 0; all three packages built and packed.
+- JSX smoke probes for counter, text-runs, and menus — exit 0. The menus probe
+  exercises the dynamic ternary that requires `memo`.
+- `cargo test -p solid-gpui-protocol -p solid-gpui-helper` — exit 0 in the
+  green run: 84 helper unit + 2 smoke + 1 stdio + 22 real-window + 37 retained
+  + 39 round-trip tests (one ignored generator); `cargo clippy --all-targets
+  -- -D warnings` and `cargo fmt --all -- --check` — exit 0.
+- A later isolated GUI perf/animation rerun returned one initial frame while
+  stdio mutations still acked; the same behavior reproduced without the JS
+  migration and is covered by the repository's `SOLID_GPUI_SKIP_GUI_TESTS=1`
+  headless escape hatch. No Rust/protocol files are in this migration diff;
+  treat that rerun as window-server/environment evidence, not an rc.3 failure.
+- Independent review: `.pi/review-tmp/rc3_r1_brief.md`; reviewer verdict
+  CLEAN/MERGEABLE, no blocker/major/important finding.

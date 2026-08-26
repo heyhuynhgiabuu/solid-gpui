@@ -1,7 +1,7 @@
 /**
- * Hyperscript authoring helper (v0.1): JSX compilation for Solid requires
- * babel-preset-solid/vite (generate: "universal"), which bun run does not
- * apply — h() is the runtime-authored equivalent.
+ * Hyperscript authoring helper (v0.1): JSX compilation for Solid uses
+ * @solidjs/babel-plugin (generate: "universal"); h() is the runtime-authored
+ * equivalent for code paths that do not run through the compiler.
  */
 import type { HostNode } from "./renderer"
 import type { Renderer } from "@solidjs/universal"
@@ -47,7 +47,7 @@ export function makeH(R: Renderer<HostNode>): H {
         R.effect(
           () => {
             // Compute reads the signals (tracked). It returns void on
-            // purpose: rc.1's runner stores a non-function return in the
+            // purpose: older Solid 2 runners stored a non-function return in the
             // effect's cleanup slot and calls it on the next run
             // ([REACTIVITY_HALTED] crash); the commit reads via closure.
             current = (value as () => StyleMap | string | TextRun[])()

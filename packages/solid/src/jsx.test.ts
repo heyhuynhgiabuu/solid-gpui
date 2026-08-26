@@ -1,8 +1,8 @@
 /**
- * JSX runtime tests (S15): the bindings babel-preset-solid { universal }
+ * JSX runtime tests (S15): the bindings @solidjs/babel-plugin { universal }
  * emits must route through the SAME suite machinery as h()/render().
  * The emitted call shapes are pinned by the compile-surface test at the
- * bottom — if the preset starts importing something we don't export, it
+ * bottom — if the compiler starts importing something we don't export, it
  * fails loudly instead of breaking user builds.
  */
 import { describe, expect, test } from "bun:test"
@@ -171,7 +171,7 @@ describe("jsx runtime bindings", () => {
   })
 
   test("jsx.ts bindings return undefined (effect commits must not return values)", async () => {
-    // S12 landmine: solid-js rc.1 stores an effect commit's RETURN VALUE in
+    // S12 landmine: older Solid 2 runners stored an effect commit's RETURN VALUE in
     // the cleanup slot and calls it on the next run — a value-returning
     // binding reintroduces [REACTIVITY_HALTED] under compiled two-arg
     // effects. These bindings are called from inside commits; pin their
@@ -228,23 +228,24 @@ describe("jsx runtime bindings", () => {
 })
 
 /**
- * Compile-surface contract: whatever babel-preset-solid { universal } emits
- * for representative JSX must be importable from our runtime module. This is
- * the guard that makes preset upgrades safe — a renamed/added helper import
- * fails HERE, not in a user build.
+ * Compile-surface contract: whatever @solidjs/babel-plugin { universal }
+ * emits for representative JSX must be importable from our runtime module.
+ * This is the guard that makes compiler upgrades safe — a renamed/added
+ * helper import fails HERE, not in a user build.
  */
 import { describe as d2, test as t2, expect as e2 } from "bun:test"
 import * as jsxModule from "./jsx"
 
 d2("compile-surface contract", () => {
-  t2("every preset import resolves to a jsx-module export", () => {
+  t2("every compiler import resolves to a jsx-module export", () => {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     const babel = require("@babel/core")
-    const preset = require("babel-preset-solid")
+    const plugin = require("@solidjs/babel-plugin")
     const fixture = `
       const v = (
         <div style={{ gap: 8 }} onClick={() => {}}>
           <h1>Title {count()}</h1>
+          <p>{ready() ? "ready" : "waiting"}</p>
           <markdown source={doc()} />
           <input value={text()} onInput={(e) => setText(e.currentTarget.value)} />
           <Show when={ready()}>{label}</Show>
@@ -254,7 +255,7 @@ d2("compile-surface contract", () => {
     `
     const out = babel.transformSync(fixture, {
       filename: "fixture.tsx",
-      presets: [[preset, { moduleName: "@solid-gpui/solid/jsx", generate: "universal" }]],
+      plugins: [[plugin, { moduleName: "@solid-gpui/solid/jsx", generate: "universal" }]],
       parserOpts: { plugins: ["jsx", "typescript"] },
     })
     const code = out.code as string

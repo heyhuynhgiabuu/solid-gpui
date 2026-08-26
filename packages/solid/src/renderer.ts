@@ -82,7 +82,7 @@ const TAG_ELEMENT_TYPES: Record<string, ElementType> = {
 export interface SolidGpuiRenderer {
   renderer: Renderer<HostNode>
   /** Mount under a container; returns a disposer that also destroys the
-   *  mounted root (the exported universal render does not clean up). */
+   *  mounted root and any helper-side refused descendants. */
   render(code: () => HostNode, container: HostNode): () => void
   /** Flush queued mutations as one batch through `send`. No-op when idle. */
   flush(): Promise<void>
@@ -637,12 +637,20 @@ export function createSolidRenderer(send: Send): SolidGpuiRenderer {
     removeNode: removeNodeImpl,
 
     cleanupNodes(_parent: HostNode, nodes: HostNode[]) {
+      // Solid 2 rc.3 invokes this hook from the universal disposer. Reuse the
+      // full subtree teardown so helper-owned refused children are freed too;
+      // older universal builds that skip the hook are covered below.
       for (const n of nodes) {
         if (n.kind === "container") continue
-        push({ op: "destroyElement", id: elementId(n.id) })
-        refusedChildren.delete(n.id)
-        shadow.delete(n.id)
+        if (shadow.has(n.id)) {
+          destroySubtree(n)
+        } else if (refusedChildren.delete(n.id)) {
+          push({ op: "destroyElement", id: elementId(n.id) })
+        }
+        if (n === topNode) topNode = null
       }
+      handlers.clear()
+      keyHandlers.clear()
     },
 
     getParentNode(node: HostNode) {
@@ -686,19 +694,15 @@ export function createSolidRenderer(send: Send): SolidGpuiRenderer {
   }
 
   function renderWithDispose(code: () => HostNode, container: HostNode): () => void {
-    // The comment below replaced an earlier wrong one: in rc.1 the dev and
-    // prod builds of @solidjs/universal are byte-identical, and NEITHER
-    // exported render() runs cleanupNodes (only the internal base renderer
-    // does). The self-destroy + shadow guard below is required everywhere.
+    // The universal disposer may invoke cleanupNodes, depending on the
+    // version/build. That hook owns the normal path; the shadow guard below
+    // keeps teardown correct for builds that skip it.
     const baseDispose = renderer.render(code, container)
     let disposed = false
     return () => {
       if (disposed) return
       disposed = true
       baseDispose()
-      // The dev build of @solidjs/universal does not run cleanupNodes on
-      // dispose; the prod build does. Destroy the mounted root ourselves,
-      // guarded by the shadow map so a prod double-call is a no-op.
       if (topNode && shadow.has(topNode.id)) {
         destroySubtree(topNode)
         handlers.clear()

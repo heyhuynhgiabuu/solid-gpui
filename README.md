@@ -7,8 +7,9 @@ windows (Metal/Vulkan/DirectX), no webview.
 Solid reactivity → mutation protocol (NDJSON) → Rust helper → GPUI
 ```
 
-Status: **walking skeleton** (Phase 1). Mounts Solid trees into a native window
-and applies fine-grained updates. Not yet production-ready.
+Status: **Phase 2 complete through P11**. Mounts Solid 2 trees into native
+windows and applies fine-grained updates. P12 protocol compaction remains
+benchmark-gated; this is still a prerelease and not production-ready.
 
 ## The one trap you must know
 
@@ -50,9 +51,15 @@ Binary resolution order (first hit wins): the `SOLID_GPUI_HELPER` env var →
 a monorepo `target/debug` build → the platform npm package. If none
 resolves you get an error listing exactly what was tried and how to fix it.
 
-For JSX authoring, configure your bundler with
-`babel-preset-solid` (`{ generate: "universal", moduleName: "@solid-gpui/solid/jsx" }`);
-see `scripts/solid-jsx-preload.ts` for a zero-config Bun dev setup.
+For JSX authoring, install the matching compiler plugin and Babel core:
+
+```sh
+bun add -d @solidjs/babel-plugin@2.0.0-rc.3 @babel/core
+```
+
+Configure your Babel pipeline with
+`@solidjs/babel-plugin` (`{ generate: "universal", moduleName: "@solid-gpui/solid/jsx" }`)
+as a plugin; see `scripts/solid-jsx-preload.ts` for a zero-config Bun dev setup.
 
 ## Quick start (from a checkout)
 
@@ -111,15 +118,12 @@ loop on every OS, so no Zed fork and no ThreadsafeFunction usage. See
 
 ## Current limitations (v0.1)
 
-- Authoring via `makeH(renderer)` hyperscript. JSX needs Solid's own compiler
-  (`babel-preset-solid`, `generate: "universal"`) — a Vite/bun plugin is future
-  work. Do NOT point react-style automatic JSX at this package.
-- Event handlers register but clicks don't fire back yet (event backchannel is
-  the next slice).
-- macOS validated; Windows/Linux pending (the architecture needs no per-OS
-  patches).
-- Style subset only (box model, flex, colors as `#hex`, opacity); scrolling
-  clips instead of scrolls for now.
+- Solid 2.0.0-rc.3 is still a prerelease; keep the runtime, universal renderer,
+  and JSX compiler versions aligned.
+- macOS is validated; Windows/Linux remain pending (the architecture needs no
+  per-OS patches).
+- Protocol compaction (P12) is intentionally deferred until benchmarks justify
+  its compatibility and maintenance cost.
 - A failed batch poisons the renderer (by design): discard it and remount.
 
 ## License

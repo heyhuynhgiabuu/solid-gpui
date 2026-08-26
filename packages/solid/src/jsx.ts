@@ -1,12 +1,11 @@
 /**
- * Module-level JSX runtime for babel-preset-solid { generate: "universal" }.
+ * Module-level JSX runtime for @solidjs/babel-plugin { generate: "universal" }.
  *
- * The preset emits imports from THIS module (configure moduleName:
+ * The compiler plugin emits imports from THIS module (configure moduleName:
  * "@solid-gpui/solid/jsx"): createElement, createTextNode, insertNode,
- * insert, setProp, effect, createComponent — plus flow components (Show,
- * For, ...) re-exported from solid-js. The emitted call shapes were
- * verified empirically against @dom-expressions/babel-plugin-jsx
- * 0.50.0-next.44 (see S15a recon in TODO.md).
+ * insert, setProp, effect, createComponent, and memo — plus flow components
+ * (Show, For, ...) re-exported from solid-js. The emitted call shapes were
+ * verified empirically against @solidjs/babel-plugin 2.0.0-rc.3.
  *
  * Bindings delegate to ONE suite. Tests/embeddings inject a suite via
  * initJsxRuntime(send); apps go through mountJsx(), which spawns the helper
@@ -14,7 +13,7 @@
  * suite to a connection by hand — that bypass has broken event routing
  * twice).
  */
-import { Show, For, Switch, Match } from "solid-js"
+import { Show, For, Switch, Match, createMemo } from "solid-js"
 import { createSolidRenderer, type HostNode } from "./renderer"
 import { mount } from "./render"
 import type { RenderHandle } from "./render"
@@ -114,10 +113,10 @@ export function insert(
 }
 
 /**
- * The two-arg effect the universal preset emits for dynamic props:
+ * The two-arg effect the universal compiler plugin emits for dynamic props:
  * compute(tracked) → commit(values, prevValues). The ECHOED binding from
  * createRenderer wraps solid's createRenderEffect and empirically supports
- * object-returning computes with prev-value diffing exactly as the preset
+ * object-returning computes with prev-value diffing exactly as the compiler
  * expects (.pi/effect-probe.ts: [[10,undefined],[20,10]] on set(2)).
  */
 export function effect(compute: () => unknown, commit: (values: never, prev: never) => void): void {
@@ -133,5 +132,5 @@ export function createComponent(comp: unknown, props: unknown): unknown {
 }
 
 // Flow components are renderer-agnostic: re-exported from solid-js so the
-// preset's builtIns imports resolve from this module.
-export { Show, For, Switch, Match }
+// compiler plugin's builtIns imports resolve from this module.
+export { Show, For, Switch, Match, createMemo as memo }

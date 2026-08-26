@@ -3,7 +3,7 @@
  *
  * Same behavior as examples/counter.ts, authored in real JSX: the .tsx is
  * compiled at load time by scripts/solid-jsx-preload.ts through
- * babel-preset-solid { generate: "universal" }, targeting the module-level
+ * @solidjs/babel-plugin { generate: "universal" }, targeting the module-level
  * runtime in packages/solid/src/jsx.
  */
 import { createSignal } from "solid-js"

@@ -16,10 +16,12 @@
   — legal to port with attribution.
 - Dead/quiet competitors: fzdwx/gpui-react (19★, dead), Alex6357/alloy Solid+QuickJS (70★, 1 day).
 
-## Runtime facts (verified 2026-08-24)
+## Runtime facts (verified 2026-08-26)
 
-- Solid: `latest` 1.9.15, `next` = 2.0.0-rc.1 (2026-08-19). Custom renderer story:
-  `@solidjs/universal`, `createRenderer`, renderer-owned JSX types; API frozen at RC.
+- Solid: `latest` 1.9.15, `next` = 2.0.0-rc.3 (2026-08-26). The project pins
+  `solid-js`, `@solidjs/universal`, `@solidjs/web`, and
+  `@solidjs/babel-plugin` to the same rc.3 release. The custom renderer uses
+  `@solidjs/universal`'s `createRenderer` surface.
 - Bun: `latest` 1.4.0 (2026-08-20, first all-Rust release). TSFN exit crash fixed 2026-08-21
   AFTER 1.4.0 (#39810 — wait for 1.4.1+); nested-loop TSFN deadlock open (#36828);
   no Fast Refresh in `--hot` (#40179) → hot reload = full remount pattern.
@@ -167,10 +169,11 @@
   flush(). A host-side flush() must call solid's flush() FIRST, then batch.
 - solid-js 2: reactivity moved to @solidjs/signals (bun's .bun store); main entry
   re-exports. createRoot owned-by-parent default; effects need owner.
-- JSX for solid needs babel-preset-solid/vite 'generate: universal' — bun run
-  applies react-style automatic JSX which is SEMANTICALLY WRONG for solid
-  (eager children evaluation). v0.1 ships makeH() hyperscript; JSX pipeline is a
-  documented gap (needs vite plugin or custom bun plugin later).
+- JSX (pre-rc3 history): Bun's automatic JSX applies React-style transforms that
+  are semantically wrong for Solid (eager children evaluation). Current rc3 uses
+  `@solidjs/babel-plugin` with `generate: "universal"`, `moduleName:
+  "@solid-gpui/solid/jsx"`, and the checked-in Bun preload; `makeH()` remains
+  available for runtime-authored paths.
 - Shadow-tree invariant learned the hard way (review critical): universal's
   reconcileArrays MOVES call insertNode for nodes ALREADY in the parent —
   retain-before-splice is mandatory or duplicates compound. Mirror helper
@@ -682,3 +685,19 @@
 - URL.pathname KHÔNG percent-decode — luôn fileURLToPath(new.URL(...)).
 - Demo <text>string</text> đã dính lỗi attach 3 LẦN (P7/P8/P10): text
   element nhận nội dung qua PROP, string child trong JSX chỉ hợp trên div.
+
+## Solid 2 rc.3 compatibility (2026-08-26)
+
+- Pin `solid-js`, `@solidjs/universal`, `@solidjs/web`, and
+  `@solidjs/babel-plugin` to the same rc.3 release; rc.3 universal declares a
+  `solid-js ^2.0.0-rc.3` peer.
+- The rc.3 JSX compiler is a Babel plugin, not the old preset: use
+  `plugins: [[solidPlugin, { generate: "universal", moduleName: ... }]]`.
+- Unlike rc.1's observed disposer, rc.3 universal calls `cleanupNodes` during
+  render disposal. The hook must tear down the whole shadow subtree so
+  helper-owned refused children are destroyed, while `renderWithDispose`
+  retains a shadow-guarded fallback for older builds.
+- [warning] If the macOS window server is unavailable/occluded, GPUI frame
+  stats can remain at one frame even while stdio mutations are acknowledged;
+  use `SOLID_GPUI_SKIP_GUI_TESTS=1` for headless verification and report the
+  frame test separately rather than attributing it to the JS migration.
