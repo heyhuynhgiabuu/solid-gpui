@@ -573,3 +573,27 @@
 - Pixels không expose field .0 — so sánh bằng px(x) trực tiếp (PartialEq).
 - GUI smoke phải assert RESULT payload + error path có tương quan seq —
   smoke P5 lần này làm đúng ngay từ đầu nhờ bài học P4.
+
+## P6 — scrollbar (2026-08-26)
+
+- **window.on_mouse_event là PAINT-PHASE-ONLY và listener sống đúng MỘT
+  frame** (Frame::clear drop sau draw-swap). Đăng ký "một lần" ở open_window
+  callback / render() đều sai — đúng pattern là element zero-size có paint()
+  đăng ký MỖI frame (gpui elements chính làm vậy; ImeAnchor là tiền lệ
+  trong repo). Tôi sai 2 lần liên tiếp trước khi ra đúng chỗ — khi API cần
+  phase, tìm element có sẵn làm cùng việc trong pinned source.
+- **Đừng tin comment cũ về API thiếu**: comment nói ScrollHandle không có
+  viewport — thực tế ScrollHandle::bounds() tồn tại (div.rs:4111, populate
+  mỗi layout). Reviewer grep vendored source bắt được. Khi ghi "API không
+  có", kiểm tra lại bằng grep trước khi viết.
+- **Zed ui crate components phụ thuộc theme crate** — vendor nguyên component
+  kéo theo chuỗi phụ thuộc; tự viết tối giản theo pattern (ScrollableHandle
+  trait) là hợp quy mô hơn cho helper.
+- **GUI smoke content scrollable**: phải là div height cố định CHỨA div cao
+  hơn — text node mang style height không materialize max_offset. Và sleep
+  một frame sau ack trước khi scrollTo/assert offset (layout cần chạy).
+- Element trait của pinned gpui: paint() có 8 tham số (kể cả PrepaintState)
+  — copy signature từ ImeAnchor thay vì viết từ trí nhớ.
+- Smoke mode --smoke <ms> là công cụ nhanh nhất phát hiện debug_assert /
+  panic-at-startup: cargo test smoke suite sẽ ĐỎ, đừng để CI skip (GUI skip
+  flag) che mất.

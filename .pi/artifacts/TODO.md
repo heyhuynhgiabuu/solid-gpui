@@ -896,7 +896,7 @@ REPLACE far requests instead of widening. Recon what v1 already has first
       đổi semantics trong slice này.
 
 ### 2026-08-26 - P6: scrollbars (host-side bar over any scrollable)
-status: active
+status: CLOSED 2026-08-26 (r1 2 Blockers → fixes 5df67ca → r2 CLEAN)
 
 Goal: a <scrollbar> element wrapping a scrollable (div overflow, list) per
 roadmap P6: bar drawn host-side (drag survives pointer leaving the 8px
@@ -928,4 +928,16 @@ axis/drag/scroll_handle APIs) and our track_scroll/scroll handle plumbing.
       và sleep một frame sau ack trước khi scroll để max_offset materialize);
       thumb geometry unit; fixture round-trip byte-identical. Track-click
       jump + list target (ListState) = follow-up khi có nhu cầu thật
-- [ ] VERIFY: gates + independent review
+- [x] VERIFY: gates + independent review — r1 (mt9n6bj0-bc25) NOT MERGEABLE,
+      2 Blocker cùng root cause: window.on_mouse_event là PAINT-ONLY **và**
+      listener sống đúng 1 frame (Frame::clear drop) — đăng ký open_window
+      callback vừa panic debug_assert (smoke suite ĐỎ) vừa vắng trong
+      --stdio-window (mode client thật) vừa chết sau frame 2. Tôi sai 2 lần
+      (render() cũng không phải paint phase). Fix đúng pattern gpui:
+      ScrollDragAnchor — element zero-size trong scrollbar wrapper, paint()
+      đăng ký MỤI frame (tiền lệ ImeAnchor). M2: comment chối API sai —
+      ScrollHandle::bounds() TỒN TẠI (div.rs:4111), track height giờ đọc
+      bounds sống. M1: TS parity fixture scrollbar. r2 (mt9od7w6-bc6b)
+      verdict CLEAN — audit từng change + smoke exit 0 + grep không còn
+      on_mouse_event ngoài anchor paint. Gates: bun 148/148 · cargo
+      34+82+17 (smoke xanh lại) · clippy/fmt. P6 CLOSED.
