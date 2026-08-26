@@ -1135,3 +1135,56 @@ fn window_mode_scrollbar_wraps_scrollable_and_acknowledges() {
     let status = child.wait().expect("wait");
     assert_eq!(status.code(), Some(0), "EOF must exit 0");
 }
+
+#[test]
+fn window_mode_drag_data_and_drop_listener_apply() {
+    if skip() {
+        return;
+    }
+    let _lock = window_lock();
+    let bin = env!("CARGO_BIN_EXE_solid-gpui-helper");
+    let mut child = Command::new(bin)
+        .arg("--stdio-window")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .spawn()
+        .expect("helper spawns");
+
+    let mut stdin = child.stdin.take().expect("stdin piped");
+    let reader = BufReader::new(child.stdout.take().expect("stdout piped"));
+    let mut lines = reader.lines();
+
+    // Drag source + drop target + dragOver layer, with the payload JSON
+    // built separately so no brace-escaping fights happen in raw strings.
+    let payload = "{\"itemId\":42}";
+    let batch = format!(
+        concat!(
+            "{{\"v\":1,\"seq\":100,\"mutations\":[",
+            "{{\"op\":\"createElement\",\"id\":1,\"elementType\":\"div\"}},",
+            "{{\"op\":\"createElement\",\"id\":2,\"elementType\":\"div\"}},",
+            "{{\"op\":\"setDragData\",\"id\":2,\"data\":\"{}\"}},",
+            "{{\"op\":\"setEventListener\",\"id\":1,\"eventType\":\"drop\",\"enabled\":true}},",
+            "{{\"op\":\"setStyle\",\"id\":1,\"style\":{{\"backgroundColor\":\"#7aa2f7\"}},\"state\":\"dragOver\"}},",
+            "{{\"op\":\"appendChild\",\"parentId\":1,\"childId\":2}},",
+            "{{\"op\":\"setRoot\",\"id\":1}}]}}"
+        ),
+        payload.replace('"', "\\\\".to_string().as_str())
+    );
+    writeln!(stdin, "{batch}").unwrap();
+    stdin.flush().unwrap();
+    let ack = lines.next().unwrap().expect("ack line");
+    assert_eq!(ack, r#"{"type":"ack","seq":100,"applied":7}"#);
+
+    // Clearing drag data applies too (empty string).
+    let clear = r#"{"v":1,"seq":101,"mutations":[{"op":"setDragData","id":2,"data":""}]}"#;
+    writeln!(stdin, "{clear}").unwrap();
+    stdin.flush().unwrap();
+    assert_eq!(
+        lines.next().unwrap().unwrap(),
+        r#"{"type":"ack","seq":101,"applied":1}"#
+    );
+
+    drop(stdin);
+    let status = child.wait().expect("wait");
+    assert_eq!(status.code(), Some(0), "EOF must exit 0");
+}

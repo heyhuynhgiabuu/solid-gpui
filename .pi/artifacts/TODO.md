@@ -941,3 +941,38 @@ axis/drag/scroll_handle APIs) and our track_scroll/scroll handle plumbing.
       verdict CLEAN — audit từng change + smoke exit 0 + grep không còn
       on_mouse_event ngoài anchor paint. Gates: bun 148/148 · cargo
       34+82+17 (smoke xanh lại) · clippy/fmt. P6 CLOSED.
+
+### 2026-08-26 - P7: drag & drop + tooltips
+status: active
+
+Goal: per roadmap P7 — dragData prop (any JSON) starts a drag with the
+element as its own preview; onDragStart/onDrop events; dragOverStyle state
+layer; tooltip prop (string or element ref, shown on hover). Recon gpui
+machinery first: external_drag_payload/on_drag (we saw on_drag in P6 recon),
+DragMoveEvent, hover detection for tooltip timing, anchored() for tooltip
+positioning.
+
+- [x] P7-a recon: on_drag<T,W>(value, constructor) — constructor gọi ĐÚNG
+      lúc drag bắt đầu (dùng làm dragStart event), preview là Entity<W:
+      Render> riêng; on_drop<T> match bằng TypeId → mọi source/target chia
+      MỘT type DragPayload(String) chứa JSON; drag_over::<S> (không phải
+      drag_over_style) nhận StyleRefinement + payload + window + cx; hitbox
+      is_hovered có sẵn cho tooltip. V1 scope chốt: dragData (JSON), dragStart/
+      drop events, dragOverStyle layer, preview chip tự chế (label 24 chars);
+      TOOLTIP (string) DEFERRED — slice riêng, cần hover-timing state + overlay.
+- [x] P7-b: EventType DragStart/Drop + StyleState::DragOver + Mutation
+      SetDragData (JSON string, empty=clear; markdown reject) — lockstep đủ
+      mọi list (KNOWN events/styles/ops) + fixture batch-drag-01.json both
+      sides byte-identical
+- [x] P7-c: DragPayload(String) shared TypeId + DragPreview (Render,
+      chip translucent label 24 chars); on_drag constructor = dragStart
+      emit (value=payload); on_drop emit drop (value=payload);
+      drag_over::<DragPayload> cho layer (clone map trước closure — lifetime
+      node không thoát); element_needs_stateful mở rộng (drag source + drop
+      listener đều cần stateful path)
+- [x] P7-d: dragData prop (stringify tự động, undefined→clear, markdown
+      warn+drop), onDragStart/onDrop vào EVENT_NAMES, dragOverStyle nhánh
+      thứ 3 của state layers; 2 tests renderer (wire shape + clear) + GUI
+      smoke (ack 7 ops + clear ack) + fixture parity TS. Demo để P7-review
+      quyết có cần thêm.
+- [ ] VERIFY: gates + independent review

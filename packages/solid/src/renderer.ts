@@ -47,6 +47,8 @@ const EVENT_NAMES: Record<string, EventType> = {
   onFocus: "focus",
   onBlur: "blur",
   onScroll: "scroll",
+  onDragStart: "dragStart",
+  onDrop: "drop",
   // DOM semantics: input fires per edit (IME included); change commits on
   // blur/Enter (the helper tracks dirty state and emits it).
   onInput: "input",
@@ -247,13 +249,14 @@ export function createSolidRenderer(send: Send): SolidGpuiRenderer {
             : undefined
         return
       }
-      if (name === "hoverStyle" || name === "activeStyle") {
+      if (name === "hoverStyle" || name === "activeStyle" || name === "dragOverStyle") {
         // State layer (P1-c): value is a style map applied on top of the
         // base when gpui reports hover/active. Markdown renders helper-side
         // and rejects state layers — emitting would ack-fail and poison the
         // session (validation and rendering agree), so drop it here instead.
         if (node.tag === "markdown") return
-        const state = name === "hoverStyle" ? "hover" : "active"
+        const state =
+          name === "hoverStyle" ? "hover" : name === "activeStyle" ? "active" : "dragOver"
         const layer = expandShorthands((value ?? {}) as StyleMap)
         push({ op: "setStyle", id, style: layer, state })
         return
@@ -316,6 +319,23 @@ export function createSolidRenderer(send: Send): SolidGpuiRenderer {
           return
         }
         push({ op: "setStyle", id, style: next })
+        return
+      }
+      if (name === "dragData") {
+        // Drag source (P7): any JSON payload; stringified for the wire
+        // (empty string clears the source). Markdown refuses like all
+        // interactive props.
+        if (node.tag === "markdown") {
+          if (typeof console !== "undefined") {
+            console.warn(
+              "[solid-gpui] <markdown> ignores dragData — it fires no events.",
+            )
+          }
+          return
+        }
+        const data =
+          value == null ? "" : typeof value === "string" ? value : JSON.stringify(value)
+        push({ op: "setDragData", id, data })
         return
       }
       if (name === "keys") {

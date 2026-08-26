@@ -218,6 +218,14 @@ function decodeMutation(m: Dict, p: string): Result<Mutation, ProtocolError> {
       }
       return { ok: true, value: { op, id: idR.value, bindings } }
     }
+    case "setDragData": {
+      const idR = id()
+      if (!idR.ok) return idR
+      if (typeof m.data !== "string") {
+        return { ok: false, error: shape(`${p}.data`, "expected a string") }
+      }
+      return { ok: true, value: { op, id: idR.value, data: m.data } }
+    }
     case "setText": {
       const idR = id()
       if (!idR.ok) return idR

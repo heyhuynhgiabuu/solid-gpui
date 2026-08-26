@@ -32,14 +32,18 @@ export type EventType =
   | "submit"
   /** A `keys` binding fired; the event's key field carries the binding. */
   | "keys"
+  /** A drag started on this element; value carries the JSON payload. */
+  | "dragStart"
+  /** A drag released over this target; value carries the JSON payload. */
+  | "drop"
 
 /**
  * Closed set of style-STATE layers: the helper must know every state to wire
  * gpui interactivity (same asymmetry as EVENT_TYPES — style KEYS stay open).
  */
-export type StyleState = "hover" | "active"
+export type StyleState = "hover" | "active" | "dragOver"
 
-export const STYLE_STATES: readonly StyleState[] = ["hover", "active"]
+export const STYLE_STATES: readonly StyleState[] = ["hover", "active", "dragOver"]
 
 export const EVENT_TYPES: readonly EventType[] = [
   "click",
@@ -56,6 +60,8 @@ export const EVENT_TYPES: readonly EventType[] = [
   "change",
   "submit",
   "keys",
+  "dragStart",
+  "drop",
 ]
 
 export const ELEMENT_TYPES: readonly ElementType[] = [
@@ -89,6 +95,12 @@ export type Mutation =
       readonly id: ElementId
       /** Keystroke strings; spaces separate a sequence ("ctrl-x ctrl-s"). */
       readonly bindings: readonly string[]
+    }
+  | {
+      readonly op: "setDragData"
+      readonly id: ElementId
+      /** JSON payload string; empty clears drag-source behavior. */
+      readonly data: string
     }
   | {
       readonly op: "setAnimation"
@@ -139,6 +151,7 @@ export const MUTATION_OPS = [
   "setStyle",
   "setText",
   "setKeyBindings",
+  "setDragData",
   "setValue",
   "setAnimation",
   "setEventListener",

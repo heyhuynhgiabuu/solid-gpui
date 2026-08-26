@@ -28,6 +28,8 @@ pub const EVENT_TYPES: &[&str] = &[
     "change",
     "submit",
     "keys",
+    "dragStart",
+    "drop",
 ];
 
 pub const ELEMENT_TYPES: &[&str] = &[
@@ -79,6 +81,8 @@ pub enum ElementType {
 pub enum StyleState {
     Hover,
     Active,
+    /// Applied while a drag is held over the element (dragOverStyle prop).
+    DragOver,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
@@ -102,6 +106,12 @@ pub enum EventType {
     /// A `keys` binding fired (shortcut/sequence match). The event's `key`
     /// field carries the matched binding string ("cmd-k", "ctrl-x ctrl-s").
     Keys,
+    /// A drag started on this element (dragData prop). The event's `value`
+    /// field carries the JSON payload string.
+    DragStart,
+    /// A drag released over this drop target. The event's `value` field
+    /// carries the dragged JSON payload string.
+    Drop,
 }
 
 /// A style value is a JSON number (kept exact via `serde_json::Number`) or a
@@ -230,6 +240,14 @@ pub enum Mutation {
         transition_ms: u32,
         /// One of linear|easeIn|easeOut|easeInOut; None means easeOut.
         easing: Option<String>,
+    },
+    /// Configure drag & drop for the element: `data` is a JSON string (the
+    /// payload carried to drop targets); an empty string clears drag source
+    /// behavior. Drop targets register onDrop listeners normally.
+    #[serde(rename_all = "camelCase")]
+    SetDragData {
+        id: ElementId,
+        data: String,
     },
     /// Install the element's key bindings (shortcuts/sequences). Each entry
     /// is a keystroke string; spaces separate a sequence ("ctrl-x ctrl-s").
@@ -633,6 +651,7 @@ const KNOWN_OPS: &[&str] = &[
     "setStyle",
     "setText",
     "setKeyBindings",
+    "setDragData",
     "setValue",
     "setAnimation",
     "setEventListener",
@@ -738,6 +757,7 @@ fn from_value(v: serde_json::Value) -> Result<MutationBatch, ProtocolError> {
             | Mutation::DestroyElement { id }
             | Mutation::SetStyle { id, .. }
             | Mutation::SetKeyBindings { id, .. }
+            | Mutation::SetDragData { id, .. }
             | Mutation::SetText { id, .. }
             | Mutation::SetValue { id, .. }
             | Mutation::SetAnimation { id, .. }

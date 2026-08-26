@@ -1,0 +1,1 @@
+{"v":1,"seq":24,"mutations":[{"op":"createElement","id":1,"elementType":"div"},{"op":"setDragData","id":1,"data":"{\"itemId\":42}"},{"op":"setEventListener","id":1,"eventType":"drop","enabled":true},{"op":"setStyle","id":1,"style":{"backgroundColor":"#7aa2f7"},"state":"dragOver"},{"op":"setRoot","id":1}]}

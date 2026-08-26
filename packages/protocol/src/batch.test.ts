@@ -5,6 +5,7 @@ import listFixture from "../fixtures/batch-list-01.json"
 import stateFixture from "../fixtures/batch-style-state-01.json"
 import keysFixture from "../fixtures/batch-keys-01.json"
 import scrollbarFixture from "../fixtures/batch-scrollbar-01.json"
+import dragFixture from "../fixtures/batch-drag-01.json"
 import animationFixture from "../fixtures/batch-animation-01.json"
 import markdownFixture from "../fixtures/batch-markdown-01.json"
 import { elementId } from "./ids"
@@ -375,5 +376,18 @@ describe("scrollbar fixture parity (P6)", () => {
     // re-decode of the raw line would fail.
     const again = decodeBatch(raw)
     expect(again.ok).toBe(true)
+  })
+})
+
+describe("drag fixture parity (P7)", () => {
+  test("batch-drag-01 parses and re-encodes losslessly (dragOver state + drop event)", () => {
+    const raw = JSON.stringify(dragFixture)
+    const r = decodeBatch(raw)
+    expect(r.ok).toBe(true)
+    if (r.ok) {
+      expect(JSON.parse(encodeBatch(r.value))).toEqual(dragFixture)
+      expect(r.value.mutations[1]).toMatchObject({ op: "setDragData", data: '{"itemId":42}' })
+      expect(r.value.mutations[3]).toMatchObject({ state: "dragOver" })
+    }
   })
 })

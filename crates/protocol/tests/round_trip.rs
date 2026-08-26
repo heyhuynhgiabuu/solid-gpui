@@ -608,3 +608,29 @@ fn scrollbar_batch_fixture_parses_both_ways() {
     }
     assert_eq!(to_json(&batch), raw);
 }
+
+#[test]
+fn drag_batch_fixture_parses_both_ways() {
+    let raw = fs::read_to_string(fixture_path("batch-drag-01.json"))
+        .expect("fixture readable")
+        .trim()
+        .to_string();
+    let batch = from_json(&raw).expect("batch parses");
+    match &batch.mutations[1] {
+        Mutation::SetDragData { id, data } => {
+            assert_eq!(*id, 1.into());
+            assert_eq!(data, r#"{"itemId":42}"#);
+        }
+        other => panic!("expected setDragData, got {other:?}"),
+    }
+    match &batch.mutations[3] {
+        Mutation::SetStyle { state, .. } => {
+            assert!(matches!(
+                state,
+                Some(solid_gpui_protocol::StyleState::DragOver)
+            ));
+        }
+        other => panic!("expected setStyle dragOver, got {other:?}"),
+    }
+    assert_eq!(to_json(&batch), raw);
+}

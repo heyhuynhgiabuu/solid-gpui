@@ -2,11 +2,11 @@
 
 use crate::frame_stats::FrameStats;
 use gpui::{
-    AnyElement, App, Bounds, Context, Div, Element, FocusHandle, FollowMode, InputHandler,
-    InteractiveElement, IntoElement, LayoutId, ListAlignment, ListState, ParentElement, Pixels,
-    Point, Render, Rgba, ScrollHandle, SharedString, StatefulInteractiveElement, Style, Styled,
-    UTF16Selection, WeakEntity, Window, div, list, prelude::FluentBuilder as _, px, rgb, rgba,
-    size,
+    AnyElement, App, AppContext as _, Bounds, Context, Div, Element, FocusHandle, FollowMode,
+    InputHandler, InteractiveElement, IntoElement, LayoutId, ListAlignment, ListState,
+    ParentElement, Pixels, Point, Render, Rgba, ScrollHandle, SharedString,
+    StatefulInteractiveElement, Style, Styled, UTF16Selection, WeakEntity, Window, div, list,
+    prelude::FluentBuilder as _, px, rgb, rgba, size,
 };
 use solid_gpui_protocol::EventType;
 use solid_gpui_protocol::Mutation;
@@ -1438,6 +1438,43 @@ fn build_element(
     el.into_any_element()
 }
 
+/// Drag payload carried between elements (P7): every drag source and drop
+/// target shares this ONE type so gpui's TypeId matching works across the
+/// tree — the JSON string is opaque to the helper, meaningful only to JS.
+#[derive(Clone)]
+pub struct DragPayload(pub String);
+
+/// Drag preview shown while dragging (P7): a compact translucent chip; the
+/// payload text preview rides along when it is short and printable.
+struct DragPreview {
+    label: SharedString,
+}
+
+impl Render for DragPreview {
+    fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
+        div()
+            .px_2()
+            .py_1()
+            .rounded_md()
+            .bg(rgb(0x313244e6))
+            .text_size(px(12.))
+            .text_color(rgb(0xcdd6f4ff))
+            .child(self.label.clone())
+    }
+}
+
+impl DragPayload {
+    /// Short printable label for the preview chip.
+    fn preview_label(&self) -> SharedString {
+        let trimmed: String = self.0.chars().take(24).collect();
+        if self.0.chars().count() > 24 {
+            format!("{trimmed}…").into()
+        } else {
+            trimmed.into()
+        }
+    }
+}
+
 /// Whether the plain-div path must become stateful (id + interactivity).
 /// State layers (hover/active) need a Stateful element for gpui's
 /// hover()/active() refinements — without this check they would be stored
@@ -1449,7 +1486,18 @@ fn element_needs_stateful(
     has_click: bool,
     wants_focus: bool,
 ) -> bool {
-    has_overflow || has_click || wants_focus || !node.state_styles.is_empty()
+    has_overflow
+        || has_click
+        || wants_focus
+        || !node.state_styles.is_empty()
+        || node.drag_data.as_ref().is_some_and(|d| !d.is_empty())
+        || tree_listens_for_drop(node)
+}
+
+/// Whether the node registers a drop listener (needs the stateful path so
+/// on_drop is reachable). Pure helper for element_needs_stateful.
+fn tree_listens_for_drop(node: &solid_gpui_protocol::Node) -> bool {
+    node.listeners.contains(&EventType::Drop)
 }
 
 impl IntoElement for ScrollDragAnchor {
@@ -1856,6 +1904,51 @@ fn apply_interactive(
         });
         el = el.on_click(listener);
     }
+    // Drag source (P7): dragData prop → on_drag with the shared DragPayload
+    // type; the preview constructor fires dragStart to JS when the gesture
+    // begins (gpui calls it exactly then).
+    if let Some(data) = node.drag_data.as_ref().filter(|d| !d.is_empty()) {
+        let payload = DragPayload(data.clone());
+        let sink_id = id;
+        let sink = ctx.sink.clone();
+        let entity_for_start = ctx.host.clone();
+        el = el.on_drag(
+            payload,
+            move |payload: &DragPayload, _point, _window, cx| {
+                // Emit dragStart when the drag begins (constructor call time).
+                let _ = entity_for_start.upgrade();
+                (sink)(&Event::Input {
+                    id: sink_id,
+                    event_type: EventType::DragStart,
+                    x: None,
+                    y: None,
+                    key: None,
+                    modifiers: None,
+                    value: Some(payload.0.clone()),
+                });
+                cx.new(|_| DragPreview {
+                    label: payload.preview_label(),
+                })
+            },
+        );
+    }
+    // Drop target (P7): any element with a drop listener receives the JSON
+    // payload. gpui matches the shared DragPayload TypeId.
+    if node.listeners.contains(&EventType::Drop) {
+        let sink_id = id;
+        let sink = ctx.sink.clone();
+        el = el.on_drop::<DragPayload>(move |payload: &DragPayload, _window, _cx| {
+            (sink)(&Event::Input {
+                id: sink_id,
+                event_type: EventType::Drop,
+                x: None,
+                y: None,
+                key: None,
+                modifiers: None,
+                value: Some(payload.0.clone()),
+            });
+        });
+    }
     if !node.key_bindings.is_empty() {
         // Shortcuts/sequences: a listener ON THE FOCUSED ELEMENT, so bindings
         // never compete with other elements' key handlers. Bindings are read
@@ -2208,6 +2301,11 @@ fn apply_state_styles(
     }
     if let Some(active) = node.state_styles.get(&StyleState::Active) {
         el = el.active(|s| apply_refinement(s, active));
+    }
+    if let Some(over) = node.state_styles.get(&StyleState::DragOver).cloned() {
+        // gpui applies drag_over styles only while a matching drag hovers.
+        el = el
+            .drag_over::<DragPayload>(move |s, _payload, _window, _cx| apply_refinement(s, &over));
     }
     el
 }

@@ -34,6 +34,9 @@ pub const MAX_DEPTH: usize = 256;
 pub struct Node {
     pub element_type: ElementType,
     pub style: StyleMap,
+    /// Drag payload (JSON string) — non-empty makes the element a drag
+    /// source; drop targets receive it in the drop event's value field.
+    pub drag_data: Option<String>,
     /// Key bindings (shortcuts/sequences) — fired as `keys` events while
     /// the element holds focus. Empty = none.
     pub key_bindings: Vec<String>,
@@ -56,6 +59,7 @@ impl Node {
         Node {
             element_type,
             style: BTreeMap::new(),
+            drag_data: None,
             key_bindings: Vec::new(),
             state_styles: BTreeMap::new(),
             text: None,
@@ -216,6 +220,22 @@ impl RetainedTree {
                     node.style
                         .insert(key.clone(), StyleValue::Number(to_number));
                 }
+                Ok(())
+            }
+            Mutation::SetDragData { id, data } => {
+                let node = self.mut_node(*id, "setDragData")?;
+                if node.element_type == ElementType::Markdown {
+                    // Validation and rendering agree: markdown renders a
+                    // static helper-owned subtree and fires no events.
+                    return Err(ApplyError::InvalidMutation {
+                        message: format!("setDragData: markdown elements fire no events ({id:?})"),
+                    });
+                }
+                node.drag_data = if data.is_empty() {
+                    None
+                } else {
+                    Some(data.clone())
+                };
                 Ok(())
             }
             Mutation::SetKeyBindings { id, bindings } => {

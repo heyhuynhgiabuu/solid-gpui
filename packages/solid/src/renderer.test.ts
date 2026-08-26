@@ -542,3 +542,63 @@ describe("keys prop (P3)", () => {
     ).toBe(true)
   })
 })
+
+describe("drag & drop (P7)", () => {
+  test("dragData stringifies to the wire; onDragStart/onDrop register listeners", async () => {
+    const rec = recording()
+    const { renderer: R, render, flush } = createSolidRenderer(rec.send)
+    const container = R.createElement("#root")
+    let node: ReturnType<typeof R.createElement> | null = null
+    let target: ReturnType<typeof R.createElement> | null = null
+    const dispose = render(() => {
+      const root = R.createElement("div")
+      node = R.createElement("div")
+      target = R.createElement("div")
+      R.insert(root, node, null, null)
+      R.insert(root, target, null, null)
+      return root
+    }, container)
+    await flush()
+
+    R.setProp(node!, "dragData", { itemId: 42 })
+    R.setProp(node!, "onDragStart", () => {})
+    R.setProp(target!, "onDrop", () => {})
+    R.setProp(target!, "dragOverStyle", { backgroundColor: "#7aa2f7" })
+    await flush()
+    dispose()
+
+    const muts = rec.batches.flatMap((b) => b.mutations)
+    const dd = muts.find((m): m is Extract<Mutation, { op: "setDragData" }> => m.op === "setDragData")
+    expect(dd?.data).toBe('{"itemId":42}')
+    const listeners = muts
+      .filter((m): m is Extract<Mutation, { op: "setEventListener" }> => m.op === "setEventListener")
+      .map((m) => `${m.eventType}:${m.enabled}`)
+    expect(listeners).toContain("dragStart:true")
+    expect(listeners).toContain("drop:true")
+    const over = muts.find(
+      (m): m is Extract<Mutation, { op: "setStyle" }> => m.op === "setStyle" && m.state === "dragOver",
+    )
+    expect(over?.style).toEqual({ backgroundColor: "#7aa2f7" })
+  })
+
+  test("clearing dragData sends the empty string", async () => {
+    const rec = recording()
+    const { renderer: R, render, flush } = createSolidRenderer(rec.send)
+    const container = R.createElement("#root")
+    let node: ReturnType<typeof R.createElement> | null = null
+    const dispose = render(() => {
+      const root = R.createElement("div")
+      node = root
+      return root
+    }, container)
+    await flush()
+    R.setProp(node!, "dragData", "x")
+    R.setProp(node!, "dragData", undefined)
+    await flush()
+    dispose()
+    const dd = rec.batches
+      .flatMap((b) => b.mutations)
+      .filter((m): m is Extract<Mutation, { op: "setDragData" }> => m.op === "setDragData")
+    expect(dd[dd.length - 1]?.data).toBe("")
+  })
+})
