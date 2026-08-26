@@ -1967,13 +1967,20 @@ fn build_svg_element(tree: &RetainedTree, id: ElementId, ctx: &mut RenderCtx) ->
     let source: SharedString = SharedString::from(node.text.clone().unwrap_or_default());
     // gpui's Svg paints NOTHING without a text color (style.text.color is
     // Option and unpainted when None), so a missing `color` style must get
-    // an explicit default — black, matching plain text elements. Without
-    // this the icon silently disappears.
+    // an explicit default. Hsla::default() is alpha-0 (derive(Default) on
+    // four f32s — transparent, still invisible), so this is the OPAQUE
+    // One Dark text color gpui itself falls back to for unlabeled text
+    // (theme/fallback_themes.rs:140): icons behave like default text.
     let has_color = node.style.contains_key("color")
         || node.state_styles.values().any(|m| m.contains_key("color"));
     let mut el = svg().data(source.as_bytes());
     if !has_color {
-        el = el.text_color(Hsla::default());
+        el = el.text_color(Hsla {
+            h: 221.0 / 360.0,
+            s: 0.11,
+            l: 0.86,
+            a: 1.0,
+        });
     }
     // Svg impls Styled: width/height/backgroundColor AND the `color` tint
     // all flow through the same generic applier as every other element.

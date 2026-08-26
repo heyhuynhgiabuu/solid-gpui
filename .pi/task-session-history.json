@@ -1302,5 +1302,30 @@
     "rawStatus": "failure",
     "resultValid": true,
     "completedAt": 1787737080528
+  },
+  {
+    "id": "mt9wv9mt-8b72",
+    "agentType": "reviewer",
+    "description": "P10 media review r2",
+    "sessionName": "task-mt9wv9mt-8b72",
+    "startedAt": 1787737705436,
+    "paneId": "w3:pFR",
+    "handle": {
+      "backend": "herdr",
+      "resourceId": "w3:pFR",
+      "socketPath": "/Users/huynhgiabuu/.config/herdr/herdr.sock",
+      "terminalId": "term_659f01e903da417",
+      "agentName": "reviewer-mt9wv9mt",
+      "foregroundProcessGroupId": 74939
+    },
+    "piDir": "/Users/huynhgiabuu/dev/projects/solid-gpui/.pi",
+    "dir": "/Users/huynhgiabuu/dev/projects/solid-gpui/.pi/artifacts/tasks",
+    "cwd": "/Users/huynhgiabuu/dev/projects/solid-gpui",
+    "status": "done",
+    "background": true,
+    "reportedStatus": "failure",
+    "rawStatus": "failure",
+    "resultValid": true,
+    "completedAt": 1787738230812
   }
 ]

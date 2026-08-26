@@ -1217,6 +1217,15 @@ fn media_elements_store_sources_and_reject_misuse() {
         tree.get(ElementId(1)).unwrap().src.as_deref(),
         Some("/tmp/pic.png")
     );
+    // Empty src rejects (mirrors the TS decoder; clearing an img source is
+    // not a thing — destroy the element instead).
+    let err = tree
+        .apply(&Mutation::SetSrc {
+            id: ElementId(1),
+            src: String::new(),
+        })
+        .unwrap_err();
+    assert!(err.to_string().contains("non-empty"), "{err}");
     let err = tree
         .apply(&Mutation::SetSrc {
             id: ElementId(3),

@@ -6,6 +6,7 @@
  * Run: bun run example/media
  */
 import { createSignal } from "solid-js"
+import { fileURLToPath } from "node:url"
 import { mountJsx } from "../packages/solid/src/jsx"
 import type { RenderHandle } from "../packages/solid/src/render"
 
@@ -61,7 +62,7 @@ function Tree() {
         ))}
       </div>
       <img
-        src={new URL("./assets/media-sample.png", import.meta.url).pathname}
+        src={fileURLToPath(new URL("./assets/media-sample.png", import.meta.url))}
         style={{ width: 220, height: 140, borderRadius: 10, backgroundColor: "#181825" }}
         deferred
       />

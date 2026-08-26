@@ -514,7 +514,6 @@ export function createSolidRenderer(send: Send): SolidGpuiRenderer {
         // list, svg markup, img source). All reject attach on the wire
         // (applyFailed poisons the session). Refuse children client-side
         // instead of emitting an op we know is invalid.
-        // children client-side instead of emitting an op we know is invalid.
         // The node is still recorded in the shadow bookkeeping: dispose walks
         // the shadow tree and destroys these ids (they exist helper-side via
         // their createElement), so refusing must not leak elements, and
@@ -522,7 +521,7 @@ export function createSolidRenderer(send: Send): SolidGpuiRenderer {
         // universal believes about the tree.
         if (typeof console !== "undefined") {
           console.warn(
-            `[solid-gpui] <${parent.tag}> takes a content prop (source/src); children are not rendered and were dropped.`,
+            `[solid-gpui] <${parent.tag}> takes a content prop (${parent.tag === "canvas" ? "drawList" : parent.tag === "markdown" ? "source" : "src"}); children are not rendered and were dropped.`,
           )
         }
         const entry = shadow.get(parent.id)!
