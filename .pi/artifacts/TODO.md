@@ -727,7 +727,7 @@ closes correctness gaps found by adversarial typing tests.
       giờ emit change (deliberate, đã ghi nhận). P2 CLOSED.
 
 ### 2026-08-26 - P3: focus + keys (shortcuts via keymap, scoped key events)
-status: active
+status: CLOSED 2026-08-26 (r1-retry NOT MERGEABLE → fixes verified below)
 
 Goal: desktop-app shortcuts work like desktop apps: a `keys` prop resolves
 through gpui's keymap (sequences like "ctrl-x ctrl-s") instead of competing
@@ -753,4 +753,15 @@ Recon first — v1 already has tabIndex/autofocus/focus/blur/keyDown/keyUp.
 - [x] P3-d renderer: keys prop = { binding: fn } map → setKeyBindings +
       keys listener; keys handler demux theo binding báo về; re-set thay
       toàn bộ map; undefined clear cả hai; markdown warn + drop
-- [ ] VERIFY: gates + independent review
+- [x] VERIFY: gates + independent review — lần review đầu (mt9kifuw-f246)
+      chết giữa chừng không verdict (29 tool calls, hết stream) → retry
+      (mt9kqwri-49aa) với yêu cầu verdict là message cuối. Verdict NOT
+      MERGEABLE: B1 keys-only element không bao giờ fire (outer gate có
+      key_bindings, inner wants_focus KHÔNG → focusable() không chạy; smoke
+      ack-only che mất), B2 panic seq.0[matched] khi bindings swap giữa
+      sequence sang list ngắn hơn (guard chỉ che stale-bi), Major prefix
+      shadowing im lặng (thứ tự list quyết định binding nào chết), Minor TS
+      parity fixture keys thiếu. Tất cả fixed: hai gate sync kèm comment,
+      stale-guard đầy đủ (reset + fresh-match), semantics pin bằng unit +
+      renderer warn lúc cài, parity test thêm. Gates: bun 131/131 · cargo
+      79+31+15 · tsc ×3 · clippy/fmt sạch. P3 CLOSED.
