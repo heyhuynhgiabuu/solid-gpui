@@ -1562,5 +1562,59 @@
     "rawStatus": "success",
     "resultValid": true,
     "completedAt": 1787751920090
+  },
+  {
+    "id": "mta8bdf4-aa8b",
+    "agentType": "reviewer",
+    "description": "Review S14 tooltip slice",
+    "sessionName": "task-mta8bdf4-aa8b",
+    "startedAt": 1787756927215,
+    "paneId": "wB:p1",
+    "handle": {
+      "backend": "herdr",
+      "resourceId": "wB:p1",
+      "socketPath": "/Users/huynhgiabuu/.config/herdr/herdr.sock",
+      "terminalId": "term_659f4989786a123",
+      "agentName": "reviewer-mta8bdf4",
+      "foregroundProcessGroupId": 44743,
+      "workspaceId": "wB",
+      "workspaceGroup": "solid-gpui-s14-tooltip-review"
+    },
+    "piDir": "/Users/huynhgiabuu/dev/projects/solid-gpui/.pi",
+    "dir": "/Users/huynhgiabuu/dev/projects/solid-gpui/.pi/artifacts/tasks",
+    "cwd": "/Users/huynhgiabuu/dev/projects/solid-gpui",
+    "status": "done",
+    "background": false,
+    "reportedStatus": "success",
+    "rawStatus": "success",
+    "resultValid": true,
+    "completedAt": 1787757286417
+  },
+  {
+    "id": "mta8mvh9-f090",
+    "agentType": "reviewer",
+    "description": "Review tooltip parity fix",
+    "sessionName": "task-mta8mvh9-f090",
+    "startedAt": 1787757463844,
+    "paneId": "wC:p1",
+    "handle": {
+      "backend": "herdr",
+      "resourceId": "wC:p1",
+      "socketPath": "/Users/huynhgiabuu/.config/herdr/herdr.sock",
+      "terminalId": "term_659f4b893d92b24",
+      "agentName": "reviewer-mta8mvh9",
+      "foregroundProcessGroupId": 51609,
+      "workspaceId": "wC",
+      "workspaceGroup": "solid-gpui-s14-tooltip-fix-review"
+    },
+    "piDir": "/Users/huynhgiabuu/dev/projects/solid-gpui/.pi",
+    "dir": "/Users/huynhgiabuu/dev/projects/solid-gpui/.pi/artifacts/tasks",
+    "cwd": "/Users/huynhgiabuu/dev/projects/solid-gpui",
+    "status": "done",
+    "background": false,
+    "reportedStatus": "success",
+    "rawStatus": "success",
+    "resultValid": true,
+    "completedAt": 1787757628074
   }
 ]

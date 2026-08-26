@@ -1240,5 +1240,23 @@ Non-goals:
       and covered by unit, fixture, and stdio-window tests.
 - [ ] Reassess select/combobox from evidence; implement only if its contract is
       independently verifiable without a round-trip during native layout.
-- [ ] Run relevant tests, typecheck, Rust gates, and obtain an independent review;
-      close this block only after fresh verification and zero open findings.
+- [x] Run the relevant tooltip tests, typecheck, Rust gates, and obtain an
+      independent review. `bun run test` is green at 176 pass / 0 fail;
+      `bun run typecheck`, `cargo test -p solid-gpui-protocol -p solid-gpui-helper`,
+      `cargo clippy --all-targets -- -D warnings`, and `cargo fmt --all -- --check`
+      all exit 0. Reviewer `mta8mvh9-f090` returned CLEAN/MERGEABLE after the
+      missing-field parity fix from `mta8bdf4-aa8b`.
+- [ ] Close the parent S14 block after the select/combobox contract is separately
+      reassessed and either implemented or explicitly deferred.
+
+
+#### Tooltip slice verification
+
+- `bun run benchmark:protocol` still exits 0 after adding `setTooltip`: 12
+  fixtures, numeric candidate `50.21%` smaller on wire but `28.13%` slower to
+  encode, so P12 remains a no-op.
+- `batch-tooltip-01.json` round-trips in both protocol suites; null clearing,
+  missing/empty field rejection, unsupported target rejection, renderer refusal,
+  stateful-path wiring, and real `--stdio-window` acknowledgement are covered.
+- Select/combobox is intentionally the next open design item; no implementation
+  is claimed by this tooltip slice.
