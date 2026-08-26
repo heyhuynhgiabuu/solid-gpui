@@ -32,7 +32,7 @@ idea-level inspiration from the prior-art bridge only; no the prior-art bridge c
 - [x] State change → minimal mutation (no full-tree diff) reaches the native layer
 - [x] Works with `bun --hot` (remount without losing the window) and plain `node`
 - [x] Counter demo committed with run instructions; `bun run example/counter` verified
-- [ ] LICENSE file present; repo public-ready
+- [x] LICENSE file present; repo public-ready
 
 ## Resolved decisions (2026-08-24)
 

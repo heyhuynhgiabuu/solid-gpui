@@ -1064,7 +1064,7 @@ r2 NOT MERGEABLE: tint fallback alpha-0; fixes c3b25a8+225d09a; r3 CLEAN)
       khớp default hiệu lực của gpui (cite fallback_themes.rs). r3 CLEAN.
 
 ### 2026-08-26 - P11: span styled runs inside text
-status: active
+status: done (2026-08-26; commit 5e13f7d; independent review mt9yz59o-1d31 CLEAN)
 
 - [x] Recon current text protocol, renderer, and pinned gpui styled-text APIs;
       `StyledText::with_runs` is the version-matched wrapping seam; `TextRun`
@@ -1081,5 +1081,14 @@ status: active
 - [x] GREEN: protocol/helper/renderer/demo implemented; `setTextRuns` is
       wholesale, Rust derives UTF-8 ranges, client validates boundary shapes,
       plain `setText` clears runs, and list-height remeasure sees the new op.
-- [ ] VERIFY: fresh full exit-code gates plus independent review; close only
-      after all checklist items are green.
+- [x] VERIFY: fresh full gates all exited 0: `bun run test` = 171 pass / 0
+      fail; `bun run typecheck` = 0; `cargo test -p
+      solid-gpui-protocol -p solid-gpui-helper` = 0 (146 tests, including 22
+      real-window tests); `cargo clippy --all-targets -- -D warnings` = 0;
+      `cargo fmt --all -- --check` = 0. The text-runs demo exited 0 and logged
+      mount + three style toggles. Independent review mt9yz59o-1d31 is
+      CLEAN/MERGEABLE with 0 blocker/major/minor findings. Non-blocking notes:
+      fixture seq 27 is arbitrary; Rust style/underline/color shape errors use
+      serde rather than bespoke paths; `runs: () => null` preserves prior runs,
+      matching the existing style-bag precedent. Visual pixels were not
+      compared; P11 remains complete within its stated smoke-test scope.

@@ -1402,5 +1402,30 @@
     "rawStatus": "success",
     "resultValid": true,
     "completedAt": 1787739601527
+  },
+  {
+    "id": "mt9yz59o-1d31",
+    "agentType": "reviewer",
+    "description": "Finish P11 review",
+    "sessionName": "task-mt9yz59o-1d31",
+    "startedAt": 1787741245100,
+    "paneId": "w3:pFW",
+    "handle": {
+      "backend": "herdr",
+      "resourceId": "w3:pFW",
+      "socketPath": "/Users/huynhgiabuu/.config/herdr/herdr.sock",
+      "terminalId": "term_659f0f1933ef81b",
+      "agentName": "reviewer-mt9yz59o",
+      "foregroundProcessGroupId": 84022
+    },
+    "piDir": "/Users/huynhgiabuu/dev/projects/solid-gpui/.pi",
+    "dir": "/Users/huynhgiabuu/dev/projects/solid-gpui/.pi/artifacts/tasks",
+    "cwd": "/Users/huynhgiabuu/dev/projects/solid-gpui",
+    "status": "done",
+    "background": true,
+    "reportedStatus": "success",
+    "rawStatus": "success",
+    "resultValid": true,
+    "completedAt": 1787741674666
   }
 ]
