@@ -843,7 +843,7 @@ status: done 2026-08-26 (superseded by the main P4 block — closed above; kept 
       fmt. P4 CLOSED.
 
 ### 2026-08-26 - P5: variable-height list (chat-log UX)
-status: active
+status: CLOSED 2026-08-26 (r1 Major → fixes verified below)
 
 Goal: extend the existing uniform List toward gpui's variable-height list
 semantics per roadmap P5: itemHeight stand-in for unmeasured rows,
@@ -881,4 +881,16 @@ REPLACE far requests instead of widening. Recon what v1 already has first
 - [x] P5-d: list.ts (scrollToItem, seq namespace 2M riêng); StyleKey gains
       listAlign/overdraw; tests encode/decode đôi (protocol) + fake-channel
       (list API) + GUI smoke assert RESULT payload + correlated error path
-- [ ] VERIFY: gates + independent review
+- [x] VERIFY: gates + independent review — r1 (mt9mbrx0-25f6) NOT MERGEABLE:
+      Major overdraw chết trên path chính — có BA nơi tạo ListState, site
+      eager ensure_list_state (chạy TRƯỚC cho mọi list) vẫn hardcode
+      px(500) + ternary cũ; followTail+overdraw bị ignore vĩnh viễn vì state
+      tồn tại trước render, alignment không diverge → recreate không bao giờ
+      chạy; GUI smoke pass may mắn vì listAlign của nó diverge. Reviewer
+      khen scrollToItem lockstep "exemplary" (bài học P4 áp dụng đúng).
+      Fix: list_state_config — MỘT nguồn sự thật cho cả 3 sites; regression
+      unit pin đúng case reviewer nêu. Minors: doc/allow re-attach, list
+      export + seq doc. Gates: bun 147/147 · cargo 81+32+16 · clippy/fmt.
+      P5 CLOSED. Note 5 (followTail+listAlign:top mâu thuẫn — resolver thắng
+      nhưng FollowMode vẫn armed): ghi nhận là hành vi cần doc ở P6; không
+      đổi semantics trong slice này.
