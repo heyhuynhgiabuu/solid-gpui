@@ -1256,7 +1256,8 @@ Non-goals:
 
 - `bun run benchmark:protocol` still exits 0 after adding `setTooltip` and
   `setAccessibility`: 13 fixtures, numeric candidate `51.77%` smaller on wire
-  but `34.94%` slower to encode, so P12 remains a no-op.
+  but its measured encode regression remains above the 10% gate, so P12 remains
+  a no-op.
 - `batch-tooltip-01.json` round-trips in both protocol suites; null clearing,
   missing/empty field rejection, unsupported target rejection, renderer refusal,
   stateful-path wiring, and real `--stdio-window` acknowledgement are covered.
