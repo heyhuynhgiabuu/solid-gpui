@@ -446,6 +446,8 @@ describe("accessibility fixture parity", () => {
       { accessibility: { role: "slider" }, path: "mutations[0].accessibility.role" },
       { accessibility: { role: "option", selected: "yes" }, path: "mutations[0].accessibility.selected" },
       { accessibility: { role: "option", value: 1 }, path: "mutations[0].accessibility.value" },
+      { accessibility: { role: "option", selected: null }, path: "mutations[0].accessibility.selected" },
+      { accessibility: { role: "combobox", expanded: null }, path: "mutations[0].accessibility.expanded" },
     ]
     for (const item of cases) {
       const r = decodeBatch(

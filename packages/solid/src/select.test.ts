@@ -1,3 +1,17 @@
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 import { describe, expect, test } from "bun:test"
 import { createSignal } from "solid-js"
 import type { Mutation, MutationBatch, SolidGpuiEvent } from "@solid-gpui/protocol"
@@ -67,7 +81,12 @@ describe("select primitives", () => {
                   }),
                   createComponent(select.Item, {
                     value: "blue",
+                    disabled: true,
                     children: () => createTextNode("Blue"),
+                  }),
+                  createComponent(select.Item, {
+                    value: "green",
+                    children: () => createTextNode("Green"),
                   }),
                 ],
               }),
@@ -128,8 +147,8 @@ describe("select primitives", () => {
       suite.handler(triggerId!, "keyDown")?.(event(triggerId!, "keyDown", { key: "Enter" }))
       await suite.flush()
 
-      expect(changes).toEqual(["blue"])
-      expect(value()).toBe("blue")
+      expect(changes).toEqual(["green"])
+      expect(value()).toBe("green")
       const all = rec.batches.flatMap((batch) => batch.mutations)
       expect(
         all.some(
@@ -137,7 +156,7 @@ describe("select primitives", () => {
             mutation.op === "setAccessibility" &&
             mutation.accessibility?.role === "combobox" &&
             mutation.accessibility.expanded === false &&
-            mutation.accessibility.value === "blue",
+            mutation.accessibility.value === "green",
         ),
       ).toBe(true)
 

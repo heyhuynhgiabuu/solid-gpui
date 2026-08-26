@@ -152,6 +152,8 @@ fn accessibility_decoder_rejects_missing_and_malformed_states() {
         r#"{"v":1,"seq":1,"mutations":[{"op":"setAccessibility","id":1}]}"#,
         r#"{"v":1,"seq":1,"mutations":[{"op":"setAccessibility","id":1,"accessibility":{"role":"slider"}}]}"#,
         r#"{"v":1,"seq":1,"mutations":[{"op":"setAccessibility","id":1,"accessibility":{"role":"option","selected":"yes"}}]}"#,
+        r#"{"v":1,"seq":1,"mutations":[{"op":"setAccessibility","id":1,"accessibility":{"role":"option","selected":null}}]}"#,
+        r#"{"v":1,"seq":1,"mutations":[{"op":"setAccessibility","id":1,"accessibility":{"role":"combobox","expanded":null}}]}"#,
     ] {
         assert!(
             from_json(raw).is_err(),

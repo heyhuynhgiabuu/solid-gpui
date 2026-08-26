@@ -997,6 +997,22 @@ fn from_value(v: serde_json::Value) -> Result<MutationBatch, ProtocolError> {
                     message: "missing field".into(),
                 });
             }
+            if op == "setAccessibility"
+                && let Some(state) = mo
+                    .get("accessibility")
+                    .and_then(serde_json::Value::as_object)
+            {
+                for field in ["value", "expanded", "selected"] {
+                    if let Some(raw) = state.get(field)
+                        && raw.is_null()
+                    {
+                        return Err(ProtocolError::InvalidShape {
+                            path: format!("{p}.accessibility.{field}"),
+                            message: "field must be omitted rather than null".into(),
+                        });
+                    }
+                }
+            }
             if op == "setEventListener"
                 && let Some(et) = mo.get("eventType")
             {

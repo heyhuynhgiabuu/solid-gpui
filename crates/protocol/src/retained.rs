@@ -20,6 +20,9 @@
 //!   (the markdown source the helper parses and renders), and svg elements
 //!   (raw markup); `setTextRuns` is valid only on text elements and replaces
 //!   their one wrapping string atomically.
+//! - `setAccessibility` is valid on div/input/textarea nodes and stores a
+//!   closed typed role plus optional live properties for the helper's AccessKit
+//!   render path.
 //! - Destroying the current root clears it; the window shows nothing until a
 //!   new root is set.
 

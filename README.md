@@ -92,8 +92,10 @@ images, and scrollbar wrappers intentionally ignore the prop.
 
 ## Select and combobox primitives (S14b)
 
-The `select` and `combobox` namespaces provide composable headless primitives.
-Both use a controlled string value; the combobox trigger is an editable input.
+The `select` and `combobox` namespaces provide composable headless primitives
+for the JSX universal runtime (`mountJsx`). `render((h) => ...)` remains the
+low-level hyperscript surface. Both controls use a controlled string value; the
+combobox trigger is an editable input.
 Content is an in-window anchored/deferred overlay and GPUI receives typed
 `combobox`, `listbox`, and `option` accessibility roles plus live expanded and
 selected state:
@@ -109,9 +111,10 @@ selected state:
 ```
 
 `combobox.Root` uses the same `Content`/`Item` primitives with an editable
-`combobox.Trigger`. Values are controlled; multi-select, uncontrolled state,
-native popup windows, and outside-click dismissal are not part of S14b. Try the
-real window demo with `bun run example/select`.
+`combobox.Trigger`. Values are controlled; filtering remains caller-owned, and
+multi-select, uncontrolled state, native popup windows, and outside-click
+dismissal are not part of S14b. Try the real window demo with
+`bun run example/select`.
 
 ## Window, dialogs, shell (P4)
 

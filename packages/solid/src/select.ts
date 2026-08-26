@@ -1,3 +1,17 @@
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 import { createContext, createEffect, createSignal, onCleanup, useContext } from "solid-js"
 import type { Element as SolidElement } from "solid-js"
 import type {
@@ -14,8 +28,6 @@ import {
   Show,
 } from "./jsx"
 import type { HostNode } from "./renderer"
-
-type SelectMode = "select" | "combobox"
 
 type SelectChildren = SolidElement | (() => SelectChildren)
 
@@ -62,7 +74,6 @@ interface RegisteredItem {
 }
 
 interface SelectContext {
-  readonly mode: SelectMode
   readonly value: () => string
   readonly open: () => boolean
   readonly items: () => readonly RegisteredItem[]
@@ -144,7 +155,7 @@ function accessibility(
   }
 }
 
-function createContextValue(props: SelectRootProps, mode: SelectMode): SelectContext {
+function createContextValue(props: SelectRootProps): SelectContext {
   const [open, setOpen] = createSignal(props.defaultOpen ?? false)
   const [items, setItems] = createSignal<readonly RegisteredItem[]>([])
   const [activeIndex, setActiveIndex] = createSignal<number | null>(null)
@@ -262,7 +273,6 @@ function createContextValue(props: SelectRootProps, mode: SelectMode): SelectCon
   )
 
   return {
-    mode,
     value: () => props.value,
     open,
     items,
@@ -280,8 +290,8 @@ function createContextValue(props: SelectRootProps, mode: SelectMode): SelectCon
   }
 }
 
-function Root(props: SelectRootProps, mode: SelectMode): HostNode {
-  const state = createContextValue(props, mode)
+function Root(props: SelectRootProps): HostNode {
+  const state = createContextValue(props)
   return createComponent(SelectContext, {
     value: state,
     children: () => {
@@ -294,11 +304,11 @@ function Root(props: SelectRootProps, mode: SelectMode): HostNode {
 }
 
 function SelectRoot(props: SelectRootProps): HostNode {
-  return Root(props, "select")
+  return Root(props)
 }
 
 function ComboboxRoot(props: SelectRootProps): HostNode {
-  return Root(props, "combobox")
+  return Root(props)
 }
 
 function SelectTrigger(props: SelectTriggerProps): HostNode {
