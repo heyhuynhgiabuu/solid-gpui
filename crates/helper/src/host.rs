@@ -1456,9 +1456,9 @@ impl Render for DragPreview {
             .px_2()
             .py_1()
             .rounded_md()
-            .bg(rgb(0x313244e6))
+            .bg(rgba(0x313244e6))
             .text_size(px(12.))
-            .text_color(rgb(0xcdd6f4ff))
+            .text_color(rgba(0xcdd6f4ff))
             .child(self.label.clone())
     }
 }
@@ -1911,12 +1911,11 @@ fn apply_interactive(
         let payload = DragPayload(data.clone());
         let sink_id = id;
         let sink = ctx.sink.clone();
-        let entity_for_start = ctx.host.clone();
         el = el.on_drag(
             payload,
             move |payload: &DragPayload, _point, _window, cx| {
-                // Emit dragStart when the drag begins (constructor call time).
-                let _ = entity_for_start.upgrade();
+                // Emit dragStart when the drag begins (constructor call
+                // time); a gone host (teardown drags) still previews.
                 (sink)(&Event::Input {
                     id: sink_id,
                     event_type: EventType::DragStart,
@@ -3154,6 +3153,51 @@ mod element_needs_stateful_tests {
             .unwrap();
         }
         tree.get(ElementId(1)).unwrap().clone()
+    }
+
+    #[test]
+    fn drag_sources_and_drop_targets_force_stateful() {
+        // P7 gate-sync (the P3 bug class): BOTH element_needs_stateful and
+        // apply_interactive must route drag wiring through the stateful
+        // path — gpui's on_drag is StatefulInteractiveElement-only.
+        let mut tree = solid_gpui_protocol::RetainedTree::new();
+        tree.apply(&Mutation::CreateElement {
+            id: ElementId(1),
+            element_type: ElementType::Div,
+        })
+        .unwrap();
+        tree.apply(&Mutation::CreateElement {
+            id: ElementId(2),
+            element_type: ElementType::Div,
+        })
+        .unwrap();
+        tree.apply(&Mutation::SetDragData {
+            id: ElementId(1),
+            data: "x".into(),
+        })
+        .unwrap();
+        tree.apply(&Mutation::SetEventListener {
+            id: ElementId(2),
+            event_type: EventType::Drop,
+            enabled: true,
+        })
+        .unwrap();
+        let source = tree.get(ElementId(1)).unwrap().clone();
+        let target = tree.get(ElementId(2)).unwrap().clone();
+        assert!(element_needs_stateful(&source, false, false, false));
+        assert!(element_needs_stateful(&target, false, false, false));
+        // Plain div still stateless.
+        tree.apply(&Mutation::CreateElement {
+            id: ElementId(3),
+            element_type: ElementType::Div,
+        })
+        .unwrap();
+        assert!(!element_needs_stateful(
+            tree.get(ElementId(3)).unwrap(),
+            false,
+            false,
+            false
+        ));
     }
 
     #[test]

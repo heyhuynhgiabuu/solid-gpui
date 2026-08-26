@@ -1102,5 +1102,55 @@
     "rawStatus": "success",
     "resultValid": true,
     "completedAt": 1787723720608
+  },
+  {
+    "id": "mt9p4kl7-4027",
+    "agentType": "reviewer",
+    "description": "P7 drag-drop review r1",
+    "sessionName": "task-mt9p4kl7-4027",
+    "startedAt": 1787724702394,
+    "paneId": "w3:pFB",
+    "handle": {
+      "backend": "herdr",
+      "resourceId": "w3:pFB",
+      "socketPath": "/Users/huynhgiabuu/.config/herdr/herdr.sock",
+      "terminalId": "term_659ed17891e53a",
+      "agentName": "reviewer-mt9p4kl7",
+      "foregroundProcessGroupId": 32298
+    },
+    "piDir": "/Users/huynhgiabuu/dev/projects/solid-gpui/.pi",
+    "dir": "/Users/huynhgiabuu/dev/projects/solid-gpui/.pi/artifacts/tasks",
+    "cwd": "/Users/huynhgiabuu/dev/projects/solid-gpui",
+    "status": "done",
+    "background": true,
+    "reportedStatus": "unknown",
+    "rawStatus": "unknown",
+    "resultValid": false,
+    "completedAt": 1787724831081
+  },
+  {
+    "id": "mt9p8e7x-c8e3",
+    "agentType": "reviewer",
+    "description": "P7 drag-drop review retry",
+    "sessionName": "task-mt9p8e7x-c8e3",
+    "startedAt": 1787724880332,
+    "paneId": "w3:pFC",
+    "handle": {
+      "backend": "herdr",
+      "resourceId": "w3:pFC",
+      "socketPath": "/Users/huynhgiabuu/.config/herdr/herdr.sock",
+      "terminalId": "term_659ed222a6878b",
+      "agentName": "reviewer-mt9p8e7x",
+      "foregroundProcessGroupId": 33287
+    },
+    "piDir": "/Users/huynhgiabuu/dev/projects/solid-gpui/.pi",
+    "dir": "/Users/huynhgiabuu/dev/projects/solid-gpui/.pi/artifacts/tasks",
+    "cwd": "/Users/huynhgiabuu/dev/projects/solid-gpui",
+    "status": "done",
+    "background": true,
+    "reportedStatus": "success",
+    "rawStatus": "success",
+    "resultValid": true,
+    "completedAt": 1787725621246
   }
 ]

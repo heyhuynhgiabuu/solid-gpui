@@ -1006,3 +1006,46 @@ fn scrollbar_requires_exactly_one_scrollable_child() {
         "second child must be rejected: {err}"
     );
 }
+
+#[test]
+fn set_drag_data_stores_clears_and_markdown_rejects() {
+    let mut tree = RetainedTree::new();
+    tree.apply(&Mutation::CreateElement {
+        id: ElementId(1),
+        element_type: ElementType::Div,
+    })
+    .unwrap();
+    tree.apply(&Mutation::CreateElement {
+        id: ElementId(2),
+        element_type: ElementType::Markdown,
+    })
+    .unwrap();
+
+    tree.apply(&Mutation::SetDragData {
+        id: ElementId(1),
+        data: r#"{"itemId":42}"#.into(),
+    })
+    .unwrap();
+    assert_eq!(
+        tree.get(ElementId(1)).unwrap().drag_data.as_deref(),
+        Some(r#"{"itemId":42}"#)
+    );
+    // Empty string clears.
+    tree.apply(&Mutation::SetDragData {
+        id: ElementId(1),
+        data: String::new(),
+    })
+    .unwrap();
+    assert_eq!(tree.get(ElementId(1)).unwrap().drag_data, None);
+
+    let err = tree
+        .apply(&Mutation::SetDragData {
+            id: ElementId(2),
+            data: "x".into(),
+        })
+        .unwrap_err();
+    assert!(
+        err.to_string().contains("markdown"),
+        "markdown drag data must be rejected: {err}"
+    );
+}

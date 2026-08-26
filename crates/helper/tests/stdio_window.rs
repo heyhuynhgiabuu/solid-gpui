@@ -1168,7 +1168,7 @@ fn window_mode_drag_data_and_drop_listener_apply() {
             "{{\"op\":\"appendChild\",\"parentId\":1,\"childId\":2}},",
             "{{\"op\":\"setRoot\",\"id\":1}}]}}"
         ),
-        payload.replace('"', "\\\\".to_string().as_str())
+        payload.replace('"', r#"\""#)
     );
     writeln!(stdin, "{batch}").unwrap();
     stdin.flush().unwrap();
