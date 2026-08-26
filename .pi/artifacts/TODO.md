@@ -734,12 +734,23 @@ through gpui's keymap (sequences like "ctrl-x ctrl-s") instead of competing
 with every onKeyDown; focusable/tabIndex scoping of key events verified.
 Recon first — v1 already has tabIndex/autofocus/focus/blur/keyDown/keyUp.
 
-- [ ] P3-a recon: current focus+key paths (tab navigation, keyDown routing,
-      focus handles) + pinned gpui keymap machinery (key_context, actions,
-      bind_keys, KeyBinding sequences) — cited path:line; decide the wire
-      surface for `keys` (event types? style-adjacent prop? commands?)
-- [ ] P3-b protocol surface for keys (lockstep TS+Rust, fixtures)
-- [ ] P3-c helper: keymap wiring per element (scoped focusable /
-      application-wide otherwise), event reporting the fired binding
-- [ ] P3-d renderer/JSX prop routing + tests
+- [x] P3-a recon: focus machinery đã trưởng thành (tab_index/tab_stop
+      wiring host.rs:1392-1417, focus_in/out subscriptions + commit-on-blur,
+      tab navigation Rust-side host.rs:1432-1443; keyDown chỉ đến element
+      đang focus). gpui keymap LÀ action-dispatch tĩnh (bind_keys +
+      Box<dyn Action>, platform.rs) — không hợp closure động kiểu JS → thiết
+      kế thay thế: matcher chuỗi thuần trên listener keydown của element,
+      scope nhờ focus (bindings làm element focusable).
+- [x] P3-b protocol: setKeyBindings {id, bindings: Vec<String>} + EventType
+      Keys (closed set cả hai phía, KNOWN_OPS/KNOWN_EVENT_TYPES đăng ký);
+      Node.key_bindings; markdown reject apply-side; fixture
+      batch-keys-01.json parse + re-encode byte-identical cả hai phía
+- [x] P3-c helper: matcher thuần (canonical_keystroke/canonical_token/
+      parse_binding/advance_binding — alias modifiers, sequence state
+      machine reset-on-mismatch + fresh-match, stale-index an toàn khi
+      bindings đổi giữa sequence); pending per-element trên HostView;
+      bindings đọc lại từ tree lúc event; listener keydown scope theo focus
+- [x] P3-d renderer: keys prop = { binding: fn } map → setKeyBindings +
+      keys listener; keys handler demux theo binding báo về; re-set thay
+      toàn bộ map; undefined clear cả hai; markdown warn + drop
 - [ ] VERIFY: gates + independent review
