@@ -1022,7 +1022,7 @@ status: CLOSED 2026-08-26 (r1 NOT MERGEABLE: helper không biên dịch do
       (mt9rmigb) CLEAN. Bài học exit-code-gates vào MEMORY.
 
 ### 2026-08-26 - P9: menu bar (macOS)
-status: active
+status: CLOSED 2026-08-26 (r1 NOT MERGEABLE 1M/3m; fixes b9f66b5; r2 CLEAN + 2 doc minors fixed)
 
 - [x] P9-a recon: gpui Menu/MenuItem/set_menus (app vs window level), action
       dispatch model (typed actions vs runtime names), keystroke wiring,
@@ -1031,14 +1031,10 @@ status: active
       set + event mới cho click) + lockstep + fixture.
 - [x] P9-c helper: dựng menu thật + forward click về JS.
 - [x] P9-d renderer TS + tests + demo.
-- [~] VERIFY: gates exit-code xanh (bun 161 · cargo 34+36 / 83+20 GUI ·
-      tsc · clippy/fmt) + demo example/menus chạy sạch. r1 (mt9sxy3f):
-      NOT MERGEABLE — Major: KeyBinding::new PANIC trên keystroke wire sai
-      ("cmnd-o") — helper chết vì wire input; Minor: error-message thiếu
-      setMenus; stale bindings tích tụ (bind_keys không có remove);
-      osAction+keystroke bất đối xứng (cmd-c bắn JS event thay vì copy).
-      Fixes đang chạy: per-token Keystroke::parse validation → command
-      fail có type (ApplyFailed), clear_key_bindings trước rebind (bar sở
-      hữu shortcut của nó), osAction bỏ qua keystroke (macOS tự cấp
-      equivalent), message sửa. Smoke thêm case cmnd-o (error reply,
-      helper sống) + sequence cmd-e p (per-token không từ chối nhầm).
+- [x] VERIFY: r2 (mt9udrx1) CLEAN. Major fix xác nhận faithful: per-token
+      Keystroke::parse BYTE-IDENTICAL với upstream KeyBinding::load
+      (split_whitespace) nên validation và construction không thể lệch nhau;
+      validation chạy TRƯỚC clear_key_bindings nên lệnh fail giữ nguyên
+      keymap cũ. 2 Minor doc r2 đã sửa (MenuState comment stale, JSDoc
+      trùng). Note ghi nhận: dedup keystroke giờ là first-wins silent —
+      chấp nhận có chủ ý.

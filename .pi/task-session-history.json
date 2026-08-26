@@ -1252,5 +1252,30 @@
     "rawStatus": "success",
     "resultValid": true,
     "completedAt": 1787732062541
+  },
+  {
+    "id": "mt9udrx1-a90a",
+    "agentType": "reviewer",
+    "description": "P9 menu bar review r2",
+    "sessionName": "task-mt9udrx1-a90a",
+    "startedAt": 1787733530091,
+    "paneId": "w3:pFN",
+    "handle": {
+      "backend": "herdr",
+      "resourceId": "w3:pFN",
+      "socketPath": "/Users/huynhgiabuu/.config/herdr/herdr.sock",
+      "terminalId": "term_659ef25b2cfe814",
+      "agentName": "reviewer-mt9udrx1",
+      "foregroundProcessGroupId": 62303
+    },
+    "piDir": "/Users/huynhgiabuu/dev/projects/solid-gpui/.pi",
+    "dir": "/Users/huynhgiabuu/dev/projects/solid-gpui/.pi/artifacts/tasks",
+    "cwd": "/Users/huynhgiabuu/dev/projects/solid-gpui",
+    "status": "done",
+    "background": true,
+    "reportedStatus": "success",
+    "rawStatus": "success",
+    "resultValid": true,
+    "completedAt": 1787733753158
   }
 ]

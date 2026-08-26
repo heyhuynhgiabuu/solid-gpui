@@ -176,9 +176,9 @@ struct MenuAction {
     item_id: String,
 }
 
-/// Global state for menu registration: whether the on_action handler is
-/// installed and which keystroke→item bindings were already bound (bind_keys
-/// has no removal API — rebinding every setMenus would accumulate).
+/// Global state for menu registration: whether the shared on_action handler
+/// is installed. Keymap ownership is clear-then-rebind per apply_menus call
+/// (the menu bar owns its shortcuts; nothing else uses the keymap).
 #[derive(Default)]
 struct MenuState {
     handler_installed: bool,

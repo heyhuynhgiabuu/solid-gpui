@@ -24,7 +24,6 @@ export type MenuItemSpec =
       readonly label: string
       /** Stable identifier echoed to JS in the menu event. */
       readonly id: string
-      /** Keystroke shown next to the label and bound globally. */
       /** Keystroke shown next to the label and bound globally. Ignored when
        * osAction is set — macOS wires its own system equivalent. */
       readonly keystroke?: string

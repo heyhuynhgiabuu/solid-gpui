@@ -640,3 +640,22 @@
   phải App::text_system() (Arc đó không có paint caches); PaintQuad là
   struct công khai (không có free fn quad()); TextRun không có field
   metadata trong bản pinned này.
+
+## P9 — menu bar macOS (2026-08-26)
+
+- **KeyBinding::new PANIC trên wire input**: upstream .unwrap() — keystroke
+  sai kiểu "cmnd-o" giết cả helper. Wire input KHÔNG BAO GIỜ đi thẳng vào
+  API panic-able; pre-flight validate từng token (split_whitespace +
+  Keystroke::parse) — byte-identical với KeyBinding::load để validation và
+  construction không thể lệch. Fail lệnh có type (ApplyFailed), không skip
+  im lặng.
+- **clear_key_bindings trước rebind** = menu bar sở hữu shortcut của nó;
+  bind_keys tích tụ vĩnh viễn nếu chỉ add. May là helper không dùng keymap
+  cho gì khác (P3 keys là element listeners).
+- **osAction items bỏ qua keystroke**: macOS tự cấp equivalent; binding thêm
+  sẽ dispatch JS event — mâu thuẫn hợp đồng "native selectors không tới JS".
+- AsyncApp::update bản pinned trả R trực tiếp (infallible, panic nội bộ khi
+  app gone) — không phải mọi context update đều Result như WeakEntity::update.
+- gpui: MenuAction derive Action #[action(no_json)] — không cần schemars/
+  serde; một on_action global handler cho MỌI instance (payload trong struct);
+  Unbind(name) tồn tại nhưng clear+rebind đơn giản hơn.
