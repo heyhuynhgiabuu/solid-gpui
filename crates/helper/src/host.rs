@@ -295,12 +295,19 @@ pub fn advance_binding(
     keystroke: &str,
 ) -> Option<usize> {
     if let Some((bi, matched)) = *pending {
-        let Some(seq) = bindings.get(bi) else {
-            // Stale index (the binding list changed mid-sequence): reset and
-            // fresh-match rather than aborting silently.
+        // Stale pending state (the binding list changed mid-sequence): the
+        // index may point past the list, or the new binding at that index may
+        // be shorter than the progress counter. Both mean "this sequence no
+        // longer exists" — reset and fresh-match the stray key.
+        let stale = match bindings.get(bi) {
+            None => true,
+            Some(seq) => matched >= seq.0.len(),
+        };
+        if stale {
             *pending = None;
             return advance_binding(bindings, pending, keystroke);
-        };
+        }
+        let seq = &bindings[bi];
         if keystroke == seq.0[matched] {
             if matched + 1 == seq.0.len() {
                 *pending = None;
@@ -1506,7 +1513,16 @@ fn apply_interactive(
     let has_key =
         node.listeners.contains(&EventType::KeyDown) || node.listeners.contains(&EventType::KeyUp);
     let has_autofocus = node.style.contains_key("autoFocus");
-    let wants_focus = force_focus || tab_index.is_some() || has_focus || has_key || has_autofocus;
+    // Key bindings make the element focusable TOO (mirroring build_element's
+    // element_needs_stateful gate): gpui delivers keys only to the focused
+    // element, so a keys-only div must be focusable for its bindings to
+    // ever fire. The two gates MUST stay in sync.
+    let wants_focus = force_focus
+        || tab_index.is_some()
+        || has_focus
+        || has_key
+        || has_autofocus
+        || !node.key_bindings.is_empty();
 
     if let Some(axis) = axis {
         let handle = ctx
@@ -2976,5 +2992,49 @@ mod key_binding_tests {
             advance_binding(&b, &mut pending, &canonical_keystroke(&ks)),
             Some(0)
         );
+    }
+}
+
+#[cfg(test)]
+mod key_binding_review_tests {
+    use super::*;
+
+    fn seqs(bindings: &[&str]) -> Vec<KeyBindingSeq> {
+        bindings.iter().map(|b| parse_binding(b).unwrap()).collect()
+    }
+
+    #[test]
+    fn binding_swap_mid_sequence_never_panics() {
+        // r1 Blocker 2: pending (0,1) + a re-render that swaps the list to a
+        // SHORTER binding at the same index must reset, not index OOB.
+        let before = seqs(&["ctrl-x ctrl-s"]);
+        let after = seqs(&["cmd-k"]);
+        let mut pending = None;
+        assert_eq!(advance_binding(&before, &mut pending, "ctrl-x"), None);
+        assert_eq!(pending, Some((0, 1)));
+        // Same index, shorter sequence: seq.0[1] would panic pre-fix.
+        assert_eq!(advance_binding(&after, &mut pending, "k"), None);
+        // Reset happened; a fresh cmd-k still fires normally.
+        assert_eq!(advance_binding(&after, &mut pending, "cmd-k"), Some(0));
+    }
+
+    #[test]
+    fn prefix_sharing_semantics_first_binding_wins() {
+        // r1 Major: with "ctrl-x" bound alone AND as a sequence prefix, the
+        // FIRST entry wins per keystroke and the other can never fire. This
+        // pins the chosen deterministic semantics (renderer warns at install
+        // time); change this test only together with that decision.
+        let b = seqs(&["ctrl-x", "ctrl-x ctrl-s"]);
+        let mut pending = None;
+        assert_eq!(advance_binding(&b, &mut pending, "ctrl-x"), Some(0));
+        assert!(pending.is_none());
+        assert_eq!(advance_binding(&b, &mut pending, "ctrl-s"), None);
+
+        // Reverse order: the chord owns ctrl-x; the lone binding is dead.
+        let b2 = seqs(&["ctrl-x ctrl-s", "ctrl-x"]);
+        let mut pending2 = None;
+        assert_eq!(advance_binding(&b2, &mut pending2, "ctrl-x"), None);
+        assert_eq!(pending2, Some((0, 1)));
+        assert_eq!(advance_binding(&b2, &mut pending2, "ctrl-s"), Some(0));
     }
 }

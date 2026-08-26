@@ -3,6 +3,7 @@ import fixture from "../fixtures/batch-01.json"
 import rustEmitted from "../fixtures/rust-emitted-batch-01.json"
 import listFixture from "../fixtures/batch-list-01.json"
 import stateFixture from "../fixtures/batch-style-state-01.json"
+import keysFixture from "../fixtures/batch-keys-01.json"
 import animationFixture from "../fixtures/batch-animation-01.json"
 import markdownFixture from "../fixtures/batch-markdown-01.json"
 import { elementId } from "./ids"
@@ -334,5 +335,27 @@ describe("style-state fixture parity", () => {
     const r = decodeBatch(raw)
     expect(r.ok).toBe(true)
     if (r.ok) expect(JSON.parse(encodeBatch(r.value))).toEqual(stateFixture)
+  })
+})
+
+describe("keys fixture parity (P3)", () => {
+  test("batch-keys-01 parses and re-encodes losslessly; setKeyBindings validates", () => {
+    const raw = JSON.stringify(keysFixture)
+    const r = decodeBatch(raw)
+    expect(r.ok).toBe(true)
+    if (r.ok) {
+      expect(JSON.parse(encodeBatch(r.value))).toEqual(keysFixture)
+      const mut = r.value.mutations[1]
+      expect(mut).toMatchObject({ op: "setKeyBindings", id: 1, bindings: ["cmd-k", "ctrl-x ctrl-s"] })
+    }
+    // Empty-string bindings are a decode error (non-empty rule).
+    const bad = decodeBatch(
+      JSON.stringify({
+        v: 1,
+        seq: 2,
+        mutations: [{ op: "setKeyBindings", id: 1, bindings: ["cmd-k", "  "] }],
+      }),
+    )
+    expect(bad.ok).toBe(false)
   })
 })

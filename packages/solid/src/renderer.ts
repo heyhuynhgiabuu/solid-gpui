@@ -341,6 +341,25 @@ export function createSolidRenderer(send: Send): SolidGpuiRenderer {
             keyHandlers.set(`${nodeId}:${k}`, map[k] as (event: SolidGpuiEvent) => void)
           }
         }
+        // Prefix-sharing is order-dependent: a binding that is a keystroke
+        // prefix of a longer sequence shadows it (or vice versa) — only one
+        // can ever fire. Deterministic, but tell the author instead of
+        // silently killing a binding.
+        if (bindings.length > 1 && typeof console !== "undefined") {
+          for (let i = 0; i < bindings.length; i++) {
+            const bi = bindings[i]
+            if (bi === undefined) continue
+            for (let j = 0; j < bindings.length; j++) {
+              const bj = bindings[j]
+              if (bi === undefined || bj === undefined) continue
+              if (i !== j && bj.startsWith(bi + " ")) {
+                console.warn(
+                  `[solid-gpui] keys conflict on element #${nodeId}: "${bindings[i]}" is a prefix of "${bindings[j]}" — only the earlier entry in the map fires. Split the chord or rename one binding.`,
+                )
+              }
+            }
+          }
+        }
         if (bindings.length > 0) {
           handlers.set(`${nodeId}:keys`, (event) => {
             const fn = keyHandlers.get(`${nodeId}:${event.key ?? ""}`)

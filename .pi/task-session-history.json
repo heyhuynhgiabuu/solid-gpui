@@ -952,5 +952,55 @@
     "rawStatus": "success",
     "resultValid": true,
     "completedAt": 1787681273156
+  },
+  {
+    "id": "mt9kifuw-f246",
+    "agentType": "reviewer",
+    "description": "P3 key bindings review r1",
+    "sessionName": "task-mt9kifuw-f246",
+    "startedAt": 1787716950867,
+    "paneId": "w3:pF4",
+    "handle": {
+      "backend": "herdr",
+      "resourceId": "w3:pF4",
+      "socketPath": "/Users/huynhgiabuu/.config/herdr/herdr.sock",
+      "terminalId": "term_659eb498b2ae03",
+      "agentName": "reviewer-mt9kifuw",
+      "foregroundProcessGroupId": 5712
+    },
+    "piDir": "/Users/huynhgiabuu/dev/projects/solid-gpui/.pi",
+    "dir": "/Users/huynhgiabuu/dev/projects/solid-gpui/.pi/artifacts/tasks",
+    "cwd": "/Users/huynhgiabuu/dev/projects/solid-gpui",
+    "status": "done",
+    "background": true,
+    "reportedStatus": "unknown",
+    "rawStatus": "unknown",
+    "resultValid": false,
+    "completedAt": 1787717238217
+  },
+  {
+    "id": "mt9kqwri-49aa",
+    "agentType": "reviewer",
+    "description": "P3 key bindings review r1 retry",
+    "sessionName": "task-mt9kqwri-49aa",
+    "startedAt": 1787717346047,
+    "paneId": "w3:pF6",
+    "handle": {
+      "backend": "herdr",
+      "resourceId": "w3:pF6",
+      "socketPath": "/Users/huynhgiabuu/.config/herdr/herdr.sock",
+      "terminalId": "term_659eb6116ddff5",
+      "agentName": "reviewer-mt9kqwri",
+      "foregroundProcessGroupId": 7797
+    },
+    "piDir": "/Users/huynhgiabuu/dev/projects/solid-gpui/.pi",
+    "dir": "/Users/huynhgiabuu/dev/projects/solid-gpui/.pi/artifacts/tasks",
+    "cwd": "/Users/huynhgiabuu/dev/projects/solid-gpui",
+    "status": "done",
+    "background": true,
+    "reportedStatus": "failure",
+    "rawStatus": "failure",
+    "resultValid": true,
+    "completedAt": 1787717638270
   }
 ]
