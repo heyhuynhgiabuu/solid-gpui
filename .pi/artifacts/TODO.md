@@ -1193,7 +1193,7 @@ status: done | updated: 2026-08-26
   existing fixture set, and the compact decoder is not a full validator.
 
 ### 2026-08-26 - S14: headless controls (tooltip, select, combobox)
-status: active | updated: 2026-08-26
+status: done | updated: 2026-08-26
 
 Goal: add the next desktop interaction primitives without reopening P12 or
 changing the out-of-process architecture. Tooltip is first because P7 explicitly
@@ -1248,8 +1248,8 @@ Non-goals:
       `cargo clippy --all-targets -- -D warnings`, and `cargo fmt --all -- --check`
       all exit 0. Reviewer `mta8mvh9-f090` returned CLEAN/MERGEABLE after the
       missing-field parity fix from `mta8bdf4-aa8b`.
-- [ ] Close the parent S14 block after the select/combobox contract is separately
-      reassessed and either implemented or explicitly deferred.
+- [x] Close the parent S14 block after the select/combobox contract was separately
+      reassessed and explicitly deferred.
 
 
 #### Tooltip slice verification
@@ -1260,26 +1260,23 @@ Non-goals:
 - `batch-tooltip-01.json` round-trips in both protocol suites; null clearing,
   missing/empty field rejection, unsupported target rejection, renderer refusal,
   stateful-path wiring, and real `--stdio-window` acknowledgement are covered.
-- Select/combobox is intentionally the next open design item; no implementation
+- Select/combobox has a separately recorded deferred contract; no implementation
   is claimed by this tooltip slice.
 
 
-#### S14b select/combobox contract frontier
+#### S14b select/combobox contract outcome (explicitly deferred)
 
 Known seams are input/textarea host-side buffers, focus handles and key bindings,
-retained lists, and in-window anchored/deferred elements. The remaining material
-design choices are:
+retained lists, and in-window anchored/deferred elements. The contract outcome is:
 
-- Public API: primitives namespace (`Root`/`Trigger`/`Content`/`Item`) versus
-  one opinionated component. Recommended: primitives, so Solid owns state and
-  composition remains headless.
-- Value model: single controlled string first versus multi-select/uncontrolled
-  state. Recommended: single controlled value first; no multi-select in S14b.
-- Popup lifecycle: in-window anchored/deferred tree versus native `PopupOptions`.
-  Recommended: in-window first, because it avoids a new command channel and
-  native-popup focus/dismiss platform surface.
-- Accessibility: generic div behavior versus explicit role/expanded/selected
-  semantics. Recommended: add a typed accessibility contract before claiming
-  select/combobox support; generic styling alone is insufficient.
-
-These choices block S14b implementation; tooltip remains independently shipped.
+- [x] Public API target: primitives namespace (`Root`/`Trigger`/`Content`/`Item`),
+      so Solid owns state and composition remains headless.
+- [x] Value target: one controlled string value first; multi-select and
+      uncontrolled state are outside S14b.
+- [x] Popup target: in-window anchored/deferred content first; native
+      `PopupOptions` and its platform focus/dismiss surface are outside S14b.
+- [x] Accessibility target: typed role/expanded/selected semantics are required
+      before claiming select/combobox support; styling alone is insufficient.
+- [x] Explicit deferral: do not implement select/combobox in S14. Reopen it as a
+      new implementation slice only with this contract, a concrete wire/API
+      proposal, and RED tests.

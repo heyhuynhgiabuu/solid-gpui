@@ -71,3 +71,27 @@ gpui build is untested here — defer). TS packages publish as built dist
 **Consequence.** Dev flows keep using `target/debug` via the existing
 resolution order (env override → dev target → platform package), so the
 monorepo needs no installed platform packages of its own.
+
+### 2026-08-26 - S14 headless controls
+status: done
+
+#### ADR 006: Select/combobox contract boundary
+
+**Decision.** Close S14 with the tooltip slice shipped and select/combobox explicitly
+deferred to a future implementation slice. That future slice targets a headless
+primitives namespace (`Root`/`Trigger`/`Content`/`Item`), starts with one controlled
+string value, renders content in-window through anchored/deferred elements, and
+requires typed role/expanded/selected semantics. Multi-select, uncontrolled state,
+native `PopupOptions`, and an untyped styling-only accessibility model are outside
+that slice.
+
+**Why.** The pinned gpui exposes low-level `PopupOptions`, but the project has no
+select/combobox primitive, popup lifecycle protocol, or accessibility-role contract.
+The existing input, focus, key-binding, list, and anchored/deferred seams are enough
+to define a safe target without inventing a native widget or a new command channel.
+Explicit deferral prevents an incomplete control from being mistaken for a supported
+public API.
+
+**Consequence.** S14 introduces no select/combobox production code or protocol
+changes. A future S14b implementation must reopen from this contract, add RED tests
+first, and verify the API/wire behavior independently before changing the S14 status.

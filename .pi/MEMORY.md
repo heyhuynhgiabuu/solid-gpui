@@ -708,3 +708,7 @@
 - [feature] S14 tooltip uses GPUI's stateful native `.tooltip` overlay: `setTooltip`
   carries only non-empty text/null, never creates a retained child, and the
   renderer refuses text/helper-owned/scrollbar targets before they can poison IPC.
+- [decision] S14 closed 2026-08-26 with the tooltip shipped and select/combobox
+  explicitly deferred under ADR 006: future work targets headless primitives,
+  one controlled string value, in-window anchored/deferred content, and typed
+  accessibility semantics before implementation.
