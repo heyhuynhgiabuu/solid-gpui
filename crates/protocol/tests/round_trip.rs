@@ -589,3 +589,22 @@ fn p4_commands_round_trip_with_camel_case_fields() {
         assert_eq!(command_to_json(&cmd), wire, "re-encode mismatch");
     }
 }
+
+#[test]
+fn scrollbar_batch_fixture_parses_both_ways() {
+    let raw = fs::read_to_string(fixture_path("batch-scrollbar-01.json"))
+        .expect("fixture readable")
+        .trim()
+        .to_string();
+    let batch = from_json(&raw).expect("batch parses");
+    match &batch.mutations[0] {
+        Mutation::CreateElement { element_type, .. } => {
+            assert!(matches!(
+                element_type,
+                solid_gpui_protocol::ElementType::Scrollbar
+            ));
+        }
+        other => panic!("expected scrollbar createElement, got {other:?}"),
+    }
+    assert_eq!(to_json(&batch), raw);
+}

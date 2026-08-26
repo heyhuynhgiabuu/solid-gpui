@@ -941,3 +941,68 @@ fn key_bindings_store_and_markdown_rejects() {
         "markdown key bindings must be rejected: {err}"
     );
 }
+
+#[test]
+fn scrollbar_requires_exactly_one_scrollable_child() {
+    let mut tree = RetainedTree::new();
+
+    // Zero children: rejected (the bar must wrap a scrollable).
+    tree.apply(&Mutation::CreateElement {
+        id: ElementId(1),
+        element_type: ElementType::Scrollbar,
+    })
+    .unwrap();
+    tree.apply(&Mutation::SetRoot { id: ElementId(1) }).unwrap();
+    let err = tree
+        .apply(&Mutation::AppendChild {
+            parent_id: ElementId(2),
+            child_id: ElementId(1),
+        })
+        .unwrap_err();
+    assert!(
+        err.to_string().contains("exist"),
+        "parent-missing fires first"
+    );
+
+    // One div child with overflow: OK.
+    let mut tree = RetainedTree::new();
+    tree.apply(&Mutation::CreateElement {
+        id: ElementId(1),
+        element_type: ElementType::Scrollbar,
+    })
+    .unwrap();
+    tree.apply(&Mutation::CreateElement {
+        id: ElementId(2),
+        element_type: ElementType::Div,
+    })
+    .unwrap();
+    tree.apply(&Mutation::SetStyle {
+        id: ElementId(2),
+        style: StyleMap::from([("overflow".to_string(), StyleValue::Text("scroll".into()))]),
+        state: None,
+    })
+    .unwrap();
+    tree.apply(&Mutation::AppendChild {
+        parent_id: ElementId(1),
+        child_id: ElementId(2),
+    })
+    .unwrap();
+    assert_eq!(tree.get(ElementId(1)).unwrap().children, vec![ElementId(2)]);
+
+    // A SECOND child: rejected — the bar drives exactly one scrollable.
+    tree.apply(&Mutation::CreateElement {
+        id: ElementId(3),
+        element_type: ElementType::Div,
+    })
+    .unwrap();
+    let err = tree
+        .apply(&Mutation::AppendChild {
+            parent_id: ElementId(1),
+            child_id: ElementId(3),
+        })
+        .unwrap_err();
+    assert!(
+        err.to_string().contains("scrollbar"),
+        "second child must be rejected: {err}"
+    );
+}

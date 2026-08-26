@@ -9,6 +9,7 @@ export type ElementType =
   | "textarea"
   | "list"
   | "markdown"
+  | "scrollbar"
 
 /**
  * Closed set: the helper must know an event to wire it, so unknown event
@@ -64,6 +65,7 @@ export const ELEMENT_TYPES: readonly ElementType[] = [
   "textarea",
   "list",
   "markdown",
+  "scrollbar",
 ]
 
 export type Mutation =

@@ -1085,3 +1085,53 @@ fn window_mode_scroll_to_item_applies_and_missing_list_errors() {
     let status = child.wait().expect("wait");
     assert_eq!(status.code(), Some(0), "EOF must exit 0");
 }
+
+#[test]
+fn window_mode_scrollbar_wraps_scrollable_and_acknowledges() {
+    if skip() {
+        return;
+    }
+    let _lock = window_lock();
+    let bin = env!("CARGO_BIN_EXE_solid-gpui-helper");
+    let mut child = Command::new(bin)
+        .arg("--stdio-window")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .spawn()
+        .expect("helper spawns");
+
+    let mut stdin = child.stdin.take().expect("stdin piped");
+    let reader = BufReader::new(child.stdout.take().expect("stdout piped"));
+    let mut lines = reader.lines();
+
+    // Scrollbar wrapping a scrollable div with tall content: the bar builds
+    // (thumb geometry over the live handle) without apply errors or panics.
+    let batch = r#"{"v":1,"seq":97,"mutations":[{"op":"createElement","id":1,"elementType":"scrollbar"},{"op":"createElement","id":2,"elementType":"div"},{"op":"setStyle","id":2,"style":{"height":200,"overflow":"scroll"}},{"op":"appendChild","parentId":1,"childId":2},{"op":"createElement","id":3,"elementType":"div"},{"op":"setStyle","id":3,"style":{"height":1200,"width":100}},{"op":"createElement","id":4,"elementType":"text"},{"op":"appendChild","parentId":3,"childId":4},{"op":"setText","id":4,"text":"tall content"},{"op":"appendChild","parentId":2,"childId":3},{"op":"setRoot","id":1}]}"#;
+    writeln!(stdin, "{batch}").unwrap();
+    stdin.flush().unwrap();
+    let ack = lines.next().unwrap().expect("ack line");
+    assert_eq!(ack, r#"{"type":"ack","seq":97,"applied":11}"#);
+    // Let layout run once so the content (1200px in a 200px viewport)
+    // materializes max_offset before we scroll.
+    std::thread::sleep(std::time::Duration::from_millis(200));
+
+    // The wrapped scrollable is driven by the SAME handle map: the existing
+    // scrollTo command moves it (the bar's thumb follows the next frame).
+    let line = r#"{"type":"scrollTo","seq":98,"id":2,"x":0,"y":150}"#;
+    writeln!(stdin, "{line}").unwrap();
+    stdin.flush().unwrap();
+    assert_eq!(
+        lines.next().unwrap().unwrap(),
+        r#"{"type":"result","seq":98,"value":{"applied":true}}"#
+    );
+    // And getScrollOffset reads the moved offset back through the handle.
+    let line = r#"{"type":"getScrollOffset","seq":99,"id":2}"#;
+    writeln!(stdin, "{line}").unwrap();
+    stdin.flush().unwrap();
+    let off = lines.next().unwrap().expect("offset line");
+    assert!(off.contains(r#""offsetY":150"#), "got {off}");
+
+    drop(stdin);
+    let status = child.wait().expect("wait");
+    assert_eq!(status.code(), Some(0), "EOF must exit 0");
+}

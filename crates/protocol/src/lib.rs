@@ -30,7 +30,15 @@ pub const EVENT_TYPES: &[&str] = &[
     "keys",
 ];
 
-pub const ELEMENT_TYPES: &[&str] = &["div", "text", "input", "textarea", "list", "markdown"];
+pub const ELEMENT_TYPES: &[&str] = &[
+    "div",
+    "text",
+    "input",
+    "textarea",
+    "list",
+    "markdown",
+    "scrollbar",
+];
 
 /// Numeric id of a host element. 0 is reserved and never valid.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -57,6 +65,10 @@ pub enum ElementType {
     /// helper parses and renders it entirely Rust-side. No wire children —
     /// the rendered subtree is helper-owned (validation rejects attach).
     Markdown,
+    /// Scrollbar overlay: wraps EXACTLY ONE scrollable child (div with
+    /// overflow, or a list); the helper draws the bar host-side and drives
+    /// the child's scroll handle (drag works even off the track).
+    Scrollbar,
 }
 
 /// Interaction state a state-layer style applies under. Closed set (the

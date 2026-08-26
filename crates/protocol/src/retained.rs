@@ -356,6 +356,18 @@ impl RetainedTree {
                 ),
             });
         }
+        // Scrollbar drives EXACTLY ONE scrollable child: the helper binds
+        // the bar to that child's scroll handle; a second child would be
+        // silently undriven (validation and rendering agree).
+        if self.elements.get(&parent_id).unwrap().element_type == ElementType::Scrollbar
+            && !self.elements.get(&parent_id).unwrap().children.is_empty()
+        {
+            return Err(ApplyError::InvalidMutation {
+                message: format!(
+                    "scrollbar {parent_id:?} already wraps one scrollable; one bar, one target"
+                ),
+            });
+        }
         let Some(child) = self.elements.get(&child_id) else {
             return Err(ApplyError::InvalidMutation {
                 message: format!("child {child_id:?} does not exist"),

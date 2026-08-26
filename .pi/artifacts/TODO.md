@@ -894,3 +894,38 @@ REPLACE far requests instead of widening. Recon what v1 already has first
       P5 CLOSED. Note 5 (followTail+listAlign:top mâu thuẫn — resolver thắng
       nhưng FollowMode vẫn armed): ghi nhận là hành vi cần doc ở P6; không
       đổi semantics trong slice này.
+
+### 2026-08-26 - P6: scrollbars (host-side bar over any scrollable)
+status: active
+
+Goal: a <scrollbar> element wrapping a scrollable (div overflow, list) per
+roadmap P6: bar drawn host-side (drag survives pointer leaving the 8px
+track — listener-based drag cannot), works with pixel scrollables and
+uniform lists (whole-row steps for variable lists documented as later).
+Recon pinned gpui capabilities first (scrollbar exists upstream? Scrollbar
+axis/drag/scroll_handle APIs) and our track_scroll/scroll handle plumbing.
+
+- [x] P6-a recon: Zed ui crate CÓ scrollbar component (1722 LOC,
+      components/scrollbar.rs, ScrollableHandle trait cho ScrollHandle +
+      ListState) nhưng phụ thuộc theme crate — vendor quá nặng. Tự viết tối
+      giản trên pattern tương tự. ScrollHandle có offset/max_offset/
+      set_offset (div.rs:4063-4068,4199) nhưng KHÔNG viewport() → track
+      height từ style key trackHeight / window height fallback (v1 hạn chế
+      documented). Quyết định: elementType "scrollbar" MỚI (closed set, mở
+      bằng lockstep) wrap MỘT scrollable (protocol enforce).
+- [x] P6-b: ElementType::Scrollbar cả hai phía + retained attach validation
+      (đúng MỘT child — cái hai bị reject "one bar, one target"); fixture
+      batch-scrollbar-01.json BTreeMap-sorted; builder: wrapper .relative(),
+      child giữ overflow wiring riêng, track absolute phải phải, thumb theo
+      scrollbar_thumb_geometry (pure: proportional + min clamp, đơn vị
+      Pixels/Pixels=f32); drag: state ThumbDrag trên HostView, mouse-down
+      thumb ghi grab point, window-level listeners ĐĂNG KÝ MỘT LẦN trong
+      open_window callback (on_mouse_event là PAINT-ONLY — render() không
+      được), scale thumb→content = (track+max)/track
+- [x] P6-c: GUI smoke — scrollbar wrap + scrollTo qua CÙNG handle map +
+      getScrollOffset đọc lại offsetY:150 (bài học: content scrollable phải
+      là div height cố định chứa div tall, KHÔNG phải text mang style height;
+      và sleep một frame sau ack trước khi scroll để max_offset materialize);
+      thumb geometry unit; fixture round-trip byte-identical. Track-click
+      jump + list target (ListState) = follow-up khi có nhu cầu thật
+- [ ] VERIFY: gates + independent review

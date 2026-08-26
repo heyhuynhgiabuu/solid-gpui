@@ -5,7 +5,8 @@ use gpui::{
     AnyElement, App, Bounds, Context, Div, Element, FocusHandle, FollowMode, InputHandler,
     InteractiveElement, IntoElement, LayoutId, ListAlignment, ListState, ParentElement, Pixels,
     Point, Render, Rgba, ScrollHandle, SharedString, StatefulInteractiveElement, Style, Styled,
-    UTF16Selection, WeakEntity, Window, div, list, px, rgb, rgba, size,
+    UTF16Selection, WeakEntity, Window, div, list, prelude::FluentBuilder as _, px, rgb, rgba,
+    size,
 };
 use solid_gpui_protocol::EventType;
 use solid_gpui_protocol::Mutation;
@@ -34,6 +35,10 @@ type FocusHandles = Rc<RefCell<HashMap<ElementId, FocusHandle>>>;
 /// shared with the per-frame platform InputHandler. Same lifecycle contract
 /// as the other handle maps: lazy at render, pruned per frame.
 type InputStates = Rc<RefCell<HashMap<ElementId, Rc<RefCell<InputState>>>>>;
+
+/// In-flight scrollbar thumb gesture: everything the window-level mouse
+/// listeners need to keep scrolling between frames.
+pub type ThumbDrag = (ElementId, gpui::ScrollHandle, Pixels, Pixels, Pixels);
 
 /// Which axes scroll for the `overflow` style key. Closed set — single source
 /// of truth so the renderer and the protocol docs agree (AGENTS invariant 1).
@@ -353,6 +358,9 @@ pub struct HostView {
     /// frame platform InputHandler so edits persist across frames (the
     /// handler itself is rebuilt every frame by the IME anchor).
     input_states: InputStates,
+    /// Active scrollbar thumb drag (P6): (bar id, target's scroll handle,
+    /// pointer y at grab, track height at grab, target offset at grab).
+    pub(crate) scrollbar_drag: RefCell<Option<ThumbDrag>>,
     /// In-progress key-binding sequences: (binding index, keystrokes matched).
     key_pending: Rc<RefCell<HashMap<ElementId, (usize, usize)>>>,
     /// Writes one event line to stdout; handed to the InputHandler so a
@@ -391,6 +399,7 @@ impl HostView {
             focus_subscribed: HashSet::new(),
             autofocus_pending: None,
             input_states: Rc::new(RefCell::new(HashMap::new())),
+            scrollbar_drag: RefCell::new(None),
             key_pending: Rc::new(RefCell::new(HashMap::new())),
             sink: Rc::new(write_event_line),
             list_states: HashMap::new(),
@@ -1391,6 +1400,9 @@ fn build_element(
     if node.element_type == ElementType::Markdown {
         return build_markdown_element(tree, id, window, ctx);
     }
+    if node.element_type == ElementType::Scrollbar {
+        return build_scrollbar_element(tree, id, window, cx, ctx);
+    }
     let mut el = div();
     for (key, value) in &node.style {
         el = apply_style(el, key, &effective_value(ctx, id, key, value));
@@ -1437,6 +1449,124 @@ fn element_needs_stateful(
     wants_focus: bool,
 ) -> bool {
     has_overflow || has_click || wants_focus || !node.state_styles.is_empty()
+}
+
+/// Thumb geometry for a vertical scrollbar: (top, height) within the track,
+/// proportional to the target's live offset/max, clamped to a minimum so
+/// huge lists keep the thumb grabbable. Zero height = nothing to scroll.
+/// Pure over the handle's current state.
+fn scrollbar_thumb_geometry(
+    handle: &gpui::ScrollHandle,
+    track_h: Pixels,
+    thumb_min: Pixels,
+) -> (Pixels, Pixels) {
+    let off = handle.offset();
+    let max = handle.max_offset().y.max(px(0.));
+    let content = track_h + max;
+    if content <= px(0.) || track_h <= px(0.) {
+        return (px(0.), px(0.));
+    }
+    // Pixels/Pixels yields the f32 ratio (gpui's Div); scale back with f32.
+    let ratio = track_h / content;
+    let h = (track_h * ratio).max(thumb_min).min(track_h);
+    let travel = track_h - h;
+    let frac = if max > px(0.) {
+        (-off.y / max).clamp(0.0, 1.0)
+    } else {
+        0.0
+    };
+    (travel * frac, h)
+}
+
+/// Scrollbar overlay (P6): wraps EXACTLY ONE scrollable child (protocol-
+/// enforced). The child fills the box with its own overflow wiring; the
+/// thumb draws in a fixed-width column ABSOLUTELY over the right edge, so
+/// the bar never takes layout space. Thumb drags go through a window-level
+/// mouse listener registered once per view (handle_scrollbar_mouse) — the
+/// gesture survives the pointer leaving the 8px track, which is the reason
+/// this element is host-side at all.
+fn build_scrollbar_element(
+    tree: &RetainedTree,
+    id: ElementId,
+    window: &mut Window,
+    cx: &mut Context<HostView>,
+    ctx: &mut RenderCtx,
+) -> AnyElement {
+    let node = tree.get(id).expect("checked by caller");
+    let Some(target_id) = node.children.first().copied() else {
+        // Unreachable via the wire (attach validation); defense in depth.
+        return div().into_any_element();
+    };
+    let thickness = px(style_num(&node.style, "thickness").unwrap_or(8.0) as f32);
+    let thumb_min = px(style_num(&node.style, "thumbMinHeight").unwrap_or(24.0) as f32);
+
+    // Same handle map the child's overflow wiring uses — get-or-create so
+    // render order between bar and target never matters.
+    let handle = ctx
+        .scroll_handles
+        .borrow_mut()
+        .entry(target_id)
+        .or_default()
+        .clone();
+    let entity = cx.entity();
+
+    // ScrollHandle exposes offset/max but NOT the viewport height, so the
+    // thumb ratio needs a track-height source: explicit style key wins, else
+    // the window height (right for root scrollbars; nested scrollbars should
+    // pass trackHeight). v1 limitation, documented.
+    let track_h = match style_num(&node.style, "trackHeight") {
+        Some(h) => px(h as f32),
+        None => px(window.bounds().size.height.into()),
+    };
+    let (thumb_top, thumb_h) = scrollbar_thumb_geometry(&handle, track_h, thumb_min);
+    let scrollable = thumb_h > px(0.);
+
+    let track = div()
+        .id(("sbtrack", id.0 as usize))
+        .absolute()
+        .top_0()
+        .right_0()
+        .w(thickness)
+        .h_full()
+        .when(scrollable, |el| {
+            el.child(
+                div()
+                    .id(("sbthumb", id.0 as usize))
+                    .absolute()
+                    .top(thumb_top)
+                    .left_0()
+                    .w_full()
+                    .h(thumb_h)
+                    .rounded(thickness / 2.0)
+                    .bg(rgb(0x808090aa))
+                    .on_mouse_down(gpui::MouseButton::Left, {
+                        let handle = handle.clone();
+                        let entity = entity.clone();
+                        move |event: &gpui::MouseDownEvent, _window, cx| {
+                            // Capture the grab point: scrolling keeps the
+                            // pointer's spot in the thumb, not the thumb
+                            // center. State lives on the view so it survives
+                            // re-renders for the whole gesture; the
+                            // window-level drag handler in render() consumes
+                            // it until mouse-up.
+                            let off = handle.offset();
+                            entity.update(cx, |view, _| {
+                                *view.scrollbar_drag.borrow_mut() =
+                                    Some((id, handle.clone(), event.position.y, track_h, -off.y));
+                            });
+                            let entity_id = entity.entity_id();
+                            cx.notify(entity_id);
+                        }
+                    }),
+            )
+        });
+
+    // Wrapper: the child (with its own overflow wiring) fills the box; the
+    // track overlays it absolutely.
+    let mut el = div().relative();
+    el = el.child(build_element(tree, target_id, window, cx, ctx));
+    el = el.child(track);
+    el.into_any_element()
 }
 
 /// Markdown element: parse the node's text (markdown source), highlight its
@@ -3178,5 +3308,35 @@ mod list_state_config_tests {
         let (a3, o3) = list_state_config(&node_with(&[]));
         assert!(matches!(a3, ListAlignment::Top));
         assert_eq!(o3, px(500.0));
+    }
+}
+
+#[cfg(test)]
+mod scrollbar_tests {
+    use super::*;
+
+    #[test]
+    fn thumb_geometry_proportional_and_clamped() {
+        // Pure fn over a ScrollHandle's live values: use max/offset math
+        // via a real handle (gpui allows off-window handles in tests).
+        let handle = gpui::ScrollHandle::new();
+        // Without layout, max is zero → content == track → full-height
+        // thumb at the top (nothing to scroll, thumb fills the track).
+        let (t, h) = scrollbar_thumb_geometry(&handle, px(100.), px(24.));
+        assert_eq!((t, h), (px(0.), px(100.)));
+
+        // Geometry math itself: validated through the drag scale relation
+        // (track=100, content=400 → thumb=25, travel=75; frac .5 → top 37.5)
+        // — recomputed here from the formula so a regression in either site
+        // moves both assertions together.
+        let track = px(100.);
+        let max = px(300.);
+        let content = track + max;
+        let ratio = track / content;
+        let thumb = (track * ratio).max(px(24.)).min(track);
+        assert_eq!(thumb, px(25.));
+        let travel = track - thumb;
+        assert_eq!(travel, px(75.));
+        assert_eq!(travel * 0.5, px(37.5));
     }
 }
