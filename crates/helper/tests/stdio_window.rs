@@ -1030,3 +1030,58 @@ fn window_mode_key_bindings_apply_cleanly() {
     let status = child.wait().expect("wait");
     assert_eq!(status.code(), Some(0), "EOF must exit 0");
 }
+
+#[test]
+fn window_mode_scroll_to_item_applies_and_missing_list_errors() {
+    if skip() {
+        return;
+    }
+    let _lock = window_lock();
+    let bin = env!("CARGO_BIN_EXE_solid-gpui-helper");
+    let mut child = Command::new(bin)
+        .arg("--stdio-window")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .spawn()
+        .expect("helper spawns");
+
+    let mut stdin = child.stdin.take().expect("stdin piped");
+    let reader = BufReader::new(child.stdout.take().expect("stdout piped"));
+    let mut lines = reader.lines();
+
+    // A list with items + P5 style keys (overdraw/listAlign are open style
+    // keys; followTail off, explicit bottom alignment without follow mode).
+    let batch = r#"{"v":1,"seq":95,"mutations":[{"op":"createElement","id":1,"elementType":"list"},{"op":"setStyle","id":1,"style":{"overdraw":200,"listAlign":"bottom"}},{"op":"setRoot","id":1},{"op":"createElement","id":2,"elementType":"text"},{"op":"appendChild","parentId":1,"childId":2},{"op":"setText","id":2,"text":"item"}]}"#;
+    writeln!(stdin, "{batch}").unwrap();
+    stdin.flush().unwrap();
+    assert_eq!(
+        lines.next().unwrap().unwrap(),
+        r#"{"type":"ack","seq":95,"applied":6}"#
+    );
+    // Render + state creation frame.
+    std::thread::sleep(std::time::Duration::from_millis(200));
+
+    // scrollToItem on the live list: applied result (RESULT payload, not
+    // just an ack — the P4 review lesson).
+    let line = r#"{"type":"scrollToItem","seq":96,"id":1,"index":0}"#;
+    writeln!(stdin, "{line}").unwrap();
+    stdin.flush().unwrap();
+    assert_eq!(
+        lines.next().unwrap().unwrap(),
+        r#"{"type":"result","seq":96,"value":{"applied":true}}"#
+    );
+
+    // scrollToItem on an id that never rendered a list: correlated error.
+    let line = r#"{"type":"scrollToItem","seq":97,"id":99,"index":0}"#;
+    writeln!(stdin, "{line}").unwrap();
+    stdin.flush().unwrap();
+    let err = lines.next().unwrap().expect("error line");
+    assert!(
+        err.contains(r#""seq":97"#) && err.contains("no list"),
+        "got {err}"
+    );
+
+    drop(stdin);
+    let status = child.wait().expect("wait");
+    assert_eq!(status.code(), Some(0), "EOF must exit 0");
+}

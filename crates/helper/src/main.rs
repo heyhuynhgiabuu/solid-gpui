@@ -105,6 +105,7 @@ fn command_ident(command: &solid_gpui_protocol::Command) -> (u32, &'static str) 
         solid_gpui_protocol::Command::DialogSaveFile { seq, .. } => (*seq, "dialogSaveFile"),
         solid_gpui_protocol::Command::ShellRevealPath { seq, .. } => (*seq, "shellRevealPath"),
         solid_gpui_protocol::Command::ShellOpenPath { seq, .. } => (*seq, "shellOpenPath"),
+        solid_gpui_protocol::Command::ScrollToItem { seq, .. } => (*seq, "scrollToItem"),
     }
 }
 
@@ -578,6 +579,30 @@ fn run_stdio_window() {
                                 value: serde_json::json!({ "applied": true }),
                             }
                         }
+
+                        solid_gpui_protocol::Command::ScrollToItem { seq, id, index } => window
+                            .update(cx, |view, _window, cx| {
+                                match view.scroll_list_to_item(id, index as usize) {
+                                    Ok(()) => {
+                                        // Repaint so the new offset paints.
+                                        cx.notify();
+                                        Reply::Result {
+                                            seq,
+                                            value: serde_json::json!({ "applied": true }),
+                                        }
+                                    }
+                                    Err(message) => Reply::Error {
+                                        seq: Some(seq),
+                                        code: ReplyCode::ApplyFailed,
+                                        message,
+                                    },
+                                }
+                            })
+                            .unwrap_or_else(|e| Reply::Error {
+                                seq: Some(seq),
+                                code: ReplyCode::Unsupported,
+                                message: format!("window closed: {e}"),
+                            }),
                     },
                     Job::Batch(batch) => {
                         let seq = batch.seq;

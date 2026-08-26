@@ -696,6 +696,19 @@ impl HostView {
     /// S11 listInfo: item count, items painted last frame (virtualization
     /// proof), and whether the list is scrolled to its end (followTail chat
     /// position). Fails when the id never rendered as a list.
+    /// Scroll a list's ListState to bring `index` to the viewport top
+    /// (scrollToItem command). Fails when the id never rendered as a list.
+    pub fn scroll_list_to_item(&self, id: ElementId, index: usize) -> Result<(), String> {
+        let Some(state) = self.list_states.get(&id) else {
+            return Err(format!("no list element for id {}", id.0));
+        };
+        state.scroll_to(gpui::ListOffset {
+            item_ix: index,
+            offset_in_item: px(0.),
+        });
+        Ok(())
+    }
+
     pub fn list_info(&self, id: ElementId) -> Result<serde_json::Value, String> {
         let Some(state) = self.list_states.get(&id) else {
             return Err(format!("no list element for id {}", id.0));
@@ -1789,6 +1802,24 @@ fn build_input_element(
 /// render_item re-enters the view via Entity::update to build items with
 /// full interactive wiring (clicks/focus work inside lists).
 #[allow(clippy::too_many_arguments)]
+/// List vertical alignment (P5): explicit `listAlign` ("top"|"bottom") wins;
+/// otherwise followTail implies Bottom (the pre-P5 semantic). Unknown values
+/// fall through to the followTail rule (open-value drop). Pure — unit-tested.
+fn resolve_list_alignment(node: &solid_gpui_protocol::Node) -> gpui::ListAlignment {
+    let follow_tail = node.style.contains_key("followTail");
+    match node.style.get("listAlign").and_then(StyleValue::as_str) {
+        Some("top") => gpui::ListAlignment::Top,
+        Some("bottom") => gpui::ListAlignment::Bottom,
+        _ => {
+            if follow_tail {
+                gpui::ListAlignment::Bottom
+            } else {
+                gpui::ListAlignment::Top
+            }
+        }
+    }
+}
+
 fn build_list_element(
     tree: &RetainedTree,
     id: ElementId,
@@ -1811,14 +1842,14 @@ fn build_list_element(
     // insertBefore mid-list splices the whole range — v1 keeps item identity
     // by index, documented simplification).
     let follow_tail = node.style.contains_key("followTail");
-    let alignment = if follow_tail {
-        ListAlignment::Bottom
-    } else {
-        ListAlignment::Top
-    };
+    let alignment = resolve_list_alignment(node);
+    // Overdraw: extra px rendered above/below the viewport so scrolling
+    // doesn't pop. Default 500 preserves pre-P5 behavior; the style key is
+    // a plain number (open style-key rule).
+    let overdraw = px(style_num(&node.style, "overdraw").unwrap_or(500.0) as f32);
     if ctx.list_alignment.get(&id) != Some(&alignment) {
         ctx.list_states
-            .insert(id, ListState::new(0, alignment, px(500.)));
+            .insert(id, ListState::new(0, alignment, overdraw));
         ctx.list_alignment.insert(id, alignment);
         ctx.list_follow_armed.remove(&id);
         // Reset the splice baseline with the fresh 0-item state (see
@@ -1829,7 +1860,7 @@ fn build_list_element(
     let state = ctx
         .list_states
         .entry(id)
-        .or_insert_with(|| ListState::new(0, alignment, px(500.)))
+        .or_insert_with(|| ListState::new(0, alignment, overdraw))
         .clone();
     // Precise splice via prefix/suffix diff against last frame's children:
     // splice(0..old, new) rebases the scroll-top INTO the range and resets
@@ -3036,5 +3067,64 @@ mod key_binding_review_tests {
         assert_eq!(advance_binding(&b2, &mut pending2, "ctrl-x"), None);
         assert_eq!(pending2, Some((0, 1)));
         assert_eq!(advance_binding(&b2, &mut pending2, "ctrl-s"), Some(0));
+    }
+}
+
+#[cfg(test)]
+mod list_alignment_tests {
+    use super::*;
+
+    fn node_with(styles: &[(&str, StyleValue)]) -> solid_gpui_protocol::Node {
+        let mut tree = solid_gpui_protocol::RetainedTree::new();
+        tree.apply(&Mutation::CreateElement {
+            id: ElementId(1),
+            element_type: ElementType::List,
+        })
+        .unwrap();
+        tree.apply(&Mutation::SetStyle {
+            id: ElementId(1),
+            style: styles
+                .iter()
+                .map(|(k, v)| (k.to_string(), v.clone()))
+                .collect(),
+            state: None,
+        })
+        .unwrap();
+        tree.get(ElementId(1)).unwrap().clone()
+    }
+
+    #[test]
+    fn align_resolution_prefers_explicit_list_align() {
+        use gpui::ListAlignment;
+        // Default: top.
+        assert_eq!(resolve_list_alignment(&node_with(&[])), ListAlignment::Top);
+        // followTail implies bottom (back-compat, pre-P5 semantic).
+        assert_eq!(
+            resolve_list_alignment(&node_with(&[(
+                "followTail",
+                StyleValue::Text("true".into())
+            )])),
+            ListAlignment::Bottom
+        );
+        // Explicit listAlign wins over the followTail fallback, both ways.
+        assert_eq!(
+            resolve_list_alignment(&node_with(&[
+                ("listAlign", StyleValue::Text("bottom".into())),
+                ("followTail", StyleValue::Text("true".into())),
+            ])),
+            ListAlignment::Bottom
+        );
+        assert_eq!(
+            resolve_list_alignment(&node_with(&[("listAlign", StyleValue::Text("top".into()))])),
+            ListAlignment::Top
+        );
+        // Unknown value falls back to the followTail rule (open-value rule).
+        assert_eq!(
+            resolve_list_alignment(&node_with(&[(
+                "listAlign",
+                StyleValue::Text("middle".into())
+            )])),
+            ListAlignment::Top
+        );
     }
 }

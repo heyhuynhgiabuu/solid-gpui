@@ -39,6 +39,7 @@ export type SolidGpuiCommand =
     }
   | { readonly type: "shellRevealPath"; readonly seq: number; readonly path: string }
   | { readonly type: "shellOpenPath"; readonly seq: number; readonly path: string }
+  | { readonly type: "scrollToItem"; readonly seq: number; readonly id: number; readonly index: number }
 
 export type WindowActionName = "minimize" | "zoom" | "toggleFullscreen" | "activate"
 export type DialogLevel = "info" | "warning" | "critical"
@@ -91,6 +92,7 @@ export function decodeCommand(json: string): Result<SolidGpuiCommand, ProtocolEr
     "dialogSaveFile",
     "shellRevealPath",
     "shellOpenPath",
+    "scrollToItem",
   ]
   if (!KNOWN.includes(type as string)) {
     return {
@@ -235,6 +237,15 @@ export function decodeCommand(json: string): Result<SolidGpuiCommand, ProtocolEr
     }
     return { ok: true, value: { type, seq: parsed.seq, path: parsed.path } as SolidGpuiCommand }
   }
+  if (type === "scrollToItem") {
+    const id = parsed.id
+    const badId = !isInt(id) || (id as number) < 1 || (id as number) > 0xffff_ffff
+    if (badId) return { ok: false, error: shape("id", "scrollToItem needs an integer id") }
+    if (!isInt(parsed.index) || parsed.index < 0) {
+      return { ok: false, error: shape("index", "expected a non-negative integer") }
+    }
+    return { ok: true, value: { type: "scrollToItem", seq: parsed.seq, id, index: parsed.index } }
+  }
   if (type === "focusElement") {
     const id = parsed.id
     const badId = !isInt(id) || (id as number) < 1 || (id as number) > 0xffff_ffff
@@ -331,6 +342,14 @@ export function encodeCommand(command: SolidGpuiCommand): string {
   }
   if (command.type === "shellRevealPath" || command.type === "shellOpenPath") {
     return JSON.stringify({ type: command.type, seq: command.seq, path: command.path })
+  }
+  if (command.type === "scrollToItem") {
+    return JSON.stringify({
+      type: "scrollToItem",
+      seq: command.seq,
+      id: command.id,
+      index: command.index,
+    })
   }
   return JSON.stringify({ type: "getStats", seq: command.seq })
 }

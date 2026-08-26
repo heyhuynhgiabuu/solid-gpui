@@ -841,3 +841,44 @@ status: done 2026-08-26 (superseded by the main P4 block — closed above; kept 
       transport-mode Unsupported từ trước, C re-entrancy tuần tự job loop)
       được reviewer xác nhận. Gates: bun 144/144 · cargo 32+79+15 · clippy/
       fmt. P4 CLOSED.
+
+### 2026-08-26 - P5: variable-height list (chat-log UX)
+status: active
+
+Goal: extend the existing uniform List toward gpui's variable-height list
+semantics per roadmap P5: itemHeight stand-in for unmeasured rows,
+insertedAt height-cache continuity on growth, align top|bottom, follow=tail
+pinned until user scrolls, overdraw margin, chunked onRange requests that
+REPLACE far requests instead of widening. Recon what v1 already has first
+(uniform list + followTail + listInfo command exist).
+
+- [x] P5-a recon: KIẾN TRÚC TA ĐÃ phủ phần lớn P5 — retained tree giữ TOÀN
+      Bộ items helper-side (children của list), virtualization xảy ra
+      helper-side trong render_item (host.rs:1830-1860) → KHÔNG cần onRange
+      round-trip (đó là bài toán của kiến trúc JS-windowed prior-art).
+      splice_range prefix/suffix diff (host.rs:1179) đã bảo toàn height-cache
+      ngoài vùng đổi cho append VÀ prepend = insertedAt continuity tốt hơn
+      heuristic prior-art. itemHeight đã là HINT semantics (gpui doc
+      list.rs:341 — đo thật thay hint khi render). followTail→Bottom+Tail
+      (host.rs:1821), FollowState tự stop khi user scroll (list.rs:574).
+      listInfo command có sẵn. GAPS THẬT: (1) overdraw fixed px(500) không
+      cấu hình được; (2) align ghì cứng vào followTail — không có align
+      bottom-không-follow; (3) thiếu scrollToItem (gpui có scroll_to
+      ListOffset list.rs:660). => P5 scope: overdraw + listAlign style keys
+      (open set, không đổi protocol) + ScrollToItem command (lockstep đủ 3
+      chỗ theo bài học P4: decode+encode+name list).
+- [x] P5-b protocol: overdraw/listAlign là STYLE KEYS (open set — không
+      cần protocol change, chỉ StyleKey union); ScrollToItem command lockstep
+      ĐỦ 3 CHỖ mỗi phía theo bài học P4 (Rust enum+matcher+ident, TS union+
+      KNOWN+decode+encode; encode test có sẵn "no getStats fallthrough")
+- [x] P5-c helper: resolve_list_alignment (pure, 4 unit cases: default top,
+      followTail→bottom back-compat, explicit wins cả 2 chiều, unknown value
+      fallback) wired vào build_list_element; overdraw cấu hình được
+      (default 500 = hành vi cũ) ở cả 2 nơi tạo state; scroll_list_to_item
+      trên HostView (list_states private → method theo pattern list_info) +
+      dispatch result-payload; height-cache-aware render + splice continuity
+      ĐÃ CÓ từ trước (recon), onRange không cần (kiến trúc retained tree)
+- [x] P5-d: list.ts (scrollToItem, seq namespace 2M riêng); StyleKey gains
+      listAlign/overdraw; tests encode/decode đôi (protocol) + fake-channel
+      (list API) + GUI smoke assert RESULT payload + correlated error path
+- [ ] VERIFY: gates + independent review

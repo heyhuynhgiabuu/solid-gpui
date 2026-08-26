@@ -6,7 +6,7 @@ import getScrollOffsetFixture from "../fixtures/command-get-scroll-offset.json"
 import focusElementFixture from "../fixtures/command-focus-element.json"
 import simulateInputFixture from "../fixtures/command-simulate-input.json"
 import listInfoFixture from "../fixtures/command-list-info.json"
-import { decodeCommand, encodeCommand } from "./command"
+import { type SolidGpuiCommand, decodeCommand, encodeCommand } from "./command"
 
 const ok = (json: string) => {
   const r = decodeCommand(json)
@@ -148,5 +148,21 @@ describe("P4 command encode (review r1 Blocker)", () => {
   test("dialogSaveFile carries suggestedName on the wire", () => {
     const wire = encodeCommand({ type: "dialogSaveFile", seq: 5, suggestedName: "notes.md" })
     expect(wire).toContain('"suggestedName":"notes.md"')
+  })
+})
+
+describe("scrollToItem (P5)", () => {
+  test("encode keeps the type — no getStats fallthrough — and decodes back", () => {
+    const wire = encodeCommand({ type: "scrollToItem", seq: 42, id: 7, index: 12 })
+    expect(wire).toBe('{"type":"scrollToItem","seq":42,"id":7,"index":12}')
+    const r = decodeCommand(wire)
+    expect(r.ok).toBe(true)
+    if (r.ok) expect(r.value).toEqual({ type: "scrollToItem", seq: 42, id: 7, index: 12 })
+  })
+  test("decode rejects invalid ids and negative indexes", () => {
+    const badId = decodeCommand('{"type":"scrollToItem","seq":1,"id":0,"index":0}')
+    expect(badId.ok).toBe(false)
+    const badIx = decodeCommand('{"type":"scrollToItem","seq":1,"id":1,"index":-3}')
+    expect(badIx.ok).toBe(false)
   })
 })

@@ -69,5 +69,7 @@ export type StyleKey =
   | "maxRows"
   | "itemHeight"
   | "followTail"
+  | "listAlign"
+  | "overdraw"
 
 export type StyleMap = { readonly [K in StyleKey]?: StyleValue }

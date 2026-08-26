@@ -417,6 +417,15 @@ pub enum Command {
         seq: u32,
         path: String,
     },
+
+    /// Scroll a list element to bring item `index` to the viewport top.
+    ScrollToItem {
+        seq: u32,
+        /// Retained element id of the list.
+        id: ElementId,
+        /// Absolute item index (clamped to the item count).
+        index: u32,
+    },
 }
 
 /// Serialize a command to one JSON line. Infallible for this type shape.
@@ -443,6 +452,7 @@ pub fn command_from_json(s: &str) -> Result<Command, ProtocolError> {
             | Some("dialogSaveFile")
             | Some("shellRevealPath")
             | Some("shellOpenPath")
+            | Some("scrollToItem")
             | Some("scrollTo")
             | Some("getScrollOffset")
             | Some("focusElement")
@@ -452,7 +462,7 @@ pub fn command_from_json(s: &str) -> Result<Command, ProtocolError> {
         return Err(ProtocolError::InvalidShape {
             path: "type".into(),
             message: format!(
-                "unknown command {:?}; expected getStats|captureFrame|scrollTo|getScrollOffset|focusElement|simulateInput|listInfo|setTitle|windowAction|dialogMessage|dialogOpenFile|dialogSaveFile|shellRevealPath|shellOpenPath",
+                "unknown command {:?}; expected getStats|captureFrame|scrollTo|getScrollOffset|focusElement|simulateInput|listInfo|setTitle|windowAction|dialogMessage|dialogOpenFile|dialogSaveFile|shellRevealPath|shellOpenPath|scrollToItem",
                 type_str.unwrap_or("<missing>")
             ),
         });
