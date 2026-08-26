@@ -1238,8 +1238,10 @@ Non-goals:
 - [x] Implement tooltip first with protocol/renderer/helper parity: `setTooltip`
       is validated in TS/Rust, rendered through GPUI's native tooltip overlay,
       and covered by unit, fixture, and stdio-window tests.
-- [ ] Reassess select/combobox from evidence; implement only if its contract is
-      independently verifiable without a round-trip during native layout.
+- [x] Reassess select/combobox from evidence: pinned GPUI exposes low-level
+      `PopupOptions` but no project-level select/combobox primitive; the current
+      protocol also has no popup lifecycle or accessibility-role contract. Defer
+      implementation until S14b's public contract is approved.
 - [x] Run the relevant tooltip tests, typecheck, Rust gates, and obtain an
       independent review. `bun run test` is green at 176 pass / 0 fail;
       `bun run typecheck`, `cargo test -p solid-gpui-protocol -p solid-gpui-helper`,
@@ -1260,3 +1262,24 @@ Non-goals:
   stateful-path wiring, and real `--stdio-window` acknowledgement are covered.
 - Select/combobox is intentionally the next open design item; no implementation
   is claimed by this tooltip slice.
+
+
+#### S14b select/combobox contract frontier
+
+Known seams are input/textarea host-side buffers, focus handles and key bindings,
+retained lists, and in-window anchored/deferred elements. The remaining material
+design choices are:
+
+- Public API: primitives namespace (`Root`/`Trigger`/`Content`/`Item`) versus
+  one opinionated component. Recommended: primitives, so Solid owns state and
+  composition remains headless.
+- Value model: single controlled string first versus multi-select/uncontrolled
+  state. Recommended: single controlled value first; no multi-select in S14b.
+- Popup lifecycle: in-window anchored/deferred tree versus native `PopupOptions`.
+  Recommended: in-window first, because it avoids a new command channel and
+  native-popup focus/dismiss platform surface.
+- Accessibility: generic div behavior versus explicit role/expanded/selected
+  semantics. Recommended: add a typed accessibility contract before claiming
+  select/combobox support; generic styling alone is insufficient.
+
+These choices block S14b implementation; tooltip remains independently shipped.
