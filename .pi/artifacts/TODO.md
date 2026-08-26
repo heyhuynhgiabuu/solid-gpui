@@ -1366,9 +1366,29 @@ Non-goals:
       gates; identify the smallest safe first slice. Local audit found five gaps;
       the highest-value new probe is cross-flush detach/reattach, followed by
       wire-level failure and cycle/depth verification.
-- [ ] Confirm priority, compatibility, licensing, and platform expectations with
-      the user before behavior-changing implementation.
+- [x] Confirm priority, compatibility, licensing, and platform expectations with
+      the user before behavior-changing implementation. User clarified that the
+      request is technical; approved scope is this repository (not a direct
+      upstream patch), preserving Apache-2.0 clean-room rules, ADR 002's
+      out-of-process architecture, protocol v1 compatibility, and evidence-based
+      platform claims. Upstream API parity is not promised; existing public APIs
+      remain backward-compatible unless a separately reviewed change says otherwise.
 - [ ] Implement and review approved slices, then close this block with evidence.
+
+#### Approved technical slices
+
+- [ ] Prove the existing failure/poison/version/sequence guarantees through the
+      real client→helper wire; prove retained cycle/depth rejection and subtree
+      drop behavior without stack overflow.
+- [ ] Reproduce or retire the cross-flush detach/reattach `Drop` hazard with a
+      failing regression test first; change lifecycle semantics only if the probe
+      demonstrates a bug.
+- [ ] Add a deterministic mock/headless host seam for render-path coverage and
+      wire it into CI without weakening real-window tests.
+- [ ] Add cross-platform CI/build validation (Linux first, Windows next) and only
+      add platform npm packages after the corresponding runtime gates exist.
+- [ ] Add regression coverage for explicitly deferred S14b edges and document the
+      trusted-JS path policy; do not add speculative image/network behavior.
 
 #### Research report
 
