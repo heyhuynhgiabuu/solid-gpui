@@ -1535,5 +1535,32 @@
     "rawStatus": "success",
     "resultValid": true,
     "completedAt": 1787751339272
+  },
+  {
+    "id": "mta5462d-3e60",
+    "agentType": "reviewer",
+    "description": "Review final P12 gate",
+    "sessionName": "task-mta5462d-3e60",
+    "startedAt": 1787751552248,
+    "paneId": "w9:p1",
+    "handle": {
+      "backend": "herdr",
+      "resourceId": "w9:p1",
+      "socketPath": "/Users/huynhgiabuu/.config/herdr/herdr.sock",
+      "terminalId": "term_659f358380e3921",
+      "agentName": "reviewer-mta5462d",
+      "foregroundProcessGroupId": 32715,
+      "workspaceId": "w9",
+      "workspaceGroup": "solid-gpui-p12-final-review"
+    },
+    "piDir": "/Users/huynhgiabuu/dev/projects/solid-gpui/.pi",
+    "dir": "/Users/huynhgiabuu/dev/projects/solid-gpui/.pi/artifacts/tasks",
+    "cwd": "/Users/huynhgiabuu/dev/projects/solid-gpui",
+    "status": "done",
+    "background": false,
+    "reportedStatus": "success",
+    "rawStatus": "success",
+    "resultValid": true,
+    "completedAt": 1787751920090
   }
 ]
