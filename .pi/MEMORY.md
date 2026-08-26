@@ -502,3 +502,26 @@
 - Platform NSRange là sorted (location+length) — selection_reversed
   unreachable qua set_selection production; nếu platform nào giao
   anchor-first, dạy set_selection direction.
+
+## P3 — key bindings (2026-08-26)
+
+- **HAI gate phải sync**: build_element (element_needs_stateful) và
+  apply_interactive (wants_focus) là hai phép tính riêng — thêm điều kiện
+  focus mới vào MỘT cái tạo element stateful-nhưng-không-focusable, listener
+  key ngồi trên element không bao giờ nhận key (gpui chỉ deliver cho focused).
+  Reviewer bắt vì GUI smoke ack-only che mất: ack prove apply, không prove
+  fire. Bài học: smoke cho feature focus phải assert EVENT, không chỉ ack.
+- **Guard stale-index phải che CẢ HAI chiều**: index ngoài list VÀ progress
+  counter vượt độ dài sequence mới (bindings swap giữa chord). match
+  bindings.get(bi) rồi seq.0[matched] vẫn panic nếu list ngắn đi. Pattern:
+  mọi cặp (index, counter) lưu trong state cross-event đều cần guard tổng.
+- **Prefix-sharing bindings là bẫy ngầm**: "ctrl-x" đơn + "ctrl-x ctrl-s" —
+  thứ tự khai báo quyết định cái nào chết, không lỗi không warning. Chốt
+  semantics (first-entry-wins), pin bằng unit, WARN renderer lúc cài đặt.
+- **Reviewer session có thể chết giữa chừng** (hết stream sau thinking
+  block) — nhận diện bằng "last message là intermediate step"; retry với
+  yêu cầu "verdict PHẢI là message cuối" + cho phép đọc transcript cũ làm
+  lead. Resume task_id không map session file được thì launch mới.
+- gpui keymap (bind_keys + Box<dyn Action>) là action-dispatch tĩnh — không
+  hợp closure động JS. Matcher chuỗi thuần + focus-scoped listener là thiết
+  kế thay thế đúng hướng (r1 xác nhận hướng, bắt lỗi implementation).
