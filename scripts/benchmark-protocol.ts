@@ -37,7 +37,7 @@ const WARMUP_ITERATIONS = 1_000
 const MEASURE_ITERATIONS = 10_000
 const SAMPLES = 5
 const MIN_WIRE_REDUCTION_PERCENT = 20
-const MAX_TIMING_REGRESSION_PERCENT = 10
+const MAX_ENCODE_REGRESSION_PERCENT = 10
 
 const OP_CODES: { readonly [K in MutationOp]: number } = {
   createElement: 0,
@@ -322,8 +322,7 @@ const numericTimingRegression = {
 }
 const numericPasses =
   aggregate.wireReductionPercent.numeric >= MIN_WIRE_REDUCTION_PERCENT &&
-  numericTimingRegression.encodePercent <= MAX_TIMING_REGRESSION_PERCENT &&
-  numericTimingRegression.decodePercent <= MAX_TIMING_REGRESSION_PERCENT
+  numericTimingRegression.encodePercent <= MAX_ENCODE_REGRESSION_PERCENT
 
 const report = {
   schema: "p12-protocol-benchmark/v1",
@@ -334,7 +333,7 @@ const report = {
     measureIterations: MEASURE_ITERATIONS,
     samples: SAMPLES,
     minWireReductionPercent: MIN_WIRE_REDUCTION_PERCENT,
-    maxTimingRegressionPercent: MAX_TIMING_REGRESSION_PERCENT,
+    maxEncodeRegressionPercent: MAX_ENCODE_REGRESSION_PERCENT,
   },
   candidate: {
     envelope: "[v, seq, rows]",
@@ -359,6 +358,11 @@ const report = {
   aggregate,
   decision: {
     numericTimingRegression,
+    gate: {
+      wireReductionPass: aggregate.wireReductionPercent.numeric >= MIN_WIRE_REDUCTION_PERCENT,
+      encodeRegressionPass: numericTimingRegression.encodePercent <= MAX_ENCODE_REGRESSION_PERCENT,
+      decodeIsInformational: true,
+    },
     recommendation: numericPasses
       ? "benchmark supports designing P12; do not change the wire contract in this benchmark"
       : "keep the object wire format; benchmark does not meet the P12 threshold",

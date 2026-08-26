@@ -1137,7 +1137,7 @@ status: done | updated: 2026-08-26
   CLEAN/MERGEABLE, no blocker/major/important finding.
 
 ### 2026-08-26 - P12 protocol compaction benchmark
-status: active | updated: 2026-08-26
+status: done | updated: 2026-08-26
 
 #### Benchmark contract
 
@@ -1146,8 +1146,9 @@ status: active | updated: 2026-08-26
   mutation; measure both string op names and numeric op tags to separate field
   overhead from an op-table design.
 - Recommend P12 only when the numeric candidate saves at least 20% of total
-  UTF-8 wire bytes and does not regress median encode/decode time by more than
-  10% across the representative fixture suite.
+  UTF-8 wire bytes and does not regress median encode time by more than 10%
+  across the representative fixture suite. Decode timing is informational until
+  the candidate has a validator-equivalent decoder.
 
 - [x] Define deterministic representative mutation batches and a positional-array
       comparison without changing the production protocol.
@@ -1156,8 +1157,10 @@ status: active | updated: 2026-08-26
 - [x] Decide P12 from observed data: the numeric candidate saves 49.60% of
       aggregate wire bytes, but its encode path regresses 27.59–30.04%; keep
       the object wire format and do not reopen P12 automatically.
-- [ ] Obtain an independent review of the benchmark methodology, then close
-      this benchmark block without changing the production protocol.
+- [x] Obtain an independent review of the benchmark methodology, then close
+      this benchmark block without changing the production protocol. Reviewer
+      `mta4sj65-daff` returned CLEAN/MERGEABLE; no blocker, major, or important
+      finding remained.
 
 #### Run report
 
@@ -1168,12 +1171,23 @@ status: active | updated: 2026-08-26
   (`-34.19%`), positional numeric-op `2270` (`-49.60%`).
 - Aggregate median encode timing: object `456–464 ns/op`, numeric
   `592–593 ns/op` (`+27.59–30.04%`); numeric decode was faster in this
-  representation-only probe (`-28.42–30.90%`).
+  representation-only probe (roughly `26–31%`, informational only).
 - The compact decoder checks envelope/row arity and expands generated rows; it
   deliberately does not duplicate `decodeBatch`'s full untrusted-input validator.
-  The result is therefore a wire-size and representation-overhead decision,
-  not approval for a protocol implementation.
+  Its decode timing is therefore informational and excluded from the pass gate;
+  the result is a wire-size and representation-overhead decision, not approval
+  for a protocol implementation.
 - Decision: the byte reduction is real, but the measured encoder regression
   fails the declared threshold. Keep the current object wire format; revisit
   only with an explicit wire-version/compatibility design and a direct encoder
   benchmark.
+
+#### Independent review
+
+- Reviewer `mta4sj65-daff` independently reran `bun run benchmark:protocol`
+  successfully and reproduced the aggregate byte totals and no-op decision.
+- Review verdict: **CLEAN/MERGEABLE**. Minor follow-ups were resolved by
+  making decode timing informational (not part of the pass gate) and changing
+  the benchmark description from “generic direct encoder” to “generic
+  row-building encoder”. Notes remain explicit: `setValue` is not in the
+  existing fixture set, and the compact decoder is not a full validator.

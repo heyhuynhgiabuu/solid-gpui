@@ -1508,5 +1508,32 @@
     "rawStatus": "success",
     "resultValid": true,
     "completedAt": 1787746575855
+  },
+  {
+    "id": "mta4sj65-daff",
+    "agentType": "reviewer",
+    "description": "Review P12 benchmark",
+    "sessionName": "task-mta4sj65-daff",
+    "startedAt": 1787751009353,
+    "paneId": "w8:p1",
+    "handle": {
+      "backend": "herdr",
+      "resourceId": "w8:p1",
+      "socketPath": "/Users/huynhgiabuu/.config/herdr/herdr.sock",
+      "terminalId": "term_659f337dc2acc20",
+      "agentName": "reviewer-mta4sj65",
+      "foregroundProcessGroupId": 27192,
+      "workspaceId": "w8",
+      "workspaceGroup": "solid-gpui-p12-review-2"
+    },
+    "piDir": "/Users/huynhgiabuu/dev/projects/solid-gpui/.pi",
+    "dir": "/Users/huynhgiabuu/dev/projects/solid-gpui/.pi/artifacts/tasks",
+    "cwd": "/Users/huynhgiabuu/dev/projects/solid-gpui",
+    "status": "done",
+    "background": false,
+    "reportedStatus": "success",
+    "rawStatus": "success",
+    "resultValid": true,
+    "completedAt": 1787751339272
   }
 ]
