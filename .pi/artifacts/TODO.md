@@ -820,13 +820,14 @@ connection (render() handle exposes it).
       fmt. P4 CLOSED.
 
 ### 2026-08-26 - P4 session note (artifact refresh)
-status: active (same work as P4 block above — this line just refreshes tracking)
+status: done 2026-08-26 (superseded by the main P4 block — closed above; kept per no-delete rule)
 
 - [x] P4-b protocol lockstep (7 commands) done; P4-c helper dispatch done
       (clean re-apply after a mangled layered edit; cargo 79+15 green)
-- [ ] P4-d: desktop.ts written (appWindow/dialog/shell over connection);
-      remaining: handle sugar in render(), tests (fake-connection pattern),
-      index exports, README section
+- [x] P4-d: desktop.ts (appWindow/dialog/shell over connection) + RenderHandle
+      sugar (handle.window/dialog/shell) + 5 fake-channel tests + decodeCommand
+      round-trip pin + index exports + README section — all in 17b0b31, hardened
+      in a50a335 (encode regressions, camelCase round-trips, empty-answers guard)
 - [x] VERIFY: gates + independent review — r1 (mt9liwgo-b1c3) NOT MERGEABLE:
       B1 encodeCommand không có 7 branch mới — MỌI command P4 lên wire thành
       {type:getStats} (client là path duy nhất; test cũ dùng JSON.stringify
