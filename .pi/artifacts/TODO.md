@@ -989,7 +989,8 @@ positioning.
       32+83+18. P7 CLOSED (drag&drop); tooltip = slice riêng khi cần.
 
 ### 2026-08-26 - P8: canvas (recorded draw list)
-status: active
+status: CLOSED 2026-08-26 (r1 NOT MERGEABLE: helper không biên dịch do
+      as_chunks tuple + fixture thiếu TS parity; fixes 7aadf8c; r2 CLEAN)
 
 - [x] P8-a recon: gpui canvas element + paint primitives — DONE trong chat:
       canvas(prepaint,paint) FnOnce nhưng helper rebuild mỗi frame → OK;
@@ -1012,5 +1013,10 @@ status: active
 - [x] P8-d renderer TS: drawList prop (chỉ canvas; element khác warn+drop);
       decode validation TS (mỗi variant đầy đủ fields, points là number-
       pairs); tests wire shape + reject paths; demo nhỏ.
-- [~] VERIFY: gates XANH (bun 153 · cargo 34+83+19 GUI · tsc · clippy/fmt) + demo chạy
-      sạch; ĐANG review độc lập.
+- [x] VERIFY: r1 (mt9r5qak) bắt 2 findings nghiêm túc — (1) helper KHÔNG
+      BIÊN DỊCH: as_chunks::<2>() trả TUPLE, .iter() không tồn tại; chuỗi
+      gates rg-filter của tôi nuốt compile failure nên commit đầu land hỏng;
+      (2) batch-canvas-01.json thiếu parity test TS. Fixes 7aadf8c:
+      destructuring đúng + TS round-trip/reject tests; gates verify lại bằng
+      EXIT CODE tường minh (cargo/bun/tsc/fmt/clippy đều exit=0). r2
+      (mt9rmigb) CLEAN. Bài học exit-code-gates vào MEMORY.
