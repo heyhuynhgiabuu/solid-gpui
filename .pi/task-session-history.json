@@ -1002,5 +1002,30 @@
     "rawStatus": "failure",
     "resultValid": true,
     "completedAt": 1787717638270
+  },
+  {
+    "id": "mt9liwgo-b1c3",
+    "agentType": "reviewer",
+    "description": "P4 desktop commands review r1",
+    "sessionName": "task-mt9liwgo-b1c3",
+    "startedAt": 1787718651951,
+    "paneId": "w3:pF7",
+    "handle": {
+      "backend": "herdr",
+      "resourceId": "w3:pF7",
+      "socketPath": "/Users/huynhgiabuu/.config/herdr/herdr.sock",
+      "terminalId": "term_659ebaeeeb8556",
+      "agentName": "reviewer-mt9liwgo",
+      "foregroundProcessGroupId": 12256
+    },
+    "piDir": "/Users/huynhgiabuu/dev/projects/solid-gpui/.pi",
+    "dir": "/Users/huynhgiabuu/dev/projects/solid-gpui/.pi/artifacts/tasks",
+    "cwd": "/Users/huynhgiabuu/dev/projects/solid-gpui",
+    "status": "done",
+    "background": true,
+    "reportedStatus": "failure",
+    "rawStatus": "failure",
+    "resultValid": true,
+    "completedAt": 1787718958547
   }
 ]

@@ -59,6 +59,11 @@ export const dialog = {
       level?: "info" | "warning" | "critical"
     },
   ): Promise<number> {
+    // A zero-button dialog is undismissable on macOS (no key equivalents)
+    // and would hang the session behind it — reject at the API boundary.
+    if (opts.answers.length === 0) {
+      throw new Error("[solid-gpui] dialog.message requires at least one answer")
+    }
     const r = (await connection.sendCommand({
       type: "dialogMessage",
       seq: seq(),

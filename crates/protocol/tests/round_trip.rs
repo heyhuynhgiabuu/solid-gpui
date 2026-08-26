@@ -542,3 +542,50 @@ fn keys_batch_fixture_parses_both_ways() {
     }
     assert_eq!(to_json(&batch), raw);
 }
+
+#[test]
+fn p4_commands_round_trip_with_camel_case_fields() {
+    // Review r1 Major: enum-level serde rename_all does NOT rename variant
+    // FIELDS — dialogSaveFile's suggestedName was silently dropped without
+    // the variant-level rule. Pin every P4 payload's camelCase shape.
+    let cases: Vec<(String, solid_gpui_protocol::Command)> = vec![
+        (
+            r#"{"type":"setTitle","seq":1,"title":"Notes"}"#.into(),
+            solid_gpui_protocol::Command::SetTitle { seq: 1, title: "Notes".into() },
+        ),
+        (
+            r#"{"type":"dialogSaveFile","seq":5,"directory":"/tmp","suggestedName":"notes.md"}"#.into(),
+            solid_gpui_protocol::Command::DialogSaveFile {
+                seq: 5,
+                directory: Some("/tmp".into()),
+                suggested_name: Some("notes.md".into()),
+            },
+        ),
+        (
+            r#"{"type":"dialogMessage","seq":3,"level":"warning","message":"m","answers":["a","b"]}"#.into(),
+            solid_gpui_protocol::Command::DialogMessage {
+                seq: 3,
+                level: "warning".into(),
+                message: "m".into(),
+                detail: None,
+                answers: vec!["a".into(), "b".into()],
+            },
+        ),
+        (
+            r#"{"type":"dialogOpenFile","seq":4,"files":true,"multiple":true}"#.into(),
+            solid_gpui_protocol::Command::DialogOpenFile {
+                seq: 4,
+                files: Some(true),
+                directories: None,
+                multiple: Some(true),
+                prompt: None,
+            },
+        ),
+    ];
+    for (wire, want) in cases {
+        let cmd = command_from_json(&wire).unwrap_or_else(|e| panic!("{wire}: {e}"));
+        assert_eq!(cmd, want, "decode mismatch for {wire}");
+        // Re-encode is canonical: camelCase fields, optionals omitted.
+        assert_eq!(command_to_json(&cmd), wire, "re-encode mismatch");
+    }
+}

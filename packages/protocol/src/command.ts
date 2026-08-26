@@ -295,5 +295,42 @@ export function encodeCommand(command: SolidGpuiCommand): string {
       id: command.id,
     })
   }
+  if (command.type === "setTitle") {
+    return JSON.stringify({ type: "setTitle", seq: command.seq, title: command.title })
+  }
+  if (command.type === "windowAction") {
+    return JSON.stringify({ type: "windowAction", seq: command.seq, action: command.action })
+  }
+  if (command.type === "dialogMessage") {
+    return JSON.stringify({
+      type: "dialogMessage",
+      seq: command.seq,
+      level: command.level,
+      message: command.message,
+      ...(command.detail !== undefined ? { detail: command.detail } : {}),
+      answers: command.answers,
+    })
+  }
+  if (command.type === "dialogOpenFile") {
+    return JSON.stringify({
+      type: "dialogOpenFile",
+      seq: command.seq,
+      ...(command.files !== undefined ? { files: command.files } : {}),
+      ...(command.directories !== undefined ? { directories: command.directories } : {}),
+      ...(command.multiple !== undefined ? { multiple: command.multiple } : {}),
+      ...(command.prompt !== undefined ? { prompt: command.prompt } : {}),
+    })
+  }
+  if (command.type === "dialogSaveFile") {
+    return JSON.stringify({
+      type: "dialogSaveFile",
+      seq: command.seq,
+      ...(command.directory !== undefined ? { directory: command.directory } : {}),
+      ...(command.suggestedName !== undefined ? { suggestedName: command.suggestedName } : {}),
+    })
+  }
+  if (command.type === "shellRevealPath" || command.type === "shellOpenPath") {
+    return JSON.stringify({ type: command.type, seq: command.seq, path: command.path })
+  }
   return JSON.stringify({ type: "getStats", seq: command.seq })
 }

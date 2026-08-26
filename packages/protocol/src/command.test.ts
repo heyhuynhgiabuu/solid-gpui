@@ -123,3 +123,30 @@ describe("decodeCommand", () => {
     if (!r.ok) expect(r.error.kind).toBe("invalidShape")
   })
 })
+
+describe("P4 command encode (review r1 Blocker)", () => {
+  const cases: SolidGpuiCommand[] = [
+    { type: "setTitle", seq: 1, title: "Notes" },
+    { type: "windowAction", seq: 2, action: "toggleFullscreen" },
+    { type: "dialogMessage", seq: 3, level: "warning", message: "m", detail: "d", answers: ["a", "b"] },
+    { type: "dialogOpenFile", seq: 4, files: true, directories: true, multiple: true, prompt: "pick" },
+    { type: "dialogSaveFile", seq: 5, directory: "/tmp", suggestedName: "notes.md" },
+    { type: "shellRevealPath", seq: 6, path: "/x" },
+    { type: "shellOpenPath", seq: 7, path: "/y" },
+  ]
+  test.each?.(cases) ?? void 0
+  for (const c of cases) {
+    test(`encodeCommand keeps type ${c.type} (no getStats fallthrough)`, () => {
+      const wire = encodeCommand(c)
+      expect(wire).toContain(`"type":"${c.type}"`)
+      expect(wire).not.toContain('"type":"getStats"')
+      // Round-trip through the validator pins shape + optional-field omissions.
+      const r = decodeCommand(wire)
+      expect(r.ok).toBe(true)
+    })
+  }
+  test("dialogSaveFile carries suggestedName on the wire", () => {
+    const wire = encodeCommand({ type: "dialogSaveFile", seq: 5, suggestedName: "notes.md" })
+    expect(wire).toContain('"suggestedName":"notes.md"')
+  })
+})

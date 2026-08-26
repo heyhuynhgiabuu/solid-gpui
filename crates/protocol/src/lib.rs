@@ -377,6 +377,7 @@ pub enum Command {
         /// One of info|warning|critical.
         level: String,
         message: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
         detail: Option<String>,
         /// Button labels, left to right.
         answers: Vec<String>,
@@ -385,16 +386,23 @@ pub enum Command {
     /// Open-file dialog; resolves with chosen paths, or null when cancelled.
     DialogOpenFile {
         seq: u32,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
         files: Option<bool>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
         directories: Option<bool>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
         multiple: Option<bool>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
         prompt: Option<String>,
     },
 
     /// Save-file dialog; resolves with a path, or null when cancelled.
+    #[serde(rename_all = "camelCase")]
     DialogSaveFile {
         seq: u32,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
         directory: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
         suggested_name: Option<String>,
     },
 
