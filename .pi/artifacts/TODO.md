@@ -1052,7 +1052,8 @@ status: active
       Scope chốt: 2 element mới (svg/img) + 2 mutation wrapper
       (SetDeferred/SetAnchored); anchored giữ nguyên trong scope vì chỉ là
       wrapper rẻ.
-- [ ] P10-b protocol lockstep (element types/mutations moi).
-- [ ] P10-c helper wiring.
-- [ ] P10-d renderer TS + tests + demo.
-- [ ] VERIFY: gates exit codes + independent review.
+- [x] P10-b protocol lockstep (element types/mutations moi).
+- [x] P10-c helper wiring.
+- [x] P10-d renderer TS + tests + demo.
+- [~] VERIFY: gates exit-code xanh (bun 165 · cargo 34+37 / 83+21 GUI ·
+      tsc · clippy/fmt) + demo example/media chay sach; DANG review doc lap.
