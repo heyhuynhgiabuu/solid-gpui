@@ -357,6 +357,58 @@ pub enum Command {
         seq: u32,
         id: ElementId,
     },
+
+    /// Set the window's title bar text.
+    SetTitle {
+        seq: u32,
+        title: String,
+    },
+
+    /// Imperative window actions (closed action set).
+    WindowAction {
+        seq: u32,
+        /// One of minimize|zoom|toggleFullscreen|activate.
+        action: String,
+    },
+
+    /// Modal message dialog; resolves with the clicked answer's index.
+    DialogMessage {
+        seq: u32,
+        /// One of info|warning|critical.
+        level: String,
+        message: String,
+        detail: Option<String>,
+        /// Button labels, left to right.
+        answers: Vec<String>,
+    },
+
+    /// Open-file dialog; resolves with chosen paths, or null when cancelled.
+    DialogOpenFile {
+        seq: u32,
+        files: Option<bool>,
+        directories: Option<bool>,
+        multiple: Option<bool>,
+        prompt: Option<String>,
+    },
+
+    /// Save-file dialog; resolves with a path, or null when cancelled.
+    DialogSaveFile {
+        seq: u32,
+        directory: Option<String>,
+        suggested_name: Option<String>,
+    },
+
+    /// Show the path in Finder (platform equivalent).
+    ShellRevealPath {
+        seq: u32,
+        path: String,
+    },
+
+    /// Hand the path to the application owning its type.
+    ShellOpenPath {
+        seq: u32,
+        path: String,
+    },
 }
 
 /// Serialize a command to one JSON line. Infallible for this type shape.
@@ -376,6 +428,13 @@ pub fn command_from_json(s: &str) -> Result<Command, ProtocolError> {
         type_str,
         Some("getStats")
             | Some("captureFrame")
+            | Some("setTitle")
+            | Some("windowAction")
+            | Some("dialogMessage")
+            | Some("dialogOpenFile")
+            | Some("dialogSaveFile")
+            | Some("shellRevealPath")
+            | Some("shellOpenPath")
             | Some("scrollTo")
             | Some("getScrollOffset")
             | Some("focusElement")
@@ -385,7 +444,7 @@ pub fn command_from_json(s: &str) -> Result<Command, ProtocolError> {
         return Err(ProtocolError::InvalidShape {
             path: "type".into(),
             message: format!(
-                "unknown command {:?}; expected getStats|captureFrame|scrollTo|getScrollOffset|focusElement|simulateInput|listInfo",
+                "unknown command {:?}; expected getStats|captureFrame|scrollTo|getScrollOffset|focusElement|simulateInput|listInfo|setTitle|windowAction|dialogMessage|dialogOpenFile|dialogSaveFile|shellRevealPath|shellOpenPath",
                 type_str.unwrap_or("<missing>")
             ),
         });

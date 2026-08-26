@@ -69,6 +69,33 @@ bun test                                  # runs with --conditions=browser
 cargo test                                # protocol + helper suites
 ```
 
+## Window, dialogs, shell (P4)
+
+The render handle exposes imperative desktop operations over the command
+channel — each resolves when the OS answers:
+
+```ts
+const app = await render((h) => ...)
+await app.window.setTitle("Untitled")
+await app.window.toggleFullscreen()
+
+const discard = await app.dialog.message({
+  message: "Discard draft?",
+  answers: ["Cancel", "Discard"],
+  level: "warning",
+})           // → button index
+
+const files = await app.dialog.openFile({ multiple: true })  // string[] | null
+const saveAs = await app.dialog.saveFile({ suggestedName: "notes.md" })
+
+await app.shell.revealPath(saveAs ?? ".")     // Finder
+await app.shell.openWithSystem(saveAs ?? ".") // default app
+```
+
+Standalone module forms (`appWindow`, `dialog`, `shell` from
+`@solid-gpui/solid`) take any command-channel connection. Dialogs queue
+batches behind them while open — the dialog is the user's current task.
+
 ## Architecture
 
 | Package | What it is |

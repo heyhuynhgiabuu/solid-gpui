@@ -1,4 +1,24 @@
 import { spawnHelper, type HelperConnection } from "@solid-gpui/client"
+import { appWindow, dialog as dialogApi, shell as shellApi, type CommandChannel } from "./desktop"
+
+const bindWindow = (c: CommandChannel) => ({
+  setTitle: (title: string) => appWindow.setTitle(c, title),
+  minimize: () => appWindow.minimize(c),
+  zoom: () => appWindow.zoom(c),
+  toggleFullscreen: () => appWindow.toggleFullscreen(c),
+  activate: () => appWindow.activate(c),
+})
+
+const bindDialogs = (c: CommandChannel) => ({
+  message: dialogApi.message.bind(null, c),
+  openFile: dialogApi.openFile.bind(null, c),
+  saveFile: dialogApi.saveFile.bind(null, c),
+})
+
+const bindShell = (c: CommandChannel) => ({
+  revealPath: (path: string) => shellApi.revealPath(c, path),
+  openWithSystem: (path: string) => shellApi.openWithSystem(c, path),
+})
 import { createSolidRenderer, type HostNode, type SolidGpuiRenderer } from "./renderer"
 import { makeH, type H } from "./h"
 
@@ -9,6 +29,12 @@ export interface RenderOptions {
 
 export interface RenderHandle {
   connection: HelperConnection
+  /** Imperative window operations bound to this connection. */
+  window: ReturnType<typeof bindWindow>
+  /** Modal dialogs bound to this connection. */
+  dialog: ReturnType<typeof bindDialogs>
+  /** OS integrations bound to this connection. */
+  shell: ReturnType<typeof bindShell>
   renderer: SolidGpuiRenderer
   container: HostNode
   /** Remount a new tree in the same window/connection (bun --hot pattern).
@@ -122,5 +148,9 @@ export async function mount(
       await flush()
       await connection.close()
     },
+    // Desktop sugar (P4): window/dialog/shell bound to this connection.
+    window: bindWindow(connection),
+    dialog: bindDialogs(connection),
+    shell: bindShell(connection),
   }
 }

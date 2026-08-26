@@ -98,6 +98,13 @@ fn command_ident(command: &solid_gpui_protocol::Command) -> (u32, &'static str) 
         solid_gpui_protocol::Command::FocusElement { seq, .. } => (*seq, "focusElement"),
         solid_gpui_protocol::Command::SimulateInput { seq, .. } => (*seq, "simulateInput"),
         solid_gpui_protocol::Command::ListInfo { seq, .. } => (*seq, "listInfo"),
+        solid_gpui_protocol::Command::SetTitle { seq, .. } => (*seq, "setTitle"),
+        solid_gpui_protocol::Command::WindowAction { seq, .. } => (*seq, "windowAction"),
+        solid_gpui_protocol::Command::DialogMessage { seq, .. } => (*seq, "dialogMessage"),
+        solid_gpui_protocol::Command::DialogOpenFile { seq, .. } => (*seq, "dialogOpenFile"),
+        solid_gpui_protocol::Command::DialogSaveFile { seq, .. } => (*seq, "dialogSaveFile"),
+        solid_gpui_protocol::Command::ShellRevealPath { seq, .. } => (*seq, "shellRevealPath"),
+        solid_gpui_protocol::Command::ShellOpenPath { seq, .. } => (*seq, "shellOpenPath"),
     }
 }
 
@@ -406,6 +413,171 @@ fn run_stdio_window() {
                                 code: ReplyCode::Unsupported,
                                 message: format!("window closed: {e}"),
                             }),
+
+                        solid_gpui_protocol::Command::SetTitle { seq, title } => window
+                            .update(cx, |_view, window, _cx| {
+                                window.set_window_title(&title);
+                                Reply::Result { seq, value: serde_json::json!({ "applied": true }) }
+                            })
+                            .unwrap_or_else(|e| Reply::Error {
+                                seq: Some(seq),
+                                code: ReplyCode::Unsupported,
+                                message: format!("window closed: {e}"),
+                            }),
+
+                        solid_gpui_protocol::Command::WindowAction { seq, action } => window
+                            .update(cx, |_view, window, _cx| {
+                                match action.as_str() {
+                                    "minimize" => window.minimize_window(),
+                                    "zoom" => window.zoom_window(),
+                                    "toggleFullscreen" => window.toggle_fullscreen(),
+                                    "activate" => window.activate_window(),
+                                    // Unreachable: the protocol pre-check rejects
+                                    // unknown actions (defense in depth).
+                                    _ => {}
+                                }
+                                Reply::Result { seq, value: serde_json::json!({ "applied": true }) }
+                            })
+                            .unwrap_or_else(|e| Reply::Error {
+                                seq: Some(seq),
+                                code: ReplyCode::Unsupported,
+                                message: format!("window closed: {e}"),
+                            }),
+
+                        // Dialogs are ASYNC (macOS panels run callbacks, not
+                        // modal loops) — awaiting never blocks the main
+                        // thread. Strict reply ordering does queue batches
+                        // behind an open dialog, which is correct: the dialog
+                        // IS the user's current task.
+                        solid_gpui_protocol::Command::DialogMessage {
+                            seq,
+                            level,
+                            message,
+                            detail,
+                            answers,
+                        } => {
+                            let level = match level.as_str() {
+                                "warning" => gpui::PromptLevel::Warning,
+                                "critical" => gpui::PromptLevel::Critical,
+                                _ => gpui::PromptLevel::Info,
+                            };
+                            let buttons: Vec<gpui::PromptButton> = answers
+                                .iter()
+                                .map(|a| gpui::PromptButton::new(a.clone()))
+                                .collect();
+                            match window.update(cx, |_view, window, cx| {
+                                window.prompt(level, &message, detail.as_deref(), &buttons, cx)
+                            }) {
+                                Ok(receiver) => match receiver.await {
+                                    Ok(answer) => Reply::Result {
+                                        seq,
+                                        value: serde_json::json!({ "answer": answer }),
+                                    },
+                                    Err(err) => Reply::Error {
+                                        seq: Some(seq),
+                                        code: ReplyCode::ApplyFailed,
+                                        message: format!("dialog failed: {err}"),
+                                    },
+                                },
+                                Err(e) => Reply::Error {
+                                    seq: Some(seq),
+                                    code: ReplyCode::Unsupported,
+                                    message: format!("window closed: {e}"),
+                                },
+                            }
+                        }
+
+                        solid_gpui_protocol::Command::DialogOpenFile {
+                            seq,
+                            files,
+                            directories,
+                            multiple,
+                            prompt,
+                        } => {
+                            let options = gpui::PathPromptOptions {
+                                files: files.unwrap_or(true),
+                                directories: directories.unwrap_or(false),
+                                multiple: multiple.unwrap_or(false),
+                                prompt: prompt.map(gpui::SharedString::from),
+                            };
+                            // AsyncApp::update returns R directly (not Result).
+                            let receiver = cx.update(|cx| cx.prompt_for_paths(options));
+                            match receiver.await {
+                                Ok(Ok(Some(paths))) => Reply::Result {
+                                    seq,
+                                    value: serde_json::json!({
+                                        "paths": paths
+                                            .iter()
+                                            .map(|p| p.display().to_string())
+                                            .collect::<Vec<_>>(),
+                                    }),
+                                },
+                                Ok(Ok(None)) => Reply::Result {
+                                    seq,
+                                    value: serde_json::json!({ "paths": null }),
+                                },
+                                Ok(Err(err)) => Reply::Error {
+                                    seq: Some(seq),
+                                    code: ReplyCode::ApplyFailed,
+                                    message: format!("open dialog failed: {err}"),
+                                },
+                                Err(err) => Reply::Error {
+                                    seq: Some(seq),
+                                    code: ReplyCode::ApplyFailed,
+                                    message: format!("open dialog dropped: {err}"),
+                                },
+                            }
+                        }
+
+                        solid_gpui_protocol::Command::DialogSaveFile {
+                            seq,
+                            directory,
+                            suggested_name,
+                        } => {
+                            let dir =
+                                directory.map(std::path::PathBuf::from).unwrap_or_default();
+                            // AsyncApp::update returns R directly (not Result).
+                            let receiver = cx
+                                .update(|cx| cx.prompt_for_new_path(&dir, suggested_name.as_deref()));
+                            match receiver.await {
+                                Ok(Ok(Some(path))) => Reply::Result {
+                                    seq,
+                                    value: serde_json::json!({ "path": path.display().to_string() }),
+                                },
+                                Ok(Ok(None)) => Reply::Result {
+                                    seq,
+                                    value: serde_json::json!({ "path": null }),
+                                },
+                                Ok(Err(err)) => Reply::Error {
+                                    seq: Some(seq),
+                                    code: ReplyCode::ApplyFailed,
+                                    message: format!("save dialog failed: {err}"),
+                                },
+                                Err(err) => Reply::Error {
+                                    seq: Some(seq),
+                                    code: ReplyCode::ApplyFailed,
+                                    message: format!("save dialog dropped: {err}"),
+                                },
+                            }
+                        }
+
+                        solid_gpui_protocol::Command::ShellRevealPath { seq, path } => {
+                            let p = std::path::PathBuf::from(&path);
+                            cx.update(|cx| cx.reveal_path(&p));
+                            Reply::Result {
+                                seq,
+                                value: serde_json::json!({ "applied": true }),
+                            }
+                        }
+
+                        solid_gpui_protocol::Command::ShellOpenPath { seq, path } => {
+                            let p = std::path::PathBuf::from(&path);
+                            cx.update(|cx| cx.open_with_system(&p));
+                            Reply::Result {
+                                seq,
+                                value: serde_json::json!({ "applied": true }),
+                            }
+                        }
                     },
                     Job::Batch(batch) => {
                         let seq = batch.seq;

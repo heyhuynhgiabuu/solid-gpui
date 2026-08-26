@@ -765,3 +765,54 @@ Recon first — v1 already has tabIndex/autofocus/focus/blur/keyDown/keyUp.
       stale-guard đầy đủ (reset + fresh-match), semantics pin bằng unit +
       renderer warn lúc cài, parity test thêm. Gates: bun 131/131 · cargo
       79+31+15 · tsc ×3 · clippy/fmt sạch. P3 CLOSED.
+
+### 2026-08-26 - P4: window/dialog/shell commands
+status: active
+
+Goal: desktop-app surface per roadmap P4 — appWindow.{setTitle, minimize,
+zoom, toggleFullscreen, activate}, dialog.{message, openFile, saveFile},
+shell.{revealPath, openWithSystem} — over the EXISTING command channel
+(getStats/captureFrame precedent: seq-correlated result replies, no new
+mutation ops). API shape: imperative module functions taking the live
+connection (render() handle exposes it).
+
+- [x] P4-a recon: command channel = closed Command enum + seq + result
+      replies (lib.rs:313, main.rs:289 dispatch pattern per-arm; async job
+      loop cx.spawn nên await được). gpui: set_window_title (window.rs:2583),
+      zoom/activate/minimize/toggle_fullscreen (5724-5751 vùng), prompt→
+      Receiver<usize> (5751), App::prompt_for_paths/prompt_for_new_path
+      (app.rs:1575/1588, PathPromptOptions files/directories/multiple/
+      prompt platform.rs:2139), reveal_path/open_with_system (app.rs:1597-
+      1603). macOS panels ASYNC (ConcreteBlock + oneshot, gpui_macos/
+      platform.rs:777) — awaiting không block main thread. V1 surface:
+      setTitle, windowAction{minimize|zoom|toggleFullscreen|activate},
+      dialogMessage(level/message/detail/answers→answer index),
+      dialogOpenFile(files/directories/multiple/prompt→paths|null),
+      dialogSaveFile(directory/suggestedName→path|null), shellRevealPath,
+      shellOpenPath.
+- [x] P4-b protocol: 7 Command variants lockstep (setTitle, windowAction,
+      dialogMessage/OpenFile/SaveFile, shellRevealPath/OpenPath) — Rust enum
+      + closed-name matcher + error message list; TS union + WINDOW_ACTIONS/
+      DIALOG_LEVELS closed sets + decodeCommand validation per type
+- [x] P4-c helper dispatch: set_window_title/minimize/zoom/toggle_fullscreen/
+      activate; dialogMessage qua window.prompt (PromptButton, answer index),
+      dialogs qua AsyncApp::update → prompt_for_paths/prompt_for_new_path
+      (NHỚ: AsyncApp::update trả R trực tiếp KHÔNG Result), reveal/open_with;
+      dialogs async nên await không block main thread (macOS panel callbacks),
+      strict ordering cho phép batch queue sau dialog — đúng semantics
+- [x] P4-d TS API: packages/solid/src/desktop.ts (appWindow/dialog/shell,
+      CommandChannel interface hẹp — interface segregation; seq namespace
+      1_000_000+ disjoint với batch counter); RenderHandle sugar
+      (handle.window/dialog/shell bound); 5 tests qua fake channel + mọi
+      command round-trip decodeCommand (lockstep shape); README section
+- [ ] VERIFY: gates + independent review
+
+### 2026-08-26 - P4 session note (artifact refresh)
+status: active (same work as P4 block above — this line just refreshes tracking)
+
+- [x] P4-b protocol lockstep (7 commands) done; P4-c helper dispatch done
+      (clean re-apply after a mangled layered edit; cargo 79+15 green)
+- [ ] P4-d: desktop.ts written (appWindow/dialog/shell over connection);
+      remaining: handle sugar in render(), tests (fake-connection pattern),
+      index exports, README section
+- [ ] VERIFY: gates + independent review
