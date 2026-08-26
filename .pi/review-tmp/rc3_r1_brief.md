@@ -38,6 +38,6 @@ The parent freshly ran: `bun run test` (171 pass, 0 fail), `bun run typecheck` (
 Reviewer `mta1z9zq-a07c` returned **CLEAN/MERGEABLE** after inspecting the complete
 candidate and the installed rc.3 sources. No blocker, major, or important finding
 remained. The reviewer confirmed the earlier missing `memo` export was fixed and
-that the cleanup hook preserves refused-child teardown. Visual frame-count checks
-were separately limited by the current window-server environment; the migration
-has no Rust/protocol diff and the earlier full GUI gate was green.
+that the cleanup hook preserves refused-child teardown. An earlier isolated window-server run briefly reported one frame, but the
+subsequent full suite returned 171 pass / 0 fail with 31 frames; the migration
+has no Rust/protocol diff.
