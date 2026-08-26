@@ -70,6 +70,8 @@ const TAG_ELEMENT_TYPES: Record<string, ElementType> = {
   textarea: "textarea",
   list: "list",
   markdown: "markdown",
+  canvas: "canvas",
+  scrollbar: "scrollbar",
 }
 
 export interface SolidGpuiRenderer {
@@ -417,6 +419,24 @@ export function createSolidRenderer(send: Send): SolidGpuiRenderer {
         }
         return
       }
+      if (name === "drawList") {
+        // Canvas draw list (P8): recorded rect/path/text ops, replaced
+        // wholesale. Canvas-only — any other element would fail apply.
+        if (node.tag !== "canvas") {
+          if (typeof console !== "undefined") {
+            console.warn("[solid-gpui] drawList is only valid on <canvas>")
+          }
+          return
+        }
+        if (!Array.isArray(value)) {
+          if (typeof console !== "undefined") {
+            console.warn("[solid-gpui] drawList must be an array of draw items")
+          }
+          return
+        }
+        push({ op: "setDrawList", id, items: value as never })
+        return
+      }
       if (name === "value" && (node.tag === "input" || node.tag === "textarea")) {
         // Controlled value (JS→helper): overwrites helper-side edits on apply.
         push({ op: "setValue", id, value: String(value ?? "") })
@@ -438,9 +458,10 @@ export function createSolidRenderer(send: Send): SolidGpuiRenderer {
     },
 
     insertNode(parent: HostNode, node: HostNode, anchor?: HostNode) {
-      if (parent.kind === "element" && parent.tag === "markdown") {
-        // The helper owns the markdown element's rendered subtree and the
-        // wire rejects attach on it (applyFailed poisons the session). Refuse
+      if (parent.kind === "element" && (parent.tag === "markdown" || parent.tag === "canvas")) {
+        // The helper owns the markdown subtree; canvas paints a recorded
+        // draw list. Both reject attach on the wire (applyFailed poisons
+        // the session). Refuse
         // children client-side instead of emitting an op we know is invalid.
         // The node is still recorded in the shadow bookkeeping: dispose walks
         // the shadow tree and destroys these ids (they exist helper-side via

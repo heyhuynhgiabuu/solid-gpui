@@ -987,3 +987,29 @@ positioning.
       MouseMove phase như on_click, không phải paint). Fixes 0b3aa5f: rgba(),
       escape đúng \", unit M3+M4, dead-code N1. Gates: bun 151/151 · cargo
       32+83+18. P7 CLOSED (drag&drop); tooltip = slice riêng khi cần.
+
+### 2026-08-26 - P8: canvas (recorded draw list)
+status: active
+
+- [ ] P8-a recon: gpui canvas element + paint primitives — DONE trong chat:
+      canvas(prepaint,paint) FnOnce nhưng helper rebuild mỗi frame → OK;
+      paint_quad(PaintQuad), PathBuilder (move_to/line_to/add_polygon/close,
+      stroke(w)/fill()), text_system.shape_line + ShapedLine::paint (origin,
+      line_height, TextAlign::Left, align_width None); font ".n" như markdown.
+      V1: rect/path/text, coords absolute px, replace-wholesale, NO readback
+      (PLAN lesson #4).
+- [ ] P8-b protocol lockstep: ElementType Canvas ("canvas") cả 2 closed sets;
+      Mutation::SetDrawList {id, items}; DrawItem enum tag "type" —
+      rect{x,y,w,h,color,cornerRadius?}, path{points[[x,y]..],color,
+      strokeWidth?|closed?}, text{x,y,text,size,color}. Node.draw_list field;
+      canvas reject children (như text) + interactive props (như markdown);
+      setDrawList trên non-canvas = InvalidMutation; fixture batch-canvas-01
+      byte-identical.
+- [ ] P8-c helper: build_canvas_element qua gpui canvas(); rect → paint_quad
+      (+corner_radius), path → PathBuilder stroke/fill + add_polygon/segments
+      + paint_path, text → shape_line single TextRun + paint. Origin offset
+      từ canvas bounds.
+- [ ] P8-d renderer TS: drawList prop (chỉ canvas; element khác warn+drop);
+      decode validation TS (mỗi variant đầy đủ fields, points là number-
+      pairs); tests wire shape + reject paths; demo nhỏ.
+- [ ] VERIFY: gates + independent review (retry contract nếu reviewer chết).

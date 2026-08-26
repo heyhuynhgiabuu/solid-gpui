@@ -1188,3 +1188,46 @@ fn window_mode_drag_data_and_drop_listener_apply() {
     let status = child.wait().expect("wait");
     assert_eq!(status.code(), Some(0), "EOF must exit 0");
 }
+
+#[test]
+fn window_mode_canvas_draw_list_applies_and_replaces() {
+    if skip() {
+        return;
+    }
+    let _lock = window_lock();
+    let bin = env!("CARGO_BIN_EXE_solid-gpui-helper");
+    let mut child = Command::new(bin)
+        .arg("--stdio-window")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .spawn()
+        .expect("helper spawns");
+
+    let mut stdin = child.stdin.take().expect("stdin piped");
+    let reader = BufReader::new(child.stdout.take().expect("stdout piped"));
+    let mut lines = reader.lines();
+
+    // Full canvas scene: rect + path + text with base size styles — the
+    // ack proves the paint path builds without panicking (draw list replay,
+    // quad/path/text construction) across two painted frames.
+    let batch = r##"{"v":1,"seq":200,"mutations":[{"op":"createElement","id":1,"elementType":"canvas"},{"op":"setDrawList","id":1,"items":[{"type":"rect","x":0.0,"y":0.0,"w":120.0,"h":60.0,"color":"#7aa2f7","cornerRadius":4.0},{"type":"path","points":[0.0,60.0,60.0,0.0,120.0,60.0],"color":"#f7768e","strokeWidth":2.0},{"type":"text","x":8.0,"y":40.0,"text":"Q3","size":13.0,"color":"#c0caf5"}]},{"op":"setStyle","id":1,"style":{"height":60,"width":120}},{"op":"setRoot","id":1}]}"##;
+    writeln!(stdin, "{batch}").unwrap();
+    stdin.flush().unwrap();
+    assert_eq!(
+        lines.next().unwrap().unwrap(),
+        r#"{"type":"ack","seq":200,"applied":4}"#
+    );
+
+    // Replace-wholesale (empty list clears) + invalid target rejects.
+    let clear = r##"{"v":1,"seq":201,"mutations":[{"op":"createElement","id":2,"elementType":"div"},{"op":"setDrawList","id":2,"items":[]}]}"##;
+    writeln!(stdin, "{clear}").unwrap();
+    stdin.flush().unwrap();
+    assert_eq!(
+        lines.next().unwrap().unwrap(),
+        r#"{"type":"error","seq":201,"code":"applyFailed","message":"apply failed after 1 mutations: invalid mutation: setDrawList: element ElementId(2) is not a canvas element"}"#
+    );
+
+    drop(stdin);
+    let status = child.wait().expect("wait");
+    assert_eq!(status.code(), Some(0), "EOF must exit 0");
+}

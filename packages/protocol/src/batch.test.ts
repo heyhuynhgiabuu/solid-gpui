@@ -231,13 +231,13 @@ describe("decodeBatch rejects malformed input", () => {
       JSON.stringify({
         v: 1,
         seq: 1,
-        mutations: [{ op: "createElement", id: 1, elementType: "canvas" }],
+        mutations: [{ op: "createElement", id: 1, elementType: "marquee" }],
       }),
     )
     expect(r.ok).toBe(false)
     if (!r.ok) {
       expect(r.error.kind).toBe("unknownElementType")
-      if (r.error.kind === "unknownElementType") expect(r.error.got).toBe("canvas")
+      if (r.error.kind === "unknownElementType") expect(r.error.got).toBe("marquee")
     }
   })
 

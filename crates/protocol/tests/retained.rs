@@ -3,8 +3,8 @@
 //! precise errors. Pure data — no gpui, no IO.
 
 use solid_gpui_protocol::{
-    ApplyError, ElementId, ElementType, EventType, Mutation, RetainedTree, StyleMap, StyleState,
-    StyleValue, from_json,
+    ApplyError, DrawItem, ElementId, ElementType, EventType, Mutation, RetainedTree, StyleMap,
+    StyleState, StyleValue, from_json,
 };
 use std::fs;
 
@@ -1048,4 +1048,142 @@ fn set_drag_data_stores_clears_and_markdown_rejects() {
         err.to_string().contains("markdown"),
         "markdown drag data must be rejected: {err}"
     );
+}
+
+#[test]
+fn canvas_draw_list_replaces_and_rejects() {
+    let mut tree = RetainedTree::new();
+    tree.apply(&Mutation::CreateElement {
+        id: ElementId(1),
+        element_type: ElementType::Canvas,
+    })
+    .unwrap();
+    tree.apply(&Mutation::CreateElement {
+        id: ElementId(2),
+        element_type: ElementType::Div,
+    })
+    .unwrap();
+
+    // Replace-wholesale: second set replaces the first, not appends.
+    let first = vec![DrawItem::Rect {
+        x: 0.,
+        y: 0.,
+        w: 10.,
+        h: 10.,
+        color: "#000000".into(),
+        corner_radius: None,
+    }];
+    tree.apply(&Mutation::SetDrawList {
+        id: ElementId(1),
+        items: first.clone(),
+    })
+    .unwrap();
+    let second = vec![
+        DrawItem::Path {
+            points: vec![0., 0., 5., 5., 10., 0.],
+            color: "#ff0000".into(),
+            stroke_width: Some(2.),
+            closed: Some(true),
+        },
+        DrawItem::Text {
+            x: 1.,
+            y: 2.,
+            text: "hi".into(),
+            size: 13.,
+            color: "#ffffff".into(),
+        },
+    ];
+    tree.apply(&Mutation::SetDrawList {
+        id: ElementId(1),
+        items: second.clone(),
+    })
+    .unwrap();
+    assert_eq!(tree.get(ElementId(1)).unwrap().draw_list, second);
+    assert_ne!(tree.get(ElementId(1)).unwrap().draw_list, first);
+
+    // Non-canvas target rejects.
+    let err = tree
+        .apply(&Mutation::SetDrawList {
+            id: ElementId(2),
+            items: vec![],
+        })
+        .unwrap_err();
+    assert!(err.to_string().contains("not a canvas"), "{err}");
+
+    // Newline in a text item rejects (shape_line is single-line).
+    let err = tree
+        .apply(&Mutation::SetDrawList {
+            id: ElementId(1),
+            items: vec![DrawItem::Text {
+                x: 0.,
+                y: 0.,
+                text: "two\nlines".into(),
+                size: 12.,
+                color: "#ffffff".into(),
+            }],
+        })
+        .unwrap_err();
+    assert!(err.to_string().contains("single-line"), "{err}");
+
+    // Odd-length flat points reject.
+    let err = tree
+        .apply(&Mutation::SetDrawList {
+            id: ElementId(1),
+            items: vec![DrawItem::Path {
+                points: vec![0., 0., 5.],
+                color: "#ffffff".into(),
+                stroke_width: None,
+                closed: None,
+            }],
+        })
+        .unwrap_err();
+    assert!(err.to_string().contains("x,y pairs"), "{err}");
+}
+
+#[test]
+fn canvas_rejects_children_and_interactive_props() {
+    let mut tree = RetainedTree::new();
+    tree.apply(&Mutation::CreateElement {
+        id: ElementId(1),
+        element_type: ElementType::Canvas,
+    })
+    .unwrap();
+    tree.apply(&Mutation::CreateElement {
+        id: ElementId(2),
+        element_type: ElementType::Div,
+    })
+    .unwrap();
+
+    let err = tree
+        .apply(&Mutation::AppendChild {
+            parent_id: ElementId(1),
+            child_id: ElementId(2),
+        })
+        .unwrap_err();
+    assert!(err.to_string().contains("no child slots"), "{err}");
+
+    let err = tree
+        .apply(&Mutation::SetEventListener {
+            id: ElementId(1),
+            event_type: EventType::Click,
+            enabled: true,
+        })
+        .unwrap_err();
+    assert!(err.to_string().contains("canvas"), "{err}");
+
+    let err = tree
+        .apply(&Mutation::SetDragData {
+            id: ElementId(1),
+            data: "x".into(),
+        })
+        .unwrap_err();
+    assert!(err.to_string().contains("canvas"), "{err}");
+
+    // Empty draw list is fine (clears the canvas).
+    tree.apply(&Mutation::SetDrawList {
+        id: ElementId(1),
+        items: vec![],
+    })
+    .unwrap();
+    assert!(tree.get(ElementId(1)).unwrap().draw_list.is_empty());
 }

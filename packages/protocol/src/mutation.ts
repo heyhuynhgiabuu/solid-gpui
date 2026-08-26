@@ -10,6 +10,9 @@ export type ElementType =
   | "list"
   | "markdown"
   | "scrollbar"
+  /** Recorded draw list element (P8): rect/path/text ops, replaced
+   * wholesale via setDrawList; no children, no interactive props. */
+  | "canvas"
 
 /**
  * Closed set: the helper must know an event to wire it, so unknown event
@@ -41,6 +44,35 @@ export type EventType =
  * Closed set of style-STATE layers: the helper must know every state to wire
  * gpui interactivity (same asymmetry as EVENT_TYPES — style KEYS stay open).
  */
+/** One recorded draw op in a canvas draw list (P8). Coordinates are
+ * absolute px within the canvas bounds; replaced wholesale on each set. */
+export type DrawItem =
+  | {
+      readonly type: "rect"
+      readonly x: number
+      readonly y: number
+      readonly w: number
+      readonly h: number
+      readonly color: string
+      readonly cornerRadius?: number
+    }
+  | {
+      readonly type: "path"
+      /** Flat vertex pairs [x, y, x, y, ...]. */
+      readonly points: readonly number[]
+      readonly color: string
+      readonly strokeWidth?: number
+      readonly closed?: boolean
+    }
+  | {
+      readonly type: "text"
+      readonly x: number
+      readonly y: number
+      readonly text: string
+      readonly size: number
+      readonly color: string
+    }
+
 export type StyleState = "hover" | "active" | "dragOver"
 
 export const STYLE_STATES: readonly StyleState[] = ["hover", "active", "dragOver"]
@@ -72,6 +104,7 @@ export const ELEMENT_TYPES: readonly ElementType[] = [
   "list",
   "markdown",
   "scrollbar",
+  "canvas",
 ]
 
 export type Mutation =
@@ -95,6 +128,12 @@ export type Mutation =
       readonly id: ElementId
       /** Keystroke strings; spaces separate a sequence ("ctrl-x ctrl-s"). */
       readonly bindings: readonly string[]
+    }
+  | {
+      readonly op: "setDrawList"
+      readonly id: ElementId
+      /** Recorded draw ops; replaces the previous list wholesale. */
+      readonly items: readonly DrawItem[]
     }
   | {
       readonly op: "setDragData"
@@ -151,6 +190,7 @@ export const MUTATION_OPS = [
   "setStyle",
   "setText",
   "setKeyBindings",
+  "setDrawList",
   "setDragData",
   "setValue",
   "setAnimation",

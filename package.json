@@ -18,7 +18,9 @@
     "pack:all": "bun run build && node scripts/pack-package.mjs packages/protocol && node scripts/pack-package.mjs packages/client && node scripts/pack-package.mjs packages/solid",
     "smoke:node": "tsx scripts/node-smoke.ts",
     "test": "bun --conditions=browser test",
-    "typecheck": "tsc --noEmit -p packages/protocol && tsc --noEmit -p packages/client && tsc --noEmit -p packages/solid"
+    "typecheck": "tsc --noEmit -p packages/protocol && tsc --noEmit -p packages/client && tsc --noEmit -p packages/solid",
+    "example:canvas": "bun --conditions=browser run examples/canvas.tsx",
+    "example/canvas": "bun --conditions=browser --preload ./scripts/solid-jsx-preload.ts examples/canvas.tsx"
   },
   "devDependencies": {
     "@babel/core": "^7",

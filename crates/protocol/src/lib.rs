@@ -40,6 +40,7 @@ pub const ELEMENT_TYPES: &[&str] = &[
     "list",
     "markdown",
     "scrollbar",
+    "canvas",
 ];
 
 /// Numeric id of a host element. 0 is reserved and never valid.
@@ -71,6 +72,12 @@ pub enum ElementType {
     /// overflow, or a list); the helper draws the bar host-side and drives
     /// the child's scroll handle (drag works even off the track).
     Scrollbar,
+    /// Recorded draw list (P8): the node's `draw_list` is replaced
+    /// wholesale on every setDrawList; no readback, no measure, no
+    /// transforms — the pixels are GPU-side. No children (validation
+    /// rejects attach, like text nodes); no interactive props (like
+    /// markdown). Base styles (size/background) apply.
+    Canvas,
 }
 
 /// Interaction state a state-layer style applies under. Closed set (the
@@ -185,6 +192,47 @@ impl Easing {
     }
 }
 
+/// One recorded draw op in a canvas element's draw list (P8). Coordinates
+/// are absolute pixels within the canvas's own bounds (origin top-left);
+/// the list is replaced wholesale — append semantics do not exist.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "camelCase")]
+pub enum DrawItem {
+    /// Filled axis-aligned rectangle (optional rounded corners).
+    #[serde(rename_all = "camelCase")]
+    Rect {
+        x: f32,
+        y: f32,
+        w: f32,
+        h: f32,
+        color: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        corner_radius: Option<f32>,
+    },
+    /// Polyline or polygon: `closed` fills the shape, otherwise it strokes
+    /// with `stroke_width` (default 1 when omitted on open paths).
+    #[serde(rename_all = "camelCase")]
+    Path {
+        /// Vertex pairs [x, y, x, y, ...] — flat keeps the wire compact.
+        points: Vec<f32>,
+        color: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        stroke_width: Option<f32>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        closed: Option<bool>,
+    },
+    /// Single-line text run (no wrapping; `\n` rejected by validation).
+    #[serde(rename_all = "camelCase")]
+    Text {
+        x: f32,
+        y: f32,
+        text: String,
+        /// Font size in pixels.
+        size: f32,
+        color: String,
+    },
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "op", rename_all = "camelCase")]
 pub enum Mutation {
@@ -244,6 +292,13 @@ pub enum Mutation {
     /// Configure drag & drop for the element: `data` is a JSON string (the
     /// payload carried to drop targets); an empty string clears drag source
     /// behavior. Drop targets register onDrop listeners normally.
+    /// Replace the canvas element's recorded draw list (P8) wholesale.
+    /// Only valid on canvas elements; validation rejects anything else.
+    #[serde(rename_all = "camelCase")]
+    SetDrawList {
+        id: ElementId,
+        items: Vec<DrawItem>,
+    },
     #[serde(rename_all = "camelCase")]
     SetDragData {
         id: ElementId,
@@ -651,6 +706,7 @@ const KNOWN_OPS: &[&str] = &[
     "setStyle",
     "setText",
     "setKeyBindings",
+    "setDrawList",
     "setDragData",
     "setValue",
     "setAnimation",
@@ -756,6 +812,7 @@ fn from_value(v: serde_json::Value) -> Result<MutationBatch, ProtocolError> {
             Mutation::CreateElement { id, .. }
             | Mutation::DestroyElement { id }
             | Mutation::SetStyle { id, .. }
+            | Mutation::SetDrawList { id, .. }
             | Mutation::SetKeyBindings { id, .. }
             | Mutation::SetDragData { id, .. }
             | Mutation::SetText { id, .. }

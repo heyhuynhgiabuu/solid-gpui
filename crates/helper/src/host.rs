@@ -2,17 +2,18 @@
 
 use crate::frame_stats::FrameStats;
 use gpui::{
-    AnyElement, App, AppContext as _, Bounds, Context, Div, Element, FocusHandle, FollowMode,
-    InputHandler, InteractiveElement, IntoElement, LayoutId, ListAlignment, ListState,
-    ParentElement, Pixels, Point, Render, Rgba, ScrollHandle, SharedString,
-    StatefulInteractiveElement, Style, Styled, UTF16Selection, WeakEntity, Window, div, list,
+    AnyElement, App, AppContext as _, BorderStyle, Bounds, Context, Corners, Div, Edges, Element,
+    FocusHandle, FollowMode, Hsla, InputHandler, InteractiveElement, IntoElement, LayoutId,
+    ListAlignment, ListState, PaintQuad, ParentElement, PathBuilder, Pixels, Point, Render, Rgba,
+    ScrollHandle, SharedString, StatefulInteractiveElement, Style, Styled, TextAlign, TextRun,
+    UTF16Selection, WeakEntity, Window, canvas, div, font, list, point,
     prelude::FluentBuilder as _, px, rgb, rgba, size,
 };
 use solid_gpui_protocol::EventType;
 use solid_gpui_protocol::Mutation;
 use solid_gpui_protocol::StyleMap;
 use solid_gpui_protocol::StyleState;
-use solid_gpui_protocol::{ElementId, ElementType, Event, RetainedTree, StyleValue};
+use solid_gpui_protocol::{DrawItem, ElementId, ElementType, Event, RetainedTree, StyleValue};
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 use std::io::Write;
@@ -1404,6 +1405,9 @@ fn build_element(
     if node.element_type == ElementType::Scrollbar {
         return build_scrollbar_element(tree, id, window, cx, ctx);
     }
+    if node.element_type == ElementType::Canvas {
+        return build_canvas_element(tree, id, ctx);
+    }
     let mut el = div();
     for (key, value) in &node.style {
         el = apply_style(el, key, &effective_value(ctx, id, key, value));
@@ -1736,6 +1740,125 @@ fn build_scrollbar_element(
 /// the same language must never receive another fence's line-relative spans.
 /// Element styles: `color` overrides body text, `backgroundColor` washes the
 /// wrapper, `fontSize` (14 = 1.0×) scales every metric linearly.
+/// Recorded-draw-list canvas (P8): every setDrawList REPLACES the list, so
+/// painting just replays `node.draw_list` in order inside the element's
+/// bounds. Coordinates are canvas-local px; the list is GPU-side — no
+/// readback exists by design.
+fn build_canvas_element(tree: &RetainedTree, id: ElementId, ctx: &mut RenderCtx) -> AnyElement {
+    let node = tree.get(id).expect("checked by caller");
+    let items = node.draw_list.clone();
+    let mut el = canvas(
+        move |_bounds, _window, _cx| {},
+        move |bounds, (), window, cx| {
+            let origin = bounds.origin;
+            for item in &items {
+                match item {
+                    DrawItem::Rect {
+                        x,
+                        y,
+                        w,
+                        h,
+                        color,
+                        corner_radius,
+                    } => {
+                        let color = color_for_canvas(color);
+                        let quad = PaintQuad {
+                            bounds: Bounds::new(
+                                origin + point(px(*x), px(*y)),
+                                size(px(*w), px(*h)),
+                            ),
+                            corner_radii: corner_radius
+                                .map(|r| Corners::all(px(r)))
+                                .unwrap_or_default(),
+                            background: color.into(),
+                            border_widths: Edges::default(),
+                            border_color: Hsla::default(),
+                            border_style: BorderStyle::default(),
+                        };
+                        window.paint_quad(quad);
+                    }
+                    DrawItem::Path {
+                        points,
+                        color,
+                        stroke_width,
+                        closed,
+                    } => {
+                        let color = color_for_canvas(color);
+                        let stroke = stroke_width.unwrap_or(1.0);
+                        let mut builder = if closed.unwrap_or(false) {
+                            PathBuilder::fill()
+                        } else {
+                            PathBuilder::stroke(px(stroke))
+                        };
+                        for (i, pair) in points.as_chunks::<2>().iter().enumerate() {
+                            let vertex = origin + point(px(pair[0]), px(pair[1]));
+                            if i == 0 {
+                                builder.move_to(vertex);
+                            } else {
+                                builder.line_to(vertex);
+                            }
+                        }
+                        if closed.unwrap_or(false) {
+                            builder.close();
+                        }
+                        if let Ok(path) = builder.build() {
+                            window.paint_path(path, color);
+                        }
+                    }
+                    DrawItem::Text {
+                        x,
+                        y,
+                        text,
+                        size,
+                        color,
+                    } => {
+                        let color = color_for_canvas(color);
+                        let font_size = px(*size);
+                        let run = TextRun {
+                            len: text.len(),
+                            font: font(SharedString::from(".n")),
+                            color: color.into(),
+                            background_color: None,
+                            underline: None,
+                            strikethrough: None,
+                        };
+                        let line = window.text_system().shape_line(
+                            (*text).clone().into(),
+                            font_size,
+                            &[run],
+                            None,
+                        );
+                        let _ = line.paint(
+                            origin + point(px(*x), px(*y)),
+                            font_size,
+                            TextAlign::Left,
+                            None,
+                            window,
+                            cx,
+                        );
+                    }
+                }
+            }
+        },
+    );
+    // Base styles (width/height/background/…) size and back the canvas;
+    // the draw list paints on top. Without a style the element is 0x0.
+    for (key, value) in &node.style {
+        el = apply_style(el, key, &effective_value(ctx, id, key, value));
+    }
+    el.into_any_element()
+}
+
+/// Parse a canvas draw-item color (hex string) — same grammar as style
+/// colors but item-local, since StyleValue wrapping would be pure ceremony.
+fn color_for_canvas(spec: &str) -> Rgba {
+    parse_color(&StyleValue::Text(spec.to_string())).unwrap_or_else(|| {
+        // Validation keeps wire colors parseable; a bad one still must not
+        // panic the renderer — fall back to visible magenta.
+        gpui::rgba(0xff00ffff)
+    })
+}
+
 fn build_markdown_element(
     tree: &RetainedTree,
     id: ElementId,

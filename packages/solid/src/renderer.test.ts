@@ -602,3 +602,59 @@ describe("drag & drop (P7)", () => {
     expect(dd[dd.length - 1]?.data).toBe("")
   })
 })
+
+describe("canvas draw list (P8)", () => {
+  test("drawList on canvas emits setDrawList with the items verbatim", async () => {
+    const rec = recording()
+    const { renderer: R, render, flush } = createSolidRenderer(rec.send)
+    const container = R.createElement("#root")
+    let cv: ReturnType<typeof R.createElement> | null = null
+    const dispose = render(() => {
+      const root = R.createElement("div")
+      cv = R.createElement("canvas")
+      R.insert(root, cv, null, null)
+      return root
+    }, container)
+    await flush()
+    const items = [
+      { type: "rect", x: 0, y: 0, w: 100, h: 50, color: "#7aa2f7", cornerRadius: 4 },
+      { type: "path", points: [0, 50, 50, 0, 100, 50], color: "#f7768e", strokeWidth: 2 },
+      { type: "text", x: 8, y: 30, text: "Q3", size: 13, color: "#c0caf5" },
+    ] as const
+    R.setProp(cv!, "drawList", items)
+    await flush()
+    dispose()
+    const dl = rec.batches
+      .flatMap((b) => b.mutations)
+      .find((m): m is Extract<Mutation, { op: "setDrawList" }> => m.op === "setDrawList")
+    expect(dl?.items).toEqual(items)
+  })
+
+  test("drawList on non-canvas warns and sends nothing; canvas children are refused client-side", async () => {
+    const rec = recording()
+    const { renderer: R, render, flush } = createSolidRenderer(rec.send)
+    const container = R.createElement("#root")
+    let dv: ReturnType<typeof R.createElement> | null = null
+    const dispose = render(() => {
+      const root = R.createElement("div")
+      dv = R.createElement("div")
+      R.insert(root, dv, null, null)
+      return root
+    }, container)
+    await flush()
+    const warn = console.warn
+    const calls: string[] = []
+    console.warn = (m: string) => calls.push(m)
+    try {
+      R.setProp(dv!, "drawList", [{ type: "rect", x: 0, y: 0, w: 1, h: 1, color: "#fff" }])
+      await flush()
+    } finally {
+      console.warn = warn
+    }
+    dispose()
+    expect(calls.some((m) => m.includes("canvas"))).toBe(true)
+    expect(
+      rec.batches.flatMap((b) => b.mutations).some((m) => m.op === "setDrawList"),
+    ).toBe(false)
+  })
+})

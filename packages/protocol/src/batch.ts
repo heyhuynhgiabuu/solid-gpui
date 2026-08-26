@@ -6,6 +6,7 @@ import {
   EVENT_TYPES,
   MUTATION_OPS,
   STYLE_STATES,
+  type DrawItem,
   type ElementType,
   type EventType,
   type Mutation,
@@ -44,6 +45,68 @@ type Dict = { readonly [k: string]: unknown }
 
 const isDict = (v: unknown): v is Dict =>
   typeof v === "object" && v !== null && !Array.isArray(v)
+
+function decodeDrawItem(
+  p: string,
+  m: unknown,
+): { ok: true; value: DrawItem } | { ok: false; error: ProtocolError } {
+  if (typeof m !== "object" || m === null || Array.isArray(m)) {
+    return { ok: false, error: shape(p, "expected an object") }
+  }
+  const o = m as Record<string, unknown>
+  const num = (k: string): number | null =>
+    typeof o[k] === "number" ? (o[k] as number) : null
+  const color = (): string | null =>
+    typeof o.color === "string" ? o.color : null
+  const xy = (): { x: number; y: number } | null => {
+    const x = num("x")
+    const y = num("y")
+    return x === null || y === null ? null : { x, y }
+  }
+  switch (o.type) {
+    case "rect": {
+      const pos = xy()
+      const w = num("w")
+      const h = num("h")
+      const c = color()
+      if (pos === null || w === null || h === null || c === null) {
+        return { ok: false, error: shape(p, "rect needs numeric x,y,w,h and string color") }
+      }
+      const cr = num("cornerRadius")
+      return { ok: true, value: { type: "rect", x: pos.x, y: pos.y, w, h, color: c, ...(cr === null ? {} : { cornerRadius: cr }) } }
+    }
+    case "path": {
+      const c = color()
+      if (c === null) return { ok: false, error: shape(p, "path needs a string color") }
+      if (!Array.isArray(o.points) || o.points.some((v) => typeof v !== "number") || o.points.length % 2 !== 0) {
+        return { ok: false, error: shape(p, "path points must be complete numeric x,y pairs") }
+      }
+      const sw = num("strokeWidth")
+      const closed = o.closed === undefined ? null : typeof o.closed === "boolean" ? o.closed : null
+      return {
+        ok: true,
+        value: {
+          type: "path",
+          points: o.points as number[],
+          color: c,
+          ...(sw === null ? {} : { strokeWidth: sw }),
+          ...(closed === null ? {} : { closed }),
+        },
+      }
+    }
+    case "text": {
+      const pos = xy()
+      const size = num("size")
+      const c = color()
+      if (pos === null || size === null || c === null || typeof o.text !== "string" || o.text.includes("\n")) {
+        return { ok: false, error: shape(p, "text needs numeric x,y,size, string text (no newline) and color") }
+      }
+      return { ok: true, value: { type: "text", x: pos.x, y: pos.y, text: o.text, size, color: c } }
+    }
+    default:
+      return { ok: false, error: shape(`${p}.type`, "expected rect, path, or text") }
+  }
+}
 
 const shape = (path: string, message: string): ProtocolError => ({
   kind: "invalidShape",
@@ -217,6 +280,20 @@ function decodeMutation(m: Dict, p: string): Result<Mutation, ProtocolError> {
         }
       }
       return { ok: true, value: { op, id: idR.value, bindings } }
+    }
+    case "setDrawList": {
+      const idR = id()
+      if (!idR.ok) return idR
+      if (!Array.isArray(m.items)) {
+        return { ok: false, error: shape(`${p}.items`, "expected an array") }
+      }
+      const items: DrawItem[] = []
+      for (let i = 0; i < m.items.length; i++) {
+        const r = decodeDrawItem(`${p}.items[${i}]`, m.items[i])
+        if (!r.ok) return r
+        items.push(r.value)
+      }
+      return { ok: true, value: { op, id: idR.value, items } }
     }
     case "setDragData": {
       const idR = id()

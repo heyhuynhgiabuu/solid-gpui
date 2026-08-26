@@ -1,7 +1,8 @@
 use solid_gpui_protocol::{
-    ApplyError, Command, ElementId, Event, EventType, Mutation, MutationBatch, MutationHandler,
-    ProtocolError, Reply, ReplyCode, RetainedTree, command_from_json, command_to_json,
-    event_from_json, event_to_json, from_json, reply_from_json, reply_to_json, to_json,
+    ApplyError, Command, DrawItem, ElementId, Event, EventType, Mutation, MutationBatch,
+    MutationHandler, ProtocolError, Reply, ReplyCode, RetainedTree, command_from_json,
+    command_to_json, event_from_json, event_to_json, from_json, reply_from_json, reply_to_json,
+    to_json,
 };
 use std::fs;
 
@@ -353,13 +354,13 @@ fn rejects_unknown_event_type() {
 #[test]
 fn rejects_unknown_element_type() {
     let err = from_json(
-        r#"{"v":1,"seq":0,"mutations":[{"op":"createElement","id":1,"elementType":"canvas"}]}"#,
+        r#"{"v":1,"seq":0,"mutations":[{"op":"createElement","id":1,"elementType":"marquee"}]}"#,
     )
     .unwrap_err();
     assert_eq!(
         err,
         ProtocolError::UnknownElementType {
-            got: "canvas".into()
+            got: "marquee".into()
         }
     );
 }
@@ -631,6 +632,34 @@ fn drag_batch_fixture_parses_both_ways() {
             ));
         }
         other => panic!("expected setStyle dragOver, got {other:?}"),
+    }
+    assert_eq!(to_json(&batch), raw);
+}
+
+#[test]
+fn canvas_batch_fixture_parses_both_ways() {
+    let raw = fs::read_to_string(fixture_path("batch-canvas-01.json"))
+        .expect("fixture readable")
+        .trim()
+        .to_string();
+    let batch = from_json(&raw).expect("batch parses");
+    match &batch.mutations[1] {
+        Mutation::SetDrawList { id, items } => {
+            assert_eq!(*id, 1.into());
+            assert_eq!(items.len(), 3);
+            assert!(
+                matches!(&items[0], DrawItem::Rect { w, corner_radius: Some(4.), .. } if *w == 120.)
+            );
+            assert!(matches!(
+                &items[1],
+                DrawItem::Path {
+                    stroke_width: Some(2.),
+                    ..
+                }
+            ));
+            assert!(matches!(&items[2], DrawItem::Text { text, .. } if text == "Q3"));
+        }
+        other => panic!("expected setDrawList, got {other:?}"),
     }
     assert_eq!(to_json(&batch), raw);
 }

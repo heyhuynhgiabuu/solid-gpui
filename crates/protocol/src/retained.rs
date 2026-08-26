@@ -37,6 +37,10 @@ pub struct Node {
     /// Drag payload (JSON string) — non-empty makes the element a drag
     /// source; drop targets receive it in the drop event's value field.
     pub drag_data: Option<String>,
+    /// Recorded draw list (P8), canvas-only; replaced wholesale by
+    /// setDrawList. No children, no interactive props (validation and
+    /// rendering agree — the canvas paint path owns everything).
+    pub draw_list: Vec<crate::DrawItem>,
     /// Key bindings (shortcuts/sequences) — fired as `keys` events while
     /// the element holds focus. Empty = none.
     pub key_bindings: Vec<String>,
@@ -60,6 +64,7 @@ impl Node {
             element_type,
             style: BTreeMap::new(),
             drag_data: None,
+            draw_list: Vec::new(),
             key_bindings: Vec::new(),
             state_styles: BTreeMap::new(),
             text: None,
@@ -140,10 +145,13 @@ impl RetainedTree {
                 match state {
                     None => node.style = style.clone(),
                     Some(state) => {
-                        if node.element_type == ElementType::Markdown {
+                        if matches!(
+                            node.element_type,
+                            ElementType::Markdown | ElementType::Canvas
+                        ) {
                             return Err(ApplyError::InvalidMutation {
                                 message: format!(
-                                    "setStyle: markdown elements render base styles only ({id:?})"
+                                    "setStyle: markdown/canvas elements render base styles only ({id:?})"
                                 ),
                             });
                         }
@@ -159,14 +167,17 @@ impl RetainedTree {
                 easing,
             } => {
                 let node = self.mut_node(*id, "setAnimation")?;
-                if node.element_type == ElementType::Markdown {
+                if matches!(
+                    node.element_type,
+                    ElementType::Markdown | ElementType::Canvas
+                ) {
                     // Validation and rendering agree: markdown reads only the
                     // static color/backgroundColor/fontSize style — there is no
                     // interpolation path, so animation must fail honestly
                     // instead of acking and silently doing nothing.
                     return Err(ApplyError::InvalidMutation {
                         message: format!(
-                            "setAnimation: markdown elements render static styles only ({id:?})"
+                            "setAnimation: markdown/canvas elements render static styles only ({id:?})"
                         ),
                     });
                 }
@@ -224,11 +235,16 @@ impl RetainedTree {
             }
             Mutation::SetDragData { id, data } => {
                 let node = self.mut_node(*id, "setDragData")?;
-                if node.element_type == ElementType::Markdown {
+                if matches!(
+                    node.element_type,
+                    ElementType::Markdown | ElementType::Canvas
+                ) {
                     // Validation and rendering agree: markdown renders a
                     // static helper-owned subtree and fires no events.
                     return Err(ApplyError::InvalidMutation {
-                        message: format!("setDragData: markdown elements fire no events ({id:?})"),
+                        message: format!(
+                            "setDragData: markdown/canvas elements fire no events ({id:?})"
+                        ),
                     });
                 }
                 node.drag_data = if data.is_empty() {
@@ -238,14 +254,50 @@ impl RetainedTree {
                 };
                 Ok(())
             }
+            Mutation::SetDrawList { id, items } => {
+                let node = self.mut_node(*id, "setDrawList")?;
+                if node.element_type != ElementType::Canvas {
+                    return Err(ApplyError::InvalidMutation {
+                        message: format!("setDrawList: element {id:?} is not a canvas element"),
+                    });
+                }
+                // Validation and rendering agree: shape_line is single-line
+                // (debug_assert upstream); a newline would silently render
+                // wrong, so reject it here.
+                if items
+                    .iter()
+                    .any(|i| matches!(i, crate::DrawItem::Text { text, .. } if text.contains('\n')))
+                {
+                    return Err(ApplyError::InvalidMutation {
+                        message: format!(
+                            "setDrawList: canvas text items must be single-line ({id:?})"
+                        ),
+                    });
+                }
+                // Flat point pairs must come in complete (x, y) couples.
+                if items.iter().any(
+                    |i| matches!(i, crate::DrawItem::Path { points, .. } if points.len() % 2 != 0),
+                ) {
+                    return Err(ApplyError::InvalidMutation {
+                        message: format!(
+                            "setDrawList: path points must be complete x,y pairs ({id:?})"
+                        ),
+                    });
+                }
+                node.draw_list = items.clone();
+                Ok(())
+            }
             Mutation::SetKeyBindings { id, bindings } => {
                 let node = self.mut_node(*id, "setKeyBindings")?;
-                if node.element_type == ElementType::Markdown {
+                if matches!(
+                    node.element_type,
+                    ElementType::Markdown | ElementType::Canvas
+                ) {
                     // Validation and rendering agree: markdown renders a
                     // static helper-owned subtree and fires no events.
                     return Err(ApplyError::InvalidMutation {
                         message: format!(
-                            "setKeyBindings: markdown elements fire no events ({id:?})"
+                            "setKeyBindings: markdown/canvas elements fire no events ({id:?})"
                         ),
                     });
                 }
@@ -285,13 +337,16 @@ impl RetainedTree {
                 enabled,
             } => {
                 let node = self.mut_node(*id, "setEventListener")?;
-                if node.element_type == ElementType::Markdown {
+                if matches!(
+                    node.element_type,
+                    ElementType::Markdown | ElementType::Canvas
+                ) {
                     // Validation and rendering agree: markdown renders a
                     // helper-owned subtree and never wires listeners, so an
                     // acked listener would silently never fire.
                     return Err(ApplyError::InvalidMutation {
                         message: format!(
-                            "setEventListener: markdown elements do not fire events ({id:?})"
+                            "setEventListener: markdown/canvas elements do not fire events ({id:?})"
                         ),
                     });
                 }
@@ -363,12 +418,17 @@ impl RetainedTree {
         }
         // Validation and rendering agree: text renders as a plain string,
         // input/textarea render as a dedicated element with no child slots,
-        // and markdown renders the source text into its own helper-owned
-        // subtree — in all cases the renderer would silently drop wire
+        // markdown renders the source text into its own helper-owned
+        // subtree, and canvas paints a recorded draw list with no element
+        // slots — in all cases the renderer would silently drop wire
         // children, so reject them.
         if matches!(
             self.elements.get(&parent_id).unwrap().element_type,
-            ElementType::Text | ElementType::Input | ElementType::Textarea | ElementType::Markdown
+            ElementType::Text
+                | ElementType::Input
+                | ElementType::Textarea
+                | ElementType::Markdown
+                | ElementType::Canvas
         ) {
             return Err(ApplyError::InvalidMutation {
                 message: format!(
