@@ -1254,9 +1254,9 @@ Non-goals:
 
 #### Tooltip slice verification
 
-- `bun run benchmark:protocol` still exits 0 after adding `setTooltip`: 12
-  fixtures, numeric candidate `50.21%` smaller on wire but `28.13%` slower to
-  encode, so P12 remains a no-op.
+- `bun run benchmark:protocol` still exits 0 after adding `setTooltip` and
+  `setAccessibility`: 13 fixtures, numeric candidate `51.77%` smaller on wire
+  but `34.94%` slower to encode, so P12 remains a no-op.
 - `batch-tooltip-01.json` round-trips in both protocol suites; null clearing,
   missing/empty field rejection, unsupported target rejection, renderer refusal,
   stateful-path wiring, and real `--stdio-window` acknowledgement are covered.
@@ -1280,3 +1280,59 @@ retained lists, and in-window anchored/deferred elements. The contract outcome i
 - [x] Explicit deferral: do not implement select/combobox in S14. Reopen it as a
       new implementation slice only with this contract, a concrete wire/API
       proposal, and RED tests.
+
+### 2026-08-26 - S14b: headless select/combobox implementation
+status: done | updated: 2026-08-26
+
+Goal: implement the separately approved S14b headless select/combobox contract
+without reopening P12 or changing the out-of-process architecture.
+
+Contract:
+- Public API is a composable primitives namespace (`Root`, `Trigger`, `Content`,
+  `Item`) so Solid owns state and composition.
+- Initial value model is one controlled string; multi-select and uncontrolled state
+  are out of scope.
+- Options render in-window through existing anchored/deferred seams; native
+  `PopupOptions` is out of scope.
+- Typed role/expanded/selected semantics are required; styling-only behavior is
+  not sufficient.
+
+Non-goals:
+- Protocol compaction, native popup commands, multi-select, Windows/Linux
+  validation, React, runtime dependencies, and prior-art source copying.
+
+- [x] Map the contract onto the existing Solid renderer, input/focus/key, list,
+      anchored/deferred, and event seams; identify the smallest API surface.
+      Existing `setProp`/event routing supports a pure Solid state machine;
+      accessibility needs one new validated `setAccessibility` mutation because
+      the helper previously mapped no role/expanded/selected state.
+- [x] RED: add failing renderer/component tests for controlled value, open/close,
+      keyboard navigation, selection, dismissal, and typed semantics. RED was
+      observed as unknown `setAccessibility`/missing select module, plus the
+      real helper rejection of the pre-existing Rust `input` event-set omission.
+- [x] GREEN: implement the primitives with existing host seams and the verified
+      `setAccessibility` protocol extension: controlled select and editable
+      combobox, Escape/blur/selection close, disabled-skipping wrap navigation,
+      and deferred anchored content.
+- [x] Add a focused example and user-facing documentation: `examples/select.tsx`,
+      `bun run example/select`, and the S14b README section.
+- [x] Run the relevant Bun tests, typecheck, Rust gates, and independent review.
+      `bun run test` = 183 pass / 0 fail; protocol/helper cargo suites pass
+      (86 unit + 24 window + 39 retained + 46 round-trip, one ignored);
+      typecheck, build, clippy, fmt, release check, and benchmark exit 0.
+      Reviewer `mtac9ahf-af7c` returned MERGEABLE with no blocker/critical/major/
+      important findings; only static-item, IME, and environmental-window notes.
+
+#### Run report
+
+- Cross-language fixture `batch-accessibility-01.json` round-trips byte-for-byte
+  in Rust and parses/re-encodes in TypeScript. `setAccessibility` rejects missing,
+  null optional fields, unknown roles, and wrong field types symmetrically;
+  `accessibility: null` clears the state. Rust and TS `EVENT_TYPES` now both
+  include `input`.
+- The helper applies AccessKit `ComboBox`, `ListBox`, and `ListBoxOption` roles
+  plus value/expanded/selected fields on the stateful div/input render paths.
+  The isolated new stdio-window test passed 4/4 under the reviewer; the full
+  window suite had a non-reproducible GUI contention flake in two earlier runs.
+- `bun run example/select` mounted and auto-disposed successfully. Outside-click
+  dismissal and IME-composition arrow suppression remain explicitly deferred.

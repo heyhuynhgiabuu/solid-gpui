@@ -712,3 +712,12 @@
   explicitly deferred under ADR 006: future work targets headless primitives,
   one controlled string value, in-window anchored/deferred content, and typed
   accessibility semantics before implementation.
+- [feature] S14b implements those select/combobox primitives through the JSX
+  universal runtime: Root value is controlled, items are static definitions,
+  content is deferred+anchored, and typed AccessKit state crosses one
+  `setAccessibility` mutation.
+- [bugfix] The Rust protocol `EVENT_TYPES` list had omitted `input` even though
+  TS and the helper emitted it; the combobox smoke exposed it and the parity
+  regression now keeps both closed sets identical.
+- [warning] S14b does not dismiss on outside click or suppress arrow handling
+  during IME composition; both remain explicit v1 limitations.

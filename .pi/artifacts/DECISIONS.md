@@ -95,3 +95,24 @@ public API.
 **Consequence.** S14 introduces no select/combobox production code or protocol
 changes. A future S14b implementation must reopen from this contract, add RED tests
 first, and verify the API/wire behavior independently before changing the S14 status.
+
+### 2026-08-26 - S14b implementation
+status: done
+
+#### ADR 007: Typed accessibility bridge for headless controls
+
+**Decision.** Add one atomic `setAccessibility` mutation carrying a closed role set
+(`combobox`, `listbox`, `option`) and optional `value`, `expanded`, and `selected`
+fields. The helper maps it to GPUI's AccessKit fields on stateful div/input paths;
+select/combobox state remains in Solid and uses the existing event and overlay
+seams.
+
+**Why.** GPUI's pinned `StatefulInteractiveElement` already exposes the required
+AccessKit role and live-property methods, while the retained tree and renderer had
+no safe way to express them. One validated object keeps TS/Rust in lockstep without
+inventing a native popup lifecycle or leaking implementation-specific calls onto the
+wire.
+
+**Consequence.** The S14b public primitives are JSX-runtime components with a
+controlled string value. Item identity/disabled state is static for this slice;
+outside-click dismissal and IME-composition arrow suppression remain deferred.

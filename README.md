@@ -111,9 +111,10 @@ selected state:
 ```
 
 `combobox.Root` uses the same `Content`/`Item` primitives with an editable
-`combobox.Trigger`. Values are controlled; filtering remains caller-owned, and
-multi-select, uncontrolled state, native popup windows, and outside-click
-dismissal are not part of S14b. Try the real window demo with
+`combobox.Trigger`. Values are controlled; item `value`/`disabled` are static definitions (remount
+an item when they change), filtering remains caller-owned, and multi-select,
+uncontrolled state, native popup windows, and outside-click dismissal are not
+part of S14b. Try the real window demo with
 `bun run example/select`.
 
 ## Window, dialogs, shell (P4)

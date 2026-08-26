@@ -60,8 +60,10 @@ export interface SelectContentProps {
 }
 
 export interface SelectItemProps {
+  /** Static item identity; remount the item if this changes. */
   readonly value: string
   readonly label?: string
+  /** Static item state; remount the item if this changes. */
   readonly disabled?: boolean
   readonly style?: StyleMap
   readonly children?: SelectChildren
