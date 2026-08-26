@@ -1152,5 +1152,55 @@
     "rawStatus": "success",
     "resultValid": true,
     "completedAt": 1787725621246
+  },
+  {
+    "id": "mt9r0d8v-e987",
+    "agentType": "reviewer",
+    "description": "P8 canvas review r1",
+    "sessionName": "task-mt9r0d8v-e987",
+    "startedAt": 1787727865784,
+    "paneId": "w3:pFD",
+    "handle": {
+      "backend": "herdr",
+      "resourceId": "w3:pFD",
+      "socketPath": "/Users/huynhgiabuu/.config/herdr/herdr.sock",
+      "terminalId": "term_659edd411f8f5c",
+      "agentName": "reviewer-mt9r0d8v",
+      "foregroundProcessGroupId": 41263
+    },
+    "piDir": "/Users/huynhgiabuu/dev/projects/solid-gpui/.pi",
+    "dir": "/Users/huynhgiabuu/dev/projects/solid-gpui/.pi/artifacts/tasks",
+    "cwd": "/Users/huynhgiabuu/dev/projects/solid-gpui",
+    "status": "done",
+    "background": true,
+    "reportedStatus": "unknown",
+    "rawStatus": "unknown",
+    "resultValid": false,
+    "completedAt": 1787727991728
+  },
+  {
+    "id": "mt9r5qak-ab69",
+    "agentType": "reviewer",
+    "description": "P8 canvas review retry",
+    "sessionName": "task-mt9r5qak-ab69",
+    "startedAt": 1787728115045,
+    "paneId": "w3:pFE",
+    "handle": {
+      "backend": "herdr",
+      "resourceId": "w3:pFE",
+      "socketPath": "/Users/huynhgiabuu/.config/herdr/herdr.sock",
+      "terminalId": "term_659ede2fb4cb9d",
+      "agentName": "reviewer-mt9r5qak",
+      "foregroundProcessGroupId": 42309
+    },
+    "piDir": "/Users/huynhgiabuu/dev/projects/solid-gpui/.pi",
+    "dir": "/Users/huynhgiabuu/dev/projects/solid-gpui/.pi/artifacts/tasks",
+    "cwd": "/Users/huynhgiabuu/dev/projects/solid-gpui",
+    "status": "done",
+    "background": true,
+    "reportedStatus": "blocked",
+    "rawStatus": "blocked",
+    "resultValid": true,
+    "completedAt": 1787728351792
   }
 ]

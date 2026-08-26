@@ -1790,7 +1790,11 @@ fn build_canvas_element(tree: &RetainedTree, id: ElementId, ctx: &mut RenderCtx)
                         } else {
                             PathBuilder::stroke(px(stroke))
                         };
-                        for (i, pair) in points.as_chunks::<2>().iter().enumerate() {
+                        // as_chunks returns (complete pairs, remainder);
+                        // apply already rejected odd lengths, so the
+                        // remainder is always empty here.
+                        let (pairs, _rest) = points.as_chunks::<2>();
+                        for (i, pair) in pairs.iter().enumerate() {
                             let vertex = origin + point(px(pair[0]), px(pair[1]));
                             if i == 0 {
                                 builder.move_to(vertex);

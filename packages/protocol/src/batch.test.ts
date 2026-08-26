@@ -6,6 +6,7 @@ import stateFixture from "../fixtures/batch-style-state-01.json"
 import keysFixture from "../fixtures/batch-keys-01.json"
 import scrollbarFixture from "../fixtures/batch-scrollbar-01.json"
 import dragFixture from "../fixtures/batch-drag-01.json"
+import canvasFixture from "../fixtures/batch-canvas-01.json"
 import animationFixture from "../fixtures/batch-animation-01.json"
 import markdownFixture from "../fixtures/batch-markdown-01.json"
 import { elementId } from "./ids"
@@ -388,6 +389,37 @@ describe("drag fixture parity (P7)", () => {
       expect(JSON.parse(encodeBatch(r.value))).toEqual(dragFixture)
       expect(r.value.mutations[1]).toMatchObject({ op: "setDragData", data: '{"itemId":42}' })
       expect(r.value.mutations[3]).toMatchObject({ state: "dragOver" })
+    }
+  })
+})
+
+describe("canvas fixture parity (P8)", () => {
+  test("batch-canvas-01 parses and re-encodes structurally (rect/path/text items)", () => {
+    const raw = JSON.stringify(canvasFixture)
+    const r = decodeBatch(raw)
+    expect(r.ok).toBe(true)
+    if (r.ok) {
+      expect(JSON.parse(encodeBatch(r.value))).toEqual(canvasFixture)
+      const dl = r.value.mutations[1]
+      expect(dl).toMatchObject({ op: "setDrawList", id: 1 })
+      if (dl?.op === "setDrawList") {
+        expect(dl.items[0]).toMatchObject({ type: "rect", w: 120, cornerRadius: 4 })
+        expect(dl.items[1]).toMatchObject({ type: "path", strokeWidth: 2 })
+        expect(dl.items[2]).toMatchObject({ type: "text", text: "Q3" })
+      }
+    }
+  })
+
+  test("decodeDrawItem rejects malformed draw items", () => {
+    const bad = [
+      { op: "setDrawList", id: 1, items: [{ type: "blob" }] },
+      { op: "setDrawList", id: 1, items: [{ type: "path", points: [1, 2, 3], color: "#fff" }] },
+      { op: "setDrawList", id: 1, items: [{ type: "text", x: 0, y: 0, size: 12, color: "#fff", text: "a\nb" }] },
+      { op: "setDrawList", id: 1, items: [{ type: "rect", x: 0, y: 0, w: "10", h: 5, color: "#fff" }] },
+    ]
+    for (const items of bad) {
+      const r = decodeBatch(JSON.stringify({ v: 1, seq: 9, mutations: [items] }))
+      expect(r.ok).toBe(false)
     }
   })
 })
