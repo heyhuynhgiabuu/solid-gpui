@@ -404,6 +404,15 @@ function decodeMutation(m: Dict, p: string): Result<Mutation, ProtocolError> {
       }
       return { ok: true, value: { op, id: idR.value, value } }
     }
+    case "setTooltip": {
+      const idR = id()
+      if (!idR.ok) return idR
+      const tooltip = m.tooltip
+      if (tooltip !== null && (typeof tooltip !== "string" || tooltip.length === 0)) {
+        return { ok: false, error: shape(`${p}.tooltip`, "expected a non-empty string or null") }
+      }
+      return { ok: true, value: { op, id: idR.value, tooltip: tooltip ?? null } }
+    }
     case "setEventListener": {
       const idR = id()
       if (!idR.ok) return idR

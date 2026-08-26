@@ -56,6 +56,7 @@ function Tree() {
         activeStyle={{
           backgroundColor: "hsl(220, 50%, 40%)",
         }}
+        tooltip="Increment counter"
         onClick={() => setCount((c) => c + 1)}
         onMouseDown={() => setPressed(true)}
         onMouseUp={() => setPressed(false)}

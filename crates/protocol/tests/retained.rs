@@ -1366,3 +1366,34 @@ fn media_elements_store_sources_and_reject_misuse() {
         .unwrap_err();
     assert!(err.to_string().contains("no child slots"), "{err}");
 }
+
+#[test]
+fn tooltip_rejects_elements_without_a_stateful_render_path() {
+    let mut tree = RetainedTree::new();
+    for (id, element_type) in [
+        (1, ElementType::Text),
+        (2, ElementType::Markdown),
+        (3, ElementType::Canvas),
+        (4, ElementType::Svg),
+        (5, ElementType::Img),
+        (6, ElementType::Scrollbar),
+    ] {
+        tree.apply(&Mutation::CreateElement {
+            id: ElementId(id),
+            element_type,
+        })
+        .expect("element creates");
+        let error = tree
+            .apply(&Mutation::SetTooltip {
+                id: ElementId(id),
+                tooltip: Some("not supported".into()),
+            })
+            .expect_err("unsupported tooltip target must be rejected");
+        assert!(
+            error
+                .to_string()
+                .contains("does not support native tooltips"),
+            "{error}"
+        );
+    }
+}

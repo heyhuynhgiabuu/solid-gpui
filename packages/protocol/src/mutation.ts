@@ -167,6 +167,7 @@ export type Mutation =
   | { readonly op: "setText"; readonly id: ElementId; readonly text: string }
   | { readonly op: "setTextRuns"; readonly id: ElementId; readonly runs: readonly TextRun[] }
   | { readonly op: "setValue"; readonly id: ElementId; readonly value: string }
+  | { readonly op: "setTooltip"; readonly id: ElementId; readonly tooltip: string | null }
   | {
       readonly op: "setKeyBindings"
       readonly id: ElementId
@@ -259,6 +260,7 @@ export const MUTATION_OPS = [
   "setDrawList",
   "setDragData",
   "setValue",
+  "setTooltip",
   "setAnimation",
   "setEventListener",
   "setRoot",

@@ -65,6 +65,7 @@ const EVENT_NAMES: Record<string, EventType> = {
  * placeholder/minRows/maxRows directly from the retained style).
  */
 const INPUT_STYLE_PROPS = new Set(["placeholder", "minRows", "maxRows"])
+const TOOLTIP_UNSUPPORTED_TAGS = new Set(["text", "markdown", "canvas", "svg", "img", "scrollbar"])
 
 /** Host tags the renderer maps to a specific elementType (everything else
  *  is a div). */
@@ -549,6 +550,25 @@ export function createSolidRenderer(send: Send): SolidGpuiRenderer {
       if (name === "value" && (node.tag === "input" || node.tag === "textarea")) {
         // Controlled value (JS→helper): overwrites helper-side edits on apply.
         push({ op: "setValue", id, value: String(value ?? "") })
+        return
+      }
+      if (name === "tooltip") {
+        if (node.kind !== "element" || TOOLTIP_UNSUPPORTED_TAGS.has(node.tag)) {
+          if (typeof console !== "undefined") {
+            console.warn(
+              `[solid-gpui] <${node.tag}> ignores tooltip — it has no stateful tooltip render path.`,
+            )
+          }
+          return
+        }
+        if (value !== null && value !== undefined && typeof value !== "string") {
+          if (typeof console !== "undefined") {
+            console.warn("[solid-gpui] tooltip must be a string, null, or undefined")
+          }
+          return
+        }
+        const tooltip = typeof value === "string" && value.length > 0 ? value : null
+        push({ op: "setTooltip", id, tooltip })
         return
       }
       if (name === "source" && node.tag === "markdown") {

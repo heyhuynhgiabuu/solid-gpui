@@ -1726,6 +1726,25 @@ fn build_element_inner(
 #[derive(Clone)]
 pub struct DragPayload(pub String);
 
+/// Native text tooltip (S14): GPUI owns hover timing and overlay placement;
+/// this view only supplies the stable, non-interactive presentation.
+struct NativeTooltip {
+    text: SharedString,
+}
+
+impl Render for NativeTooltip {
+    fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
+        div()
+            .px_2()
+            .py_1()
+            .rounded_md()
+            .bg(rgba(0x313244f0))
+            .text_size(px(12.))
+            .text_color(rgba(0xcdd6f4ff))
+            .child(self.text.clone())
+    }
+}
+
 /// Drag preview shown while dragging (P7): a compact translucent chip; the
 /// payload text preview rides along when it is short and printable.
 struct DragPreview {
@@ -1772,6 +1791,7 @@ fn element_needs_stateful(
         || has_click
         || wants_focus
         || !node.state_styles.is_empty()
+        || node.tooltip.is_some()
         || node.drag_data.as_ref().is_some_and(|d| !d.is_empty())
         || tree_listens_for_drop(node)
 }
@@ -2393,6 +2413,13 @@ fn apply_interactive(
                 })
             },
         );
+    }
+    if let Some(text) = node.tooltip.as_ref() {
+        let text = SharedString::from(text.clone());
+        // GPUI owns tooltip hover timing, placement, and window-edge flipping.
+        // Build a fresh native view per request; the text is copied from the
+        // retained node so the tooltip never becomes a tree child.
+        el = el.tooltip(move |_window, cx| cx.new(|_| NativeTooltip { text: text.clone() }).into());
     }
     // Drop target (P7): any element with a drop listener receives the JSON
     // payload. gpui matches the shared DragPayload TypeId.
@@ -3692,6 +3719,31 @@ mod element_needs_stateful_tests {
             false,
             false
         ));
+    }
+
+    #[test]
+    fn tooltip_forces_a_stateful_render_path() {
+        let mut tree = solid_gpui_protocol::RetainedTree::new();
+        tree.apply(&Mutation::CreateElement {
+            id: ElementId(1),
+            element_type: ElementType::Div,
+        })
+        .unwrap();
+        tree.apply(&Mutation::SetTooltip {
+            id: ElementId(1),
+            tooltip: Some("help".into()),
+        })
+        .unwrap();
+        let node = tree.get(ElementId(1)).unwrap().clone();
+        assert!(element_needs_stateful(&node, false, false, false));
+
+        tree.apply(&Mutation::SetTooltip {
+            id: ElementId(1),
+            tooltip: None,
+        })
+        .unwrap();
+        let cleared = tree.get(ElementId(1)).unwrap().clone();
+        assert!(!element_needs_stateful(&cleared, false, false, false));
     }
 
     #[test]

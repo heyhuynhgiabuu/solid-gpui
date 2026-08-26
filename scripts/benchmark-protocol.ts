@@ -31,6 +31,7 @@ const FIXTURES = [
   "batch-scrollbar-01.json",
   "batch-style-state-01.json",
   "batch-text-runs-01.json",
+  "batch-tooltip-01.json",
 ] as const
 
 const WARMUP_ITERATIONS = 1_000
@@ -55,9 +56,10 @@ const OP_CODES: { readonly [K in MutationOp]: number } = {
   setDrawList: 12,
   setDragData: 13,
   setValue: 14,
-  setAnimation: 15,
-  setEventListener: 16,
-  setRoot: 17,
+  setTooltip: 15,
+  setAnimation: 16,
+  setEventListener: 17,
+  setRoot: 18,
 }
 
 const OP_NAMES: readonly MutationOp[] = MUTATION_OPS
@@ -79,6 +81,7 @@ const OP_FIELDS: { readonly [K in MutationOp]: readonly string[] } = {
   setDrawList: ["id", "items"],
   setDragData: ["id", "data"],
   setValue: ["id", "value"],
+  setTooltip: ["id", "tooltip"],
   setAnimation: ["id", "target", "transitionMs", "easing"],
   setEventListener: ["id", "eventType", "enabled"],
   setRoot: ["id"],

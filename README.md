@@ -7,9 +7,10 @@ windows (Metal/Vulkan/DirectX), no webview.
 Solid reactivity → mutation protocol (NDJSON) → Rust helper → GPUI
 ```
 
-Status: **Phase 2 complete through P11**. Mounts Solid 2 trees into native
-windows and applies fine-grained updates. P12 compaction was benchmarked but
-not adopted; this is still a prerelease and not production-ready.
+Status: **Phase 2 complete through P11; S14 tooltip slice implemented**. Mounts
+Solid 2 trees into native windows and applies fine-grained updates. P12
+compaction was benchmarked but not adopted; select/combobox controls remain
+future work, and this is still a prerelease.
 
 ## The one trap you must know
 
@@ -75,6 +76,20 @@ bun run example/counter                  # counter in a real GPUI window;
 bun test                                  # runs with --conditions=browser
 cargo test                                # protocol + helper suites
 ```
+
+## Tooltips (S14)
+
+Use the `tooltip` prop on generic div-backed elements, inputs, textareas, and
+lists. GPUI owns hover timing, placement, and window-edge flipping; the
+content is a non-interactive string overlay and does not enter layout:
+
+```tsx
+h("div", { tooltip: "Save this item", style: { padding: 8 } }, "Save")
+```
+
+`null`, `undefined`, and an empty string clear the tooltip. Element-valued
+content and custom delay are not supported yet. Text, markdown, canvas, SVG,
+images, and scrollbar wrappers intentionally ignore the prop.
 
 ## Window, dialogs, shell (P4)
 

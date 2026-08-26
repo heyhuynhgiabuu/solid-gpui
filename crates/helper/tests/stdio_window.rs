@@ -1402,3 +1402,36 @@ fn window_mode_media_elements_and_overlays_apply() {
     assert_eq!(status.code(), Some(0), "EOF must exit 0");
     let _ = std::fs::remove_file(&png_path);
 }
+
+#[test]
+fn window_mode_native_tooltip_applies_without_a_round_trip() {
+    if skip() {
+        return;
+    }
+    let _lock = window_lock();
+    let bin = env!("CARGO_BIN_EXE_solid-gpui-helper");
+    let mut child = Command::new(bin)
+        .arg("--stdio-window")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .spawn()
+        .expect("helper spawns");
+
+    let mut stdin = child.stdin.take().expect("stdin piped");
+    let reader = BufReader::new(child.stdout.take().expect("stdout piped"));
+    let mut lines = reader.lines();
+    writeln!(
+        stdin,
+        r#"{{"v":1,"seq":500,"mutations":[{{"op":"createElement","id":1,"elementType":"div"}},{{"op":"setTooltip","id":1,"tooltip":"Save this item"}},{{"op":"setRoot","id":1}}]}}"#
+    )
+    .unwrap();
+    stdin.flush().unwrap();
+    assert_eq!(
+        lines.next().unwrap().unwrap(),
+        r#"{"type":"ack","seq":500,"applied":3}"#
+    );
+
+    drop(stdin);
+    let status = child.wait().expect("wait");
+    assert_eq!(status.code(), Some(0), "EOF must exit 0");
+}

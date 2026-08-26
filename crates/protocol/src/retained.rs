@@ -65,6 +65,9 @@ pub struct Node {
     /// Input/textarea document value (setValue). Present only on
     /// input/textarea elements; validation and rendering agree.
     pub value: Option<String>,
+    /// Native GPUI tooltip text. Present only on interactive elements that
+    /// the helper can render as a stateful element; no child node is created.
+    pub tooltip: Option<String>,
     pub children: Vec<ElementId>,
     pub parent: Option<ElementId>,
     pub listeners: BTreeSet<EventType>,
@@ -85,6 +88,7 @@ impl Node {
             text: None,
             text_runs: None,
             value: None,
+            tooltip: None,
             children: Vec::new(),
             parent: None,
             listeners: BTreeSet::new(),
@@ -422,6 +426,31 @@ impl RetainedTree {
                     });
                 }
                 node.value = Some(value.clone());
+                Ok(())
+            }
+            Mutation::SetTooltip { id, tooltip } => {
+                let node = self.mut_node(*id, "setTooltip")?;
+                if !matches!(
+                    node.element_type,
+                    ElementType::Div
+                        | ElementType::Input
+                        | ElementType::Textarea
+                        | ElementType::List
+                ) {
+                    return Err(ApplyError::InvalidMutation {
+                        message: format!(
+                            "setTooltip: element {id:?} does not support native tooltips"
+                        ),
+                    });
+                }
+                if tooltip.as_deref().is_some_and(str::is_empty) {
+                    return Err(ApplyError::InvalidMutation {
+                        message: format!(
+                            "setTooltip: tooltip must be a non-empty string or null ({id:?})"
+                        ),
+                    });
+                }
+                node.tooltip = tooltip.clone();
                 Ok(())
             }
             Mutation::SetEventListener {

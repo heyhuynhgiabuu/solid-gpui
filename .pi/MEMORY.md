@@ -705,3 +705,6 @@
   rows reduced UTF-8 bytes 49.60% (4504→2270), but the generic row-building
   encoder measured 27.59–30.04% slower. Keep the object wire format; do not
   reopen P12 without a direct encoder and explicit version/compatibility design.
+- [feature] S14 tooltip uses GPUI's stateful native `.tooltip` overlay: `setTooltip`
+  carries only non-empty text/null, never creates a retained child, and the
+  renderer refuses text/helper-owned/scrollbar targets before they can poison IPC.

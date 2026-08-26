@@ -11,6 +11,7 @@ import mediaFixture from "../fixtures/batch-media-01.json"
 import animationFixture from "../fixtures/batch-animation-01.json"
 import markdownFixture from "../fixtures/batch-markdown-01.json"
 import textRunsFixture from "../fixtures/batch-text-runs-01.json"
+import tooltipFixture from "../fixtures/batch-tooltip-01.json"
 import { elementId } from "./ids"
 import { decodeBatch, encodeBatch } from "./batch"
 import type { MutationBatch } from "./batch"
@@ -362,6 +363,42 @@ describe("setStyle state layer", () => {
       expect(r.error.kind).toBe("invalidShape")
       if (r.error.kind === "invalidShape") expect(r.error.path).toBe("mutations[0].state")
     }
+  })
+})
+
+describe("tooltip fixture parity", () => {
+  test("batch-tooltip-01 parses and re-encodes losslessly", () => {
+    const raw = JSON.stringify(tooltipFixture)
+    const r = decodeBatch(raw)
+    expect(r.ok).toBe(true)
+    if (r.ok) {
+      expect(r.value.mutations).toContainEqual({ op: "setTooltip", id: elementId(1), tooltip: "Save this item" })
+      expect(encodeBatch(r.value)).toBe(raw)
+    }
+  })
+
+  test("null clears a tooltip", () => {
+    const r = decodeBatch(
+      JSON.stringify({
+        v: 1,
+        seq: 52,
+        mutations: [{ op: "setTooltip", id: 1, tooltip: null }],
+      }),
+    )
+    expect(r.ok).toBe(true)
+    if (r.ok) expect(r.value.mutations[0]).toEqual({ op: "setTooltip", id: elementId(1), tooltip: null })
+  })
+
+  test("empty tooltip text is invalid", () => {
+    const r = decodeBatch(
+      JSON.stringify({
+        v: 1,
+        seq: 53,
+        mutations: [{ op: "setTooltip", id: 1, tooltip: "" }],
+      }),
+    )
+    expect(r.ok).toBe(false)
+    if (!r.ok) expect(r.error).toMatchObject({ kind: "invalidShape", path: "mutations[0].tooltip" })
   })
 })
 

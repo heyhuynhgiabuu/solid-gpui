@@ -18,6 +18,12 @@ fn text_runs_fixture() -> String {
     fs::read_to_string(path).expect("text-runs fixture readable")
 }
 
+fn tooltip_fixture() -> String {
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../packages/protocol/fixtures/batch-tooltip-01.json");
+    fs::read_to_string(path).expect("tooltip fixture readable")
+}
+
 struct Recording {
     ops: Vec<Mutation>,
 }
@@ -57,6 +63,56 @@ fn text_runs_fixture_parses_and_round_trips() {
         json.trim_end(),
         "fixture must use Rust's canonical JSON"
     );
+}
+
+#[test]
+fn tooltip_fixture_parses_and_round_trips() {
+    let json = tooltip_fixture();
+    let batch = from_json(&json).expect("tooltip fixture parses");
+    assert!(matches!(
+        &batch.mutations[1],
+        Mutation::SetTooltip {
+            tooltip: Some(text),
+            ..
+        } if text == "Save this item"
+    ));
+    let emitted = to_json(&batch);
+    assert_eq!(
+        emitted,
+        json.trim_end(),
+        "fixture must use Rust's canonical JSON"
+    );
+
+    let mut tree = RetainedTree::new();
+    for mutation in &batch.mutations {
+        tree.apply(mutation).expect("tooltip fixture applies");
+    }
+    assert_eq!(
+        tree.get(ElementId(1))
+            .and_then(|node| node.tooltip.as_deref()),
+        Some("Save this item")
+    );
+    tree.apply(&Mutation::SetTooltip {
+        id: ElementId(1),
+        tooltip: None,
+    })
+    .expect("null clears tooltip");
+    assert_eq!(
+        tree.get(ElementId(1))
+            .and_then(|node| node.tooltip.as_deref()),
+        None
+    );
+}
+
+#[test]
+fn tooltip_decoder_rejects_empty_text() {
+    let error =
+        from_json(r#"{"v":1,"seq":1,"mutations":[{"op":"setTooltip","id":1,"tooltip":""}]}"#)
+            .expect_err("empty tooltip must be rejected");
+    assert!(matches!(
+        error,
+        ProtocolError::InvalidShape { ref path, .. } if path.contains("tooltip")
+    ));
 }
 
 #[test]

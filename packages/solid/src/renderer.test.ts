@@ -64,6 +64,77 @@ describe("mount", () => {
   })
 })
 
+describe("tooltip", () => {
+  test("tooltip prop emits native tooltip text and null clears it", async () => {
+    const rec = recording()
+    const { renderer: R, render, flush } = createSolidRenderer(rec.send)
+    const container = R.createElement("#root")
+    let node: ReturnType<typeof R.createElement> | null = null
+
+    render(() => {
+      const root = R.createElement("div")
+      node = R.createElement("button")
+      R.insertNode(root, node)
+      return root
+    }, container)
+    await flush()
+
+    R.setProp(node!, "tooltip", "Save this item")
+    await flush()
+    expect(ops(rec.batches[1])).toEqual(["setTooltip"])
+    expect(rec.batches[1]!.mutations[0]).toEqual({
+      op: "setTooltip",
+      id: expect.any(Number),
+      tooltip: "Save this item",
+    })
+
+    R.setProp(node!, "tooltip", null)
+    await flush()
+    expect(ops(rec.batches[2])).toEqual(["setTooltip"])
+    expect(rec.batches[2]!.mutations[0]).toEqual({
+      op: "setTooltip",
+      id: expect.any(Number),
+      tooltip: null,
+    })
+
+    R.setProp(node!, "tooltip", "")
+    await flush()
+    expect(ops(rec.batches[3])).toEqual(["setTooltip"])
+    expect(rec.batches[3]!.mutations[0]).toEqual({
+      op: "setTooltip",
+      id: expect.any(Number),
+      tooltip: null,
+    })
+  })
+
+  test("unsupported targets warn and emit no mutation", async () => {
+    const rec = recording()
+    const { renderer: R, render, flush } = createSolidRenderer(rec.send)
+    const container = R.createElement("#root")
+    let image: ReturnType<typeof R.createElement> | null = null
+
+    render(() => {
+      image = R.createElement("img")
+      return image
+    }, container)
+    await flush()
+
+    const warnings: string[] = []
+    const warn = console.warn
+    console.warn = (message: string) => warnings.push(message)
+    try {
+      R.setProp(container, "tooltip", "ignored")
+      R.setProp(image!, "tooltip", "ignored")
+      await flush()
+    } finally {
+      console.warn = warn
+    }
+
+    expect(rec.batches.length).toBe(1)
+    expect(warnings.some((message) => message.includes("ignores tooltip"))).toBe(true)
+  })
+})
+
 describe("fine-grained updates", () => {
   test("a signal change sends ONLY the affected setText", async () => {
     const rec = recording()

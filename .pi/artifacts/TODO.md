@@ -1191,3 +1191,54 @@ status: done | updated: 2026-08-26
   the benchmark description from “generic direct encoder” to “generic
   row-building encoder”. Notes remain explicit: `setValue` is not in the
   existing fixture set, and the compact decoder is not a full validator.
+
+### 2026-08-26 - S14: headless controls (tooltip, select, combobox)
+status: active | updated: 2026-08-26
+
+Goal: add the next desktop interaction primitives without reopening P12 or
+changing the out-of-process architecture. Tooltip is first because P7 explicitly
+deferred it; select/combobox follow only after their controlled-value and focus
+contracts are concrete.
+
+Scope:
+- Tooltip trigger/content behavior and an element-safe overlay boundary.
+- Headless select/combobox API only where the existing input, focus, key-binding,
+  command, and event seams can support it without speculative native widgets.
+- Cross-language protocol changes, fixtures, retained validation, renderer,
+  helper behavior, tests, and docs in lockstep when the contract requires them.
+
+Non-goals:
+- Protocol compaction, multi-window support, React, or Windows/Linux validation.
+- Copying prior-art source or adding a runtime dependency.
+- Implementing select/combobox before recon proves the required GPUI primitives
+  and the public API/error contract.
+
+#### First vertical contract (safe assumption from the approved roadmap)
+
+- The first implementation is tooltip-only; select/combobox remains a separate
+  reassessment after this slice.
+- `tooltip` accepts a non-empty string on generic div-backed tags, `input`,
+  `textarea`, and `list`. `null`, `undefined`, and `""` clear it. Text, canvas,
+  svg, img, markdown, and scrollbar do not accept it; the client warns and
+  emits nothing for those tags, while the Rust boundary rejects a direct invalid
+  mutation.
+- The wire adds `setTooltip` with `tooltip: string | null`; no tooltip event is
+  sent back to JS. The helper uses GPUI's native tooltip overlay and default
+  show delay, with a non-interactive tooltip that hides when the trigger loses
+  hover. Element-valued content and custom delay are deferred.
+- The tooltip view is helper-owned native text with explicit styling; it is not
+  inserted into the retained child tree and therefore cannot affect layout or
+  create a cleanup/ref leak.
+
+- [x] Recon current anchored/deferred, hover, focus, keyboard, input, and command
+      seams; native GPUI already provides tooltip timing/placement through the
+      stateful element path, so tooltip is the smallest vertical slice.
+- [x] Write the approved API/wire contract and RED tests before production code;
+      RED observed in protocol and renderer tests before the implementation.
+- [x] Implement tooltip first with protocol/renderer/helper parity: `setTooltip`
+      is validated in TS/Rust, rendered through GPUI's native tooltip overlay,
+      and covered by unit, fixture, and stdio-window tests.
+- [ ] Reassess select/combobox from evidence; implement only if its contract is
+      independently verifiable without a round-trip during native layout.
+- [ ] Run relevant tests, typecheck, Rust gates, and obtain an independent review;
+      close this block only after fresh verification and zero open findings.

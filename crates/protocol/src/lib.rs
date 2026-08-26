@@ -411,6 +411,14 @@ pub enum Mutation {
         /// element types (validation and rendering agree).
         value: String,
     },
+    /// Configure the native GPUI tooltip for an interactive element. None
+    /// clears it; element-valued content and custom delay are deferred.
+    #[serde(rename_all = "camelCase")]
+    SetTooltip {
+        id: ElementId,
+        #[serde(default)]
+        tooltip: Option<String>,
+    },
     #[serde(rename_all = "camelCase")]
     SetEventListener {
         id: ElementId,
@@ -880,6 +888,7 @@ const KNOWN_OPS: &[&str] = &[
     "setAnchored",
     "setDragData",
     "setValue",
+    "setTooltip",
     "setAnimation",
     "setEventListener",
     "setRoot",
@@ -998,6 +1007,17 @@ fn from_value(v: serde_json::Value) -> Result<MutationBatch, ProtocolError> {
                 }
             }
         }
+        if let Mutation::SetTooltip {
+            tooltip: Some(tooltip),
+            ..
+        } = m
+            && tooltip.is_empty()
+        {
+            return Err(ProtocolError::InvalidShape {
+                path: format!("mutations[{i}].tooltip"),
+                message: "expected a non-empty string or null".into(),
+            });
+        }
         let zero_field = match m {
             Mutation::CreateElement { id, .. }
             | Mutation::DestroyElement { id }
@@ -1011,6 +1031,7 @@ fn from_value(v: serde_json::Value) -> Result<MutationBatch, ProtocolError> {
             | Mutation::SetText { id, .. }
             | Mutation::SetTextRuns { id, .. }
             | Mutation::SetValue { id, .. }
+            | Mutation::SetTooltip { id, .. }
             | Mutation::SetAnimation { id, .. }
             | Mutation::SetEventListener { id, .. }
             | Mutation::SetRoot { id } => (id.0 == 0).then_some("id"),
