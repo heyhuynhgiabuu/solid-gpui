@@ -810,6 +810,9 @@
   a separate helper executable from an env path, dev target, or platform npm
   package; a compiled app needs an explicit sidecar or extraction/signing
   design. The local compiled resolver probe failed without that external helper.
+  The quoted command also omits `--conditions=browser`: a compiled Solid signal
+  probe under Bun 1.4.0 yielded zero effect runs by default versus two with the
+  browser condition.
 - [fit] S14b covers only controlled in-window single-select/combobox overlays;
   P9 covers a macOS application menu bar. Neither is a general native popup
   subsystem, and multi-window is one helper process/window per connection.
