@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import eventFixture from "../fixtures/event-01.json"
 import keyDownFixture from "../fixtures/event-keydown-01.json"
+import outsideClickFixture from "../fixtures/event-outside-click-01.json"
 import { decodeEvent } from "./event"
 
 const ok = (json: string) => {
@@ -10,6 +11,16 @@ const ok = (json: string) => {
 }
 
 describe("decodeEvent", () => {
+  test("outside-click fixture parses with position (Gate 3-a parity)", () => {
+    expect(ok(JSON.stringify(outsideClickFixture))).toEqual({
+      type: "event",
+      id: 12,
+      eventType: "outsideClick",
+      x: 401.0,
+      y: 93.0,
+    })
+  })
+
   test("fixture parses (Rust↔TS event parity)", () => {
     expect(ok(JSON.stringify(eventFixture))).toEqual({
       type: "event",

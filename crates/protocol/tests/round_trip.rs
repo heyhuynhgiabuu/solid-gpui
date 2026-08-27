@@ -351,6 +351,34 @@ fn key_down_event_fixture_parses_and_emits_exactly() {
 }
 
 #[test]
+fn outside_click_event_fixture_parses_and_emits_exactly() {
+    let raw = fs::read_to_string(fixture_path("event-outside-click-01.json"))
+        .expect("fixture readable")
+        .trim()
+        .to_string();
+    let event = event_from_json(&raw).expect("event parses");
+    match &event {
+        Event::Menu { .. } => panic!("expected an input event"),
+        Event::Input {
+            id,
+            event_type,
+            x,
+            y,
+            key,
+            modifiers,
+            value,
+        } => {
+            assert_eq!(*id, ElementId(12));
+            assert_eq!(*event_type, EventType::OutsideClick);
+            assert_eq!(*x, Some(401.0));
+            assert_eq!(*y, Some(93.0));
+            assert!(key.is_none() && modifiers.is_none() && value.is_none());
+        }
+    }
+    assert_eq!(event_to_json(&event), raw);
+}
+
+#[test]
 fn focus_element_command_fixture_parses_and_emits_exactly() {
     let raw = fs::read_to_string(fixture_path("command-focus-element.json"))
         .expect("fixture readable")

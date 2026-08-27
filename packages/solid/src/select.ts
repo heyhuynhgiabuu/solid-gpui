@@ -299,6 +299,11 @@ function Root(props: SelectRootProps): HostNode {
     children: () => {
       const node = createElement("div")
       applyStyle(node, props.style)
+      // Gate 3-a: presses outside the root dismiss the open menu. Presses on
+      // the ANCHORED menu also emit outsideClick (its painted bounds escape
+      // the root's layout bounds) — safely: Bubble dispatch runs item
+      // handlers first, and selecting an item closes the menu anyway.
+      setProp(node, "onOutsideClick", () => state.closeMenu())
       if (props.children !== undefined) insert(node, props.children, null, null)
       return node
     },

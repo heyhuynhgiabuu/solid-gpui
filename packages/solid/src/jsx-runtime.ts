@@ -108,6 +108,9 @@ export namespace JSX {
     readonly onScroll?: EventHandler<"scroll">
     readonly onDragStart?: EventHandler<"dragStart">
     readonly onDrop?: EventHandler<"drop">
+    /** Fires when a pointer press lands outside this element's rendered
+     * bounds (helper-side detection; overlay dismissal). */
+    readonly onOutsideClick?: EventHandler<"outsideClick">
     readonly onInput?: EventHandler<"input">
     readonly onChange?: EventHandler<"change">
     readonly onSubmit?: EventHandler<"submit">

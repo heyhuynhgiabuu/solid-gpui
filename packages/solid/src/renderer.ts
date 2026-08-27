@@ -65,6 +65,7 @@ const EVENT_NAMES: Record<string, EventType> = {
   onScroll: "scroll",
   onDragStart: "dragStart",
   onDrop: "drop",
+  onOutsideClick: "outsideClick",
   // DOM semantics: input fires per edit (IME included); change commits on
   // blur/Enter (the helper tracks dirty state and emits it).
   onInput: "input",

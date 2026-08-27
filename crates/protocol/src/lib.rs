@@ -130,6 +130,11 @@ pub enum EventType {
     /// A drag released over this drop target. The event's `value` field
     /// carries the dragged JSON payload string.
     Drop,
+    /// A pointer press landed OUTSIDE the subscribed element's rendered
+    /// bounds (Gate 3-a). Carries the press position like click. Overlay
+    /// dismissal is the intended consumer; the helper does not close
+    /// anything itself — Solid owns overlay state.
+    OutsideClick,
 }
 
 /// A style value is a JSON number (kept exact via `serde_json::Number`) or a

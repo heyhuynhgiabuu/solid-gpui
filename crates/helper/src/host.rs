@@ -1656,6 +1656,99 @@ fn build_text_element(node: &solid_gpui_protocol::Node) -> AnyElement {
         .into_any_element()
 }
 
+/// Gate 3-a wrapper: records the wrapped subtree's painted bounds and, for
+/// that frame only, emits one `outsideClick` when a mouse-down lands outside
+/// them. Registered in paint (window.on_mouse_event is paint-only and
+/// next-frame-cleared — re-registered every paint, so nothing accumulates).
+/// Bubble phase (not gpui's documented Capture recommendation for outside
+/// detection) is deliberate: overlays need their own item handlers to run
+/// first on presses that DO land on them, and nothing in this host ever
+/// calls stop_propagation, so ordering is stable.
+struct OutsideClickDetector {
+    child: AnyElement,
+    id: ElementId,
+    sink: Rc<dyn Fn(&Event)>,
+}
+
+impl Element for OutsideClickDetector {
+    type RequestLayoutState = ();
+    type PrepaintState = ();
+
+    fn id(&self) -> Option<gpui::ElementId> {
+        None
+    }
+
+    fn source_location(&self) -> Option<&'static std::panic::Location<'static>> {
+        None
+    }
+
+    fn request_layout(
+        &mut self,
+        _id: Option<&gpui::GlobalElementId>,
+        _inspector_id: Option<&gpui::InspectorElementId>,
+        window: &mut Window,
+        cx: &mut App,
+    ) -> (LayoutId, Self::RequestLayoutState) {
+        (self.child.request_layout(window, cx), ())
+    }
+
+    fn prepaint(
+        &mut self,
+        _id: Option<&gpui::GlobalElementId>,
+        _inspector_id: Option<&gpui::InspectorElementId>,
+        _bounds: Bounds<Pixels>,
+        _request_layout: &mut Self::RequestLayoutState,
+        window: &mut Window,
+        cx: &mut App,
+    ) -> Self::PrepaintState {
+        self.child.prepaint(window, cx);
+    }
+
+    fn paint(
+        &mut self,
+        _id: Option<&gpui::GlobalElementId>,
+        _inspector_id: Option<&gpui::InspectorElementId>,
+        bounds: Bounds<Pixels>,
+        _request_layout: &mut Self::RequestLayoutState,
+        _prepaint: &mut Self::PrepaintState,
+        window: &mut Window,
+        _cx: &mut App,
+    ) {
+        let sink = self.sink.clone();
+        let id = self.id;
+        window.on_mouse_event(
+            move |event: &gpui::MouseDownEvent,
+                  phase: gpui::DispatchPhase,
+                  _window: &mut Window,
+                  _cx: &mut App| {
+                if phase != gpui::DispatchPhase::Bubble {
+                    return;
+                }
+                if bounds.contains(&event.position) {
+                    return;
+                }
+                sink(&Event::Input {
+                    id,
+                    event_type: EventType::OutsideClick,
+                    x: Some(event.position.x.to_f64()),
+                    y: Some(event.position.y.to_f64()),
+                    key: None,
+                    modifiers: None,
+                    value: None,
+                });
+            },
+        );
+        self.child.paint(window, _cx);
+    }
+}
+
+impl IntoElement for OutsideClickDetector {
+    type Element = Self;
+    fn into_element(self) -> Self {
+        self
+    }
+}
+
 /// Map one retained node to a GPUI element. Unknown style keys/values are
 /// ignored (forward compatibility — see protocol StyleMap docs). Text nodes
 /// render as plain GPUI text children unless they carry P11 runs;
@@ -1668,7 +1761,23 @@ fn build_element(
     ctx: &mut RenderCtx,
 ) -> AnyElement {
     let el = build_element_inner(tree, id, window, cx, ctx);
-    apply_overlays(tree, id, el)
+    let el = apply_overlays(tree, id, el);
+    // Gate 3-a: outside-press detection wraps the FINAL composited element so
+    // detector bounds match what the user sees (anchored/deferred included).
+    if tree
+        .get(id)
+        .expect("checked by caller")
+        .listeners
+        .contains(&EventType::OutsideClick)
+    {
+        return OutsideClickDetector {
+            child: el,
+            id,
+            sink: ctx.sink.clone(),
+        }
+        .into_any_element();
+    }
+    el
 }
 
 /// Overlay wrappers (P10), outermost last: deferred paints AFTER all
@@ -4351,6 +4460,113 @@ mod headless_render_tests {
 
         // Cleanup: shut the in-memory app down so the test leaves nothing
         // behind (mirrors gpui's own TestApp tests).
+        drop(window);
+        app.update(|cx| cx.shutdown());
+    }
+    #[test]
+    fn outside_click_emits_only_for_presses_outside_the_subscribed_bounds() {
+        let mut app = gpui::TestApp::new();
+        let mut window = app.open_window(|_, _cx| HostView::new());
+
+        let events: Rc<RefCell<Vec<(ElementId, EventType)>>> = Rc::new(RefCell::new(Vec::new()));
+        let sink_events = events.clone();
+        window.update(|view, _, _| {
+            view.sink = Rc::new(move |e: &Event| {
+                if let Event::Input { id, event_type, .. } = e {
+                    sink_events.borrow_mut().push((*id, *event_type));
+                }
+            });
+            // A root div with a 100x100 subscribed DIV child (a text child
+            // would ignore size styles — the detector must wrap a real box).
+            for mutation in [
+                Mutation::CreateElement {
+                    id: ElementId(1),
+                    element_type: ElementType::Div,
+                },
+                Mutation::SetRoot { id: ElementId(1) },
+                Mutation::CreateElement {
+                    id: ElementId(2),
+                    element_type: ElementType::Div,
+                },
+                Mutation::AppendChild {
+                    parent_id: ElementId(1),
+                    child_id: ElementId(2),
+                },
+                Mutation::SetStyle {
+                    id: ElementId(2),
+                    style: [
+                        (
+                            "width".to_string(),
+                            StyleValue::Number(serde_json::Number::from(100)),
+                        ),
+                        (
+                            "height".to_string(),
+                            StyleValue::Number(serde_json::Number::from(100)),
+                        ),
+                        (
+                            "backgroundColor".to_string(),
+                            StyleValue::Text("#45475a".to_string()),
+                        ),
+                    ]
+                    .into_iter()
+                    .collect(),
+                    state: None,
+                },
+                Mutation::SetEventListener {
+                    id: ElementId(2),
+                    event_type: EventType::OutsideClick,
+                    enabled: true,
+                },
+            ] {
+                view.tree.apply(&mutation).expect("mount must apply");
+            }
+        });
+
+        // One draw runs the real paint pass, which registers the next-frame
+        // window-level mouse listener through the detector wrapper.
+        window.draw();
+
+        // Press OUTSIDE the 100x100 element: exactly one outsideClick.
+        window.simulate_mouse_down(point(px(300.0), px(300.0)), gpui::MouseButton::Left);
+        window.simulate_mouse_up(point(px(300.0), px(300.0)), gpui::MouseButton::Left);
+        {
+            let borrowed = events.borrow();
+            assert_eq!(
+                borrowed.as_slice(),
+                &[(ElementId(2), EventType::OutsideClick)],
+                "outside press must emit exactly one outsideClick: {borrowed:?}"
+            );
+        }
+
+        // Second draw re-registers (the listener is next-frame-cleared), then
+        // a press INSIDE the element must NOT emit.
+        window.draw();
+        window.simulate_mouse_down(point(px(50.0), px(50.0)), gpui::MouseButton::Left);
+        window.simulate_mouse_up(point(px(50.0), px(50.0)), gpui::MouseButton::Left);
+        {
+            let borrowed = events.borrow();
+            assert_eq!(
+                borrowed.len(),
+                1,
+                "inside press must not emit outsideClick: {borrowed:?}"
+            );
+        }
+
+        // A third frame + another OUTSIDE press emits exactly once more —
+        // direct proof the per-frame registration never accumulates (two
+        // stale listeners would emit duplicates here).
+        window.draw();
+        window.simulate_mouse_down(point(px(300.0), px(300.0)), gpui::MouseButton::Left);
+        window.simulate_mouse_up(point(px(300.0), px(300.0)), gpui::MouseButton::Left);
+        {
+            let borrowed = events.borrow();
+            assert_eq!(
+                borrowed.len(),
+                2,
+                "second outside press must emit exactly once more (no accumulation): {borrowed:?}"
+            );
+        }
+
         drop(window);
         app.update(|cx| cx.shutdown());
     }

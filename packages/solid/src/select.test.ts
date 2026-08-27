@@ -210,10 +210,11 @@ test("keeps deferred S14b edges explicit", async () => {
       ),
     ).toBe(false)
 
-    // Pointer-based outside-click dismissal and IME composition suppression are
-    // deliberate deferred edges: there is no global pointer listener or
-    // composition event in this protocol contract for S14b to consume. The
-    // existing blur-based focus-loss close path is separate and remains wired.
+    // IME composition suppression remains a deliberate deferred edge: no
+    // composition event exists in this protocol contract for S14b to consume.
+    // Pointer outside-click dismissal SHIPPED in Gate 3-a: the root now
+    // carries an outsideClick listener and the helper emits it on presses
+    // outside the rendered subtree.
     const protocolEvents = EVENT_TYPES as readonly string[]
     expect(protocolEvents).not.toContain("compositionStart")
     expect(protocolEvents).not.toContain("compositionEnd")

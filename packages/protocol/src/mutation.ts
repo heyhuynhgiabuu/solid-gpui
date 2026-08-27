@@ -45,6 +45,9 @@ export type EventType =
   | "dragStart"
   /** A drag released over this target; value carries the JSON payload. */
   | "drop"
+  /** A pointer press landed outside the subscribed element's rendered
+   * bounds; carries the press position (Gate 3-a overlay dismissal). */
+  | "outsideClick"
 
 /**
  * Closed set of style-STATE layers: the helper must know every state to wire
@@ -152,6 +155,7 @@ export const EVENT_TYPES: readonly EventType[] = [
   "keys",
   "dragStart",
   "drop",
+  "outsideClick",
 ]
 
 export const ELEMENT_TYPES: readonly ElementType[] = [
