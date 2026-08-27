@@ -5,6 +5,8 @@ import scrollToFixture from "../fixtures/command-scroll-to.json"
 import getScrollOffsetFixture from "../fixtures/command-get-scroll-offset.json"
 import focusElementFixture from "../fixtures/command-focus-element.json"
 import simulateInputFixture from "../fixtures/command-simulate-input.json"
+import simulateKeyFixture from "../fixtures/command-simulate-key.json"
+import simulateMouseFixture from "../fixtures/command-simulate-mouse.json"
 import listInfoFixture from "../fixtures/command-list-info.json"
 import { type SolidGpuiCommand, decodeCommand, encodeCommand } from "./command"
 
@@ -75,6 +77,26 @@ describe("decodeCommand", () => {
     const r = decodeCommand(JSON.stringify({ type: "scrollTo", seq: 9, x: 0, y: 500 }))
     expect(r.ok).toBe(false)
     if (!r.ok) expect(r.error.kind).toBe("invalidShape")
+  })
+
+  test("simulateKey fixture parses and re-encodes exactly (parity)", () => {
+    const parsed = decodeCommand(JSON.stringify(simulateKeyFixture))
+    expect(parsed).toEqual({
+      ok: true,
+      value: { type: "simulateKey", seq: 45, key: "enter" },
+    })
+    if (!parsed.ok) throw new Error("unreachable")
+    expect(encodeCommand(parsed.value)).toBe(JSON.stringify(simulateKeyFixture))
+  })
+
+  test("simulateMouse fixture parses and re-encodes exactly (parity)", () => {
+    const parsed = decodeCommand(JSON.stringify(simulateMouseFixture))
+    expect(parsed).toEqual({
+      ok: true,
+      value: { type: "simulateMouse", seq: 46, x: 300, y: 220.5 },
+    })
+    if (!parsed.ok) throw new Error("unreachable")
+    expect(encodeCommand(parsed.value)).toBe(JSON.stringify(simulateMouseFixture))
   })
 
   test("simulateInput fixture parses and re-encodes exactly (parity)", () => {

@@ -592,6 +592,58 @@ fn change_event_fixture_carries_value_both_ways() {
     assert_eq!(event_to_json(&event), raw);
 }
 
+/// Regression (caught by the Gate 3 GUI harness): adding an EventType enum
+/// variant is not enough — the wire VALIDATION list must carry it too, or a
+/// real setEventListener(outsideClick) batch is rejected cross-process while
+/// direct tree.apply tests keep passing.
+#[test]
+fn set_event_listener_accepts_outside_click() {
+    let raw = r#"{"v":1,"seq":1,"mutations":[{"op":"setEventListener","id":4,"eventType":"outsideClick","enabled":true}]}"#;
+    let batch = from_json(raw).expect("batch with outsideClick listener parses");
+    assert_eq!(batch.mutations.len(), 1);
+}
+
+#[test]
+fn set_event_listener_rejects_unknown_event_type() {
+    let raw = r#"{"v":1,"seq":1,"mutations":[{"op":"setEventListener","id":4,"eventType":"middleClick","enabled":true}]}"#;
+    assert!(from_json(raw).is_err());
+}
+
+#[test]
+fn simulate_key_command_fixture_parses_and_emits_exactly() {
+    let raw = fs::read_to_string(fixture_path("command-simulate-key.json"))
+        .expect("fixture readable")
+        .trim()
+        .to_string();
+    let cmd = command_from_json(&raw).expect("command parses");
+    assert_eq!(
+        cmd,
+        Command::SimulateKey {
+            seq: 45,
+            key: "enter".into()
+        }
+    );
+    assert_eq!(command_to_json(&cmd), raw);
+}
+
+#[test]
+fn simulate_mouse_command_fixture_parses_and_emits_exactly() {
+    let raw = fs::read_to_string(fixture_path("command-simulate-mouse.json"))
+        .expect("fixture readable")
+        .trim()
+        .to_string();
+    let cmd = command_from_json(&raw).expect("command parses");
+    assert_eq!(
+        cmd,
+        Command::SimulateMouse {
+            seq: 46,
+            x: 300.0,
+            y: 220.5
+        }
+    );
+    assert_eq!(command_to_json(&cmd), raw);
+}
+
 #[test]
 fn simulate_input_command_fixture_parses_and_emits_exactly() {
     let raw = fs::read_to_string(fixture_path("command-simulate-input.json"))

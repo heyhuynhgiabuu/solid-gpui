@@ -539,9 +539,6 @@ pub struct HostView {
     /// Gate 3-b: (overlay, previous) — the autoFocus overlay that took focus
     /// and the element focused right before it. Drives removal restoration.
     autofocus_origin: Option<(ElementId, ElementId)>,
-    /// Gate 3-b: (previous, overlay) awaiting the next render's restoration
-    /// defer; fire-time guards re-check both ids (either may die in flight).
-    focus_restore_pending: Option<(ElementId, ElementId)>,
     /// Live editable state per input/textarea element. Shared with the per-
     /// frame platform InputHandler so edits persist across frames (the
     /// handler itself is rebuilt every frame by the IME anchor).
@@ -587,7 +584,6 @@ impl HostView {
             focus_subscribed: HashSet::new(),
             autofocus_pending: None,
             autofocus_origin: None,
-            focus_restore_pending: None,
             input_states: Rc::new(RefCell::new(HashMap::new())),
             scrollbar_drag: RefCell::new(None),
             key_pending: Rc::new(RefCell::new(HashMap::new())),
@@ -700,16 +696,42 @@ impl HostView {
 
     /// Gate 3-b: main.rs reports every removeChild/destroyElement so a
     /// dismissed autoFocus overlay can return focus to what had it before.
-    /// Scheduling only — the restoration itself defers from the next render,
-    /// where focus timing already lives (autofocus uses the same defer).
-    pub fn note_element_removed(&mut self, removed: ElementId) {
-        if let Some((overlay, previous)) = self.autofocus_origin {
-            if removed == previous {
-                // The restoration target died first: nothing to restore to.
-                self.autofocus_origin = None;
-            } else if removed == overlay {
-                self.focus_restore_pending = Some((previous, overlay));
-            }
+    /// Returns the restoration target when the dismissed node was the
+    /// overlay. The FOCUS itself happens at apply time (command-context
+    /// semantics, same as the focusElement command) — a deferred restore
+    /// marks is_focused but gpui's keystroke dispatch does not reach the
+    /// element's listeners until a command-context focus change, which the
+    /// real-GUI Gate 3-d harness proved with handled=false probes.
+    pub fn note_element_removed(&mut self, removed: ElementId) -> Option<ElementId> {
+        let (overlay, previous) = self.autofocus_origin?;
+        if removed == previous {
+            // The restoration target died first: nothing to restore to.
+            self.autofocus_origin = None;
+            None
+        } else if removed == overlay {
+            self.autofocus_origin = None;
+            Some(previous)
+        } else {
+            None
+        }
+    }
+
+    /// The batch-apply hook: report a removal and, when it dismisses the
+    /// focus-owning overlay, immediately restore focus to its origin.
+    pub fn handle_element_removed(
+        &mut self,
+        removed: ElementId,
+        window: &mut Window,
+        cx: &mut gpui::App,
+    ) {
+        if let Some(previous) = self.note_element_removed(removed)
+            && self.tree.get(previous).is_some()
+            && let Err(message) = self.focus_element(previous, window, cx)
+        {
+            // Best-effort restore: the tree says the target is alive, so a
+            // missing handle here would be an accounting bug — make it
+            // visible instead of silently dropping focus on the window.
+            eprintln!("[solid-gpui] focus restore failed for {previous:?}: {message}");
         }
     }
 
@@ -719,7 +741,6 @@ impl HostView {
     /// all focus-restoration state with the old tree.
     pub fn reset_focus_restore(&mut self) {
         self.autofocus_origin = None;
-        self.focus_restore_pending = None;
     }
 
     /// Set an input's value from the wire (setValue — the JS→helper direction
@@ -1590,40 +1611,6 @@ impl Render for HostView {
         // load). Self-terminating: the settle frame splices nothing.
         if animating || list_settle.get() {
             window.request_animation_frame();
-        }
-
-        // Gate 3-b RESTORATION runs BEFORE the autofocus defer below:
-        // deferred callbacks fire in registration order, and a cascading
-        // select lands dismissal + a fresh autoFocus mount in ONE frame —
-        // restore-then-autofocus leaves the new overlay focused (correct),
-        // while the reverse order lets the restore clobber the fresh focus.
-        //
-        // An autoFocus overlay was removed (dismissed by selection, Escape,
-        // outside click). Return focus to the element that had it before the
-        // overlay opened — guarded at fire time because both ids can die
-        // between scheduling and this frame (stale focus handles are never
-        // pruned; the tree is the liveness truth). A re-parented (still
-        // alive) overlay KEEPS its origin: its later real destroy still
-        // restores. No recorded origin means nothing was focused before the
-        // overlay: focus falls to the window, matching web behavior when no
-        // focusable precedes the popup.
-        if let Some((previous, overlay)) = self.focus_restore_pending.take() {
-            cx.defer_in(window, move |view, window, cx| {
-                if view.autofocus_origin != Some((overlay, previous)) {
-                    return; // superseded by a newer overlay's origin
-                }
-                if view.tree.get(previous).is_none() {
-                    view.autofocus_origin = None;
-                    return;
-                }
-                if view.tree.get(overlay).is_some() {
-                    return; // re-parented, not dismissed: keep the origin armed
-                }
-                view.autofocus_origin = None;
-                if let Some(handle) = view.focus_handles.borrow().get(&previous).cloned() {
-                    handle.focus(window, cx);
-                }
-            });
         }
 
         // Focus the autoFocus target after this frame's deferred callbacks:
@@ -4775,22 +4762,18 @@ mod headless_render_tests {
             "autofocus must remember the previously focused element"
         );
 
-        // Dismissal wire shape: removeChild + destroyElement, each reported
-        // through the same note_element_removed hook main.rs calls.
-        window.update(|view, _, _| {
+        // Dismissal wire shape: the renderer's Show unmount emits removeChild
+        // ONLY — retain-all keeps the node alive for a possible re-attach, so
+        // restoration must fire on DETACH, not just on destroy.
+        window.update(|view, w, cx| {
             view.tree
                 .apply(&Mutation::RemoveChild {
                     parent_id: ElementId(1),
                     child_id: ElementId(3),
                 })
                 .expect("removeChild applies");
-            view.note_element_removed(ElementId(3));
-            view.tree
-                .apply(&Mutation::DestroyElement { id: ElementId(3) })
-                .expect("destroyElement applies");
-            view.note_element_removed(ElementId(3));
+            view.handle_element_removed(ElementId(3), w, cx);
         });
-        window.draw(); // restoration defer: trigger focused again
         assert_eq!(
             focused_element(&mut window),
             Some(ElementId(2)),
@@ -4869,24 +4852,20 @@ mod headless_render_tests {
             Some((ElementId(3), ElementId(2)))
         );
 
-        // Same batch destroys the overlay AND the previous target: the
-        // restoration must be dropped, not fire at a dead id.
-        window.update(|view, _, _| {
+        // Same batch dismisses the overlay AND destroys the previous target:
+        // the restoration must be dropped, not fire at a dead id.
+        window.update(|view, w, cx| {
             view.tree
                 .apply(&Mutation::RemoveChild {
                     parent_id: ElementId(1),
                     child_id: ElementId(3),
                 })
                 .expect("removeChild applies");
-            view.note_element_removed(ElementId(3));
-            view.tree
-                .apply(&Mutation::DestroyElement { id: ElementId(3) })
-                .expect("destroy overlay applies");
-            view.note_element_removed(ElementId(3));
+            view.handle_element_removed(ElementId(3), w, cx);
             view.tree
                 .apply(&Mutation::DestroyElement { id: ElementId(2) })
                 .expect("destroy previous applies");
-            view.note_element_removed(ElementId(2));
+            view.handle_element_removed(ElementId(2), w, cx);
         });
         window.draw();
         assert_eq!(
@@ -4964,18 +4943,14 @@ mod headless_render_tests {
         // Cascading selects in ONE flush: dismissing A restores the trigger
         // AND the newly rendered panel mounts autoFocus overlay B. The final
         // focus must be B (its autofocus ran last), with a fresh origin.
-        window.update(|view, _, cx| {
+        window.update(|view, w, cx| {
             view.tree
                 .apply(&Mutation::RemoveChild {
                     parent_id: ElementId(1),
                     child_id: ElementId(3),
                 })
                 .expect("removeChild applies");
-            view.note_element_removed(ElementId(3));
-            view.tree
-                .apply(&Mutation::DestroyElement { id: ElementId(3) })
-                .expect("destroyElement applies");
-            view.note_element_removed(ElementId(3));
+            view.handle_element_removed(ElementId(3), w, cx);
             for mutation in [
                 Mutation::CreateElement {
                     id: ElementId(4),

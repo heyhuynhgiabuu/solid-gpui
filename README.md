@@ -172,6 +172,15 @@ bindings stay live by design (the IME does not consume them). Multi-select,
 uncontrolled state, and native popup windows are not part of S14b.
 Try the real window demo with `bun run example/select`.
 
+Real-GUI overlay evidence (Gate 3-d): `SOLID_GPUI_GATE3_GUI=1 bun run
+smoke:gate3-gui` drives a real window through open → navigate → select →
+dismiss → destroy using the `simulateKey`/`simulateMouse` commands (REAL
+event dispatch, not synthetic edits). Without the env var it prints a skip
+note — it needs a window server and a built helper. Known open issue:
+synthetic keystroke dispatch reports `handled: false` after the first
+autoFocus overlay cycle (pointer dispatch stays healthy; recorded in the
+ROADMAP).
+
 ## Trust boundary for JavaScript
 
 The TypeScript renderer is a **trusted-code API**, not a sandbox. Component

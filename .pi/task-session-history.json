@@ -2828,5 +2828,55 @@
     "rawStatus": "success",
     "resultValid": true,
     "completedAt": 1787848770776
+  },
+  {
+    "id": "mtbuf5cy-1016",
+    "agentType": "reviewer",
+    "description": "Review Gate 3-d evidence slice",
+    "sessionName": "task-mtbuf5cy-1016",
+    "startedAt": 1787854521105,
+    "paneId": "w3:pGR",
+    "handle": {
+      "backend": "herdr",
+      "resourceId": "w3:pGR",
+      "socketPath": "/Users/huynhgiabuu/.config/herdr/herdr.sock",
+      "terminalId": "term_65a0b51a4250333",
+      "agentName": "reviewer-mtbuf5cy",
+      "foregroundProcessGroupId": 14713
+    },
+    "piDir": "/Users/huynhgiabuu/dev/projects/solid-gpui/.pi",
+    "dir": "/Users/huynhgiabuu/dev/projects/solid-gpui/.pi/artifacts/tasks",
+    "cwd": "/Users/huynhgiabuu/dev/projects/solid-gpui",
+    "status": "done",
+    "background": false,
+    "reportedStatus": "failure",
+    "rawStatus": "failure",
+    "resultValid": true,
+    "completedAt": 1787854926489
+  },
+  {
+    "id": "mtbupqgn-ef83",
+    "agentType": "reviewer",
+    "description": "Re-review Gate 3-d fixes",
+    "sessionName": "task-mtbupqgn-ef83",
+    "startedAt": 1787855015020,
+    "paneId": "w3:pGS",
+    "handle": {
+      "backend": "herdr",
+      "resourceId": "w3:pGS",
+      "socketPath": "/Users/huynhgiabuu/.config/herdr/herdr.sock",
+      "terminalId": "term_65a0b6f14acc434",
+      "agentName": "reviewer-mtbupqgn",
+      "foregroundProcessGroupId": 22375
+    },
+    "piDir": "/Users/huynhgiabuu/dev/projects/solid-gpui/.pi",
+    "dir": "/Users/huynhgiabuu/dev/projects/solid-gpui/.pi/artifacts/tasks",
+    "cwd": "/Users/huynhgiabuu/dev/projects/solid-gpui",
+    "status": "done",
+    "background": false,
+    "reportedStatus": "failure",
+    "rawStatus": "failure",
+    "resultValid": true,
+    "completedAt": 1787855225282
   }
 ]

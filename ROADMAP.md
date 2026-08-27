@@ -175,7 +175,11 @@ than treating multiple independent helper processes as one application.
 **Exit criteria**
 
 - A real GUI fixture opens, navigates, selects, dismisses, and destroys an
-  overlay without stale focus/listener state.
+  overlay without stale focus/listener state. (macOS local evidence landed
+  in Gate 3-d: `smoke:gate3-gui` drives the full cycle with real dispatched
+  input. Open: synthetic-keystroke dispatch returns handled=false after the
+  first autoFocus cycle — pointer dispatch unaffected; real-keyboard
+  behavior unverified. Hosted per-OS GUI evidence still owed.)
 - macOS menu behavior remains separately tested.
 - GUI evidence is reported per OS; headless tests are not presented as visual
   proof.

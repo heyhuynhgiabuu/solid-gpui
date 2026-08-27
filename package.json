@@ -31,6 +31,8 @@
     "smoke:consumer-h": "bun --conditions=browser run scripts/consumer-h-smoke.ts",
     "check:consumer-jsx": "tsc --noEmit -p tests/consumer-jsx/tsconfig.json",
     "check:consumer-h": "tsc --noEmit -p tests/consumer-h/tsconfig.json",
+    "check:gate3-gui": "tsc --noEmit -p tests/gate3-gui/tsconfig.json",
+    "smoke:gate3-gui": "bun --conditions=browser run scripts/gate3-gui-smoke.ts",
     "test": "bun --conditions=browser test",
     "typecheck": "tsc --noEmit -p packages/protocol && tsc --noEmit -p packages/client && tsc --noEmit -p packages/solid",
     "example:canvas": "bun --conditions=browser run examples/canvas.tsx",

@@ -1031,3 +1031,65 @@ Slices:
    pinned gpui source (dispatch ordering window.rs:4967, with_simulated_ime
    keystroke.rs:241); 3 nits/questions recorded (Tab named in docs now,
    real-IME GUI evidence owed with Gate 3 exit).
+### 2026-08-27 - Gate 3-d real-GUI overlay evidence harness
+status: done | updated: 2026-08-28
+
+ROADMAP Gate 3 exit criteria: a REAL GUI fixture opens, navigates, selects,
+dismisses, and destroys an overlay without stale focus/listener state.
+simulateInput was a synthetic edit bypass; real evidence needs REAL event
+dispatch through the live window (gpui exposes pub dispatch_keystroke +
+dispatch_event with constructible PlatformInput).
+
+Design: commands simulateKey { seq, key } and simulateMouse { seq, x, y }
+in full protocol lockstep; helper dispatches through AsyncContext::
+update_window (NO HostView entity lease — dispatch handlers re-enter the
+entity and any lease during dispatch is a double-lease abort, proven live
+with a backtrace); harness drives a real window over the whole exit
+criteria; smoke skips (exit 0) without SOLID_GPUI_GATE3_GUI=1.
+
+Slices:
+
+1. [x] RED→GREEN protocol lockstep (union/list/decode/encode TS; enum +
+   validation list Rust; fixtures + round-trips both languages).
+2. [x] Helper handlers + main.rs arms; reply carries gpui's dispatch
+   handled flag as telemetry.
+3. [x] Harness + smoke + package scripts + check:gate3-gui. LOCAL REAL-GUI
+   RUN GREEN: open (real Enter; focus event lands on the autoFocus
+   content) → navigate (real ArrowDown on the focused content) → select
+   (real Enter; value updates; unmount) → reopen (real click) → dismiss
+   (real outside press; outsideClick) → clean destroy.
+4. [x] THREE production defects found and fixed by the harness:
+   - Gate 3-a gap: "outsideClick" was missing from the Rust wire
+     VALIDATION list (the enum variant alone was not enough) — real
+     setEventListener batches were REJECTED cross-process; accept/reject
+     regression tests added.
+   - Gate 3-b: restore must fire on DETACH, not just destroy — the
+     renderer's Show unmount emits removeChild only (retain-all); the
+     TestApp tests now use the real wire shape.
+   - Gate 3-b: a render-deferred restore marks is_focused but synthetic
+     keystroke dispatch never re-reaches the element (handled stays
+     false; focus transitions do not revive; TestApp never dispatches
+     synthetic keys to div listeners at all). Restore is now IMMEDIATE
+     at batch-apply via handle_element_removed (command-context focus —
+     the proven path). The synthetic-keystroke anomaly itself stays OPEN
+     (pointer dispatch healthy; real keyboards unverified) and is
+     recorded in README/ROADMAP.
+5. [x] Full gates: cargo 212/0, clippy -D warnings, fmt, bun 234/0,
+   tsc ×3 + three consumer/GUI typechecks, both real-helper smokes,
+   git diff --check.
+
+#### Review outcome
+
+First reviewer pass: **NOT MERGEABLE** — the main.rs batch hook still
+called note_element_removed (return-only; the immediate focus never
+happened on the production path — dead-code clippy caught it), clippy
+red, and the TODO file had been truncated by a bad edit. All three fixed:
+hook now calls handle_element_removed(child_id, window, cx); clippy
+clean; TODO restored from Git and this block rewritten.
+
+Second reviewer pass: wire-path focus restore VERIFIED fixed (single
+shared entry point for tests and production), all gates green — but the
+harness truncated TODO again mid-review (Solid 1 spike block lost,
++59/−16), so the verdict held NOT MERGEABLE on artifact integrity alone.
+This restoration rebuilds the file as Git HEAD + this block; nothing
+else differs.

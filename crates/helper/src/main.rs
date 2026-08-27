@@ -97,6 +97,8 @@ fn command_ident(command: &solid_gpui_protocol::Command) -> (u32, &'static str) 
         solid_gpui_protocol::Command::GetScrollOffset { seq, .. } => (*seq, "getScrollOffset"),
         solid_gpui_protocol::Command::FocusElement { seq, .. } => (*seq, "focusElement"),
         solid_gpui_protocol::Command::SimulateInput { seq, .. } => (*seq, "simulateInput"),
+        solid_gpui_protocol::Command::SimulateKey { seq, .. } => (*seq, "simulateKey"),
+        solid_gpui_protocol::Command::SimulateMouse { seq, .. } => (*seq, "simulateMouse"),
         solid_gpui_protocol::Command::ListInfo { seq, .. } => (*seq, "listInfo"),
         solid_gpui_protocol::Command::SetMenus { seq, .. } => (*seq, "setMenus"),
         solid_gpui_protocol::Command::SetTitle { seq, .. } => (*seq, "setTitle"),
@@ -197,6 +199,19 @@ fn run_stdio() -> i32 {
         }
     }
     0
+}
+
+/// Gate 3-d: parse/validate a keystroke string without touching the view.
+fn view_keystroke(key: &str) -> Result<gpui::Keystroke, String> {
+    gpui::Keystroke::parse(key).map_err(|error| format!("invalid key {key:?}: {error:?}"))
+}
+
+/// Gate 3-d: validate mouse coordinates (finite) into a window point.
+fn validate_mouse(x: f64, y: f64) -> Result<gpui::Point<gpui::Pixels>, String> {
+    if !x.is_finite() || !y.is_finite() {
+        return Err(format!("non-finite mouse coordinates ({x}, {y})"));
+    }
+    Ok(gpui::point(gpui::px(x as f32), gpui::px(y as f32)))
 }
 
 /// Transport + window mode. A dedicated thread owns stdin/stdout; the GPUI
@@ -377,6 +392,92 @@ fn run_stdio_window() {
                                 code: ReplyCode::Unsupported,
                                 message: format!("window closed: {e}"),
                             }),
+                        // Gate 3-d: dispatch REAL input. update_window (not
+                        // window.update, not defer_in) is the TestApp-proven
+                        // shape: no HostView entity lease is held during the
+                        // dispatch, so key handlers and the IME anchor may
+                        // re-enter the entity freely — any lease here plus a
+                        // handler-triggered render is a double-lease abort.
+                        solid_gpui_protocol::Command::SimulateKey { seq, key } => {
+                            let any: gpui::AnyWindowHandle = window.into();
+                            match view_keystroke(&key) {
+                                Ok(keystroke) => {
+                                    let dispatched = cx
+                                        .update_window(any, |_view, window, cx| {
+                                            window.dispatch_keystroke(keystroke, cx)
+                                        })
+                                        .ok();
+                                    if let Some(handled) = dispatched {
+                                        Reply::Result {
+                                            seq,
+                                            value: serde_json::json!({ "applied": true, "handled": handled }),
+                                        }
+                                    } else {
+                                        Reply::Error {
+                                            seq: Some(seq),
+                                            code: ReplyCode::Unsupported,
+                                            message: "window closed".into(),
+                                        }
+                                    }
+                                }
+                                Err(message) => Reply::Error {
+                                    seq: Some(seq),
+                                    code: ReplyCode::ApplyFailed,
+                                    message,
+                                },
+                            }
+                        }
+                        solid_gpui_protocol::Command::SimulateMouse { seq, x, y } => {
+                            let any: gpui::AnyWindowHandle = window.into();
+                            match validate_mouse(x, y) {
+                                Ok(position) => {
+                                    let dispatched = cx
+                                        .update_window(any, |_view, window, cx| {
+                                            window.dispatch_event(
+                                                gpui::PlatformInput::MouseDown(
+                                                    gpui::MouseDownEvent {
+                                                        button: gpui::MouseButton::Left,
+                                                        position,
+                                                        modifiers: gpui::Modifiers::default(),
+                                                        click_count: 1,
+                                                        first_mouse: false,
+                                                    },
+                                                ),
+                                                cx,
+                                            );
+                                            window.dispatch_event(
+                                                gpui::PlatformInput::MouseUp(
+                                                    gpui::MouseUpEvent {
+                                                        button: gpui::MouseButton::Left,
+                                                        position,
+                                                        modifiers: gpui::Modifiers::default(),
+                                                        click_count: 1,
+                                                    },
+                                                ),
+                                                cx,
+                                            );
+                                        })
+                                        .is_ok();
+                                    if dispatched {
+                                        Reply::Result {
+                                            seq,
+                                            value: serde_json::json!({ "applied": true }),
+                                        }
+                                    } else {
+                                        Reply::Error {
+                                            seq: Some(seq),
+                                            code: ReplyCode::Unsupported,
+                                            message: "window closed".into(),
+                                        }
+                                    }
+                                }
+                                Err(message) => Reply::Error {
+                                    seq: Some(seq),
+                                    code: ReplyCode::ApplyFailed,
+                                    message,
+                                },
+                            }
+                        }
                         solid_gpui_protocol::Command::SimulateInput { seq, id, text } => window
                             .update(cx, |view, _window, cx| {
                                 match view.simulate_input(id, &text) {
@@ -626,7 +727,7 @@ fn run_stdio_window() {
                         let mut applied: u32 = 0;
                         let mut err: Option<String> = None;
                         let mut autofocus_target: Option<solid_gpui_protocol::ElementId> = None;
-                        let update_result = window.update(cx, |view, _window, cx| {
+                        let update_result = window.update(cx, |view, window, cx| {
                             for m in &batch.mutations {
                                 // setAnimation starts must be captured BEFORE
                                 // apply (apply merges the targets into the
@@ -704,7 +805,11 @@ fn run_stdio_window() {
                                         }
                                         // Gate 3-b: report removals so a
                                         // dismissed autoFocus overlay can
-                                        // return focus to its origin element.
+                                        // return focus to its origin element
+                                        // IMMEDIATELY (command-context focus;
+                                        // the deferred variant restored
+                                        // is_focused but never re-armed
+                                        // keystroke dispatch — Gate 3-d).
                                         if let solid_gpui_protocol::Mutation::RemoveChild {
                                             child_id,
                                             ..
@@ -713,7 +818,7 @@ fn run_stdio_window() {
                                             id: child_id,
                                         } = m
                                         {
-                                            view.note_element_removed(*child_id);
+                                            view.handle_element_removed(*child_id, window, cx);
                                         }
                                         // Content changes inside a virtual
                                         // list item invalidate its cached

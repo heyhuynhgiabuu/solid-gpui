@@ -48,6 +48,8 @@ export type SolidGpuiCommand =
   | { readonly type: "getScrollOffset"; readonly seq: number; readonly id: number }
   | { readonly type: "focusElement"; readonly seq: number; readonly id: number }
   | { readonly type: "simulateInput"; readonly seq: number; readonly id: number; readonly text: string }
+  | { readonly type: "simulateKey"; readonly seq: number; readonly key: string }
+  | { readonly type: "simulateMouse"; readonly seq: number; readonly x: number; readonly y: number }
   | { readonly type: "listInfo"; readonly seq: number; readonly id: number }
   | {
       readonly type: "setMenus"
@@ -126,6 +128,8 @@ export function decodeCommand(json: string): Result<SolidGpuiCommand, ProtocolEr
     "getScrollOffset",
     "focusElement",
     "simulateInput",
+    "simulateKey",
+    "simulateMouse",
     "listInfo",
     "setMenus",
     "setTitle",
@@ -152,6 +156,24 @@ export function decodeCommand(json: string): Result<SolidGpuiCommand, ProtocolEr
       return { ok: false, error: shape("path", "expected a non-empty string") }
     }
     return { ok: true, value: { type, seq: parsed.seq, path: parsed.path } }
+  }
+  if (type === "simulateKey") {
+    const key = parsed.key
+    if (typeof key !== "string" || key.length === 0) {
+      return { ok: false, error: shape("key", "expected a non-empty keystroke string") }
+    }
+    return { ok: true, value: { type, seq: parsed.seq, key } }
+  }
+  if (type === "simulateMouse") {
+    const x = parsed.x
+    const y = parsed.y
+    if (typeof x !== "number" || !Number.isFinite(x)) {
+      return { ok: false, error: shape("x", "expected a finite number") }
+    }
+    if (typeof y !== "number" || !Number.isFinite(y)) {
+      return { ok: false, error: shape("y", "expected a finite number") }
+    }
+    return { ok: true, value: { type, seq: parsed.seq, x, y } }
   }
   if (type === "simulateInput") {
     const id = parsed.id
@@ -350,6 +372,21 @@ export function encodeCommand(command: SolidGpuiCommand): string {
       seq: command.seq,
       id: command.id,
       text: command.text,
+    })
+  }
+  if (command.type === "simulateKey") {
+    return JSON.stringify({
+      type: "simulateKey",
+      seq: command.seq,
+      key: command.key,
+    })
+  }
+  if (command.type === "simulateMouse") {
+    return JSON.stringify({
+      type: "simulateMouse",
+      seq: command.seq,
+      x: command.x,
+      y: command.y,
     })
   }
   if (command.type === "listInfo") {

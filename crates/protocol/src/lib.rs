@@ -31,6 +31,7 @@ pub const EVENT_TYPES: &[&str] = &[
     "keys",
     "dragStart",
     "drop",
+    "outsideClick",
 ];
 
 pub const ELEMENT_TYPES: &[&str] = &[
@@ -629,6 +630,23 @@ pub enum Command {
         text: String,
     },
 
+    /// Dispatch a REAL keystroke to the focused element of the live window
+    /// (Gate 3-d GUI evidence): the key string uses gpui's Keystroke::parse
+    /// grammar ("down", "enter", "shift-tab", ...). Automation hook on the
+    /// trusted-command channel, like simulateInput.
+    SimulateKey {
+        seq: u32,
+        key: String,
+    },
+
+    /// Dispatch a REAL left-button down+up at window coordinates (Gate 3-d
+    /// GUI evidence for pointer paths such as outsideClick dismissal).
+    SimulateMouse {
+        seq: u32,
+        x: f64,
+        y: f64,
+    },
+
     /// Query a virtual list's live metrics: item count, how many items the
     /// last frame actually painted (virtualization proof), and whether it is
     /// scrolled to the end (followTail chat position).
@@ -745,12 +763,14 @@ pub fn command_from_json(s: &str) -> Result<Command, ProtocolError> {
             | Some("getScrollOffset")
             | Some("focusElement")
             | Some("simulateInput")
+            | Some("simulateKey")
+            | Some("simulateMouse")
             | Some("listInfo")
     ) {
         return Err(ProtocolError::InvalidShape {
             path: "type".into(),
             message: format!(
-                "unknown command {:?}; expected getStats|captureFrame|scrollTo|getScrollOffset|focusElement|simulateInput|listInfo|setMenus|setTitle|windowAction|dialogMessage|dialogOpenFile|dialogSaveFile|shellRevealPath|shellOpenPath|scrollToItem",
+                "unknown command {:?}; expected getStats|captureFrame|scrollTo|getScrollOffset|focusElement|simulateInput|simulateKey|simulateMouse|listInfo|setMenus|setTitle|windowAction|dialogMessage|dialogOpenFile|dialogSaveFile|shellRevealPath|shellOpenPath|scrollToItem",
                 type_str.unwrap_or("<missing>")
             ),
         });
