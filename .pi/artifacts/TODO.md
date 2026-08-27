@@ -187,7 +187,7 @@ deferred to Slice 2; note: JS number lossy >2^53 (doc'd in style.ts).
 Cross-ref: PLAN.md#2026-08-24---solid--gpui-oss-repo-spec-frozen-2026-08-24-after-q1q3
 
 ### 2026-08-24 - S7: perf & visual-test instrumentation (Phase 2 opener)
-status: active
+status: done (2026-08-24)
 
 - [x] S7a FrameStats (Rust): ring-buffer of build durations, p50/p90/p99/max,
       frames count; unit-tested (percentile math incl. wraparound/unsorted)
@@ -213,7 +213,7 @@ r3 verdict: **S7 mergeable**. Closed 2026-08-24.
 Cross-ref: PLAN.md#2026-08-24---phase-2-candidate-roadmap-prior-art-informed
 
 ### 2026-08-24 - S8: scrolling (Phase 2)
-status: active
+status: done (2026-08-24)
 Recon: upstream gpui HAS overflow scroll again — Styled::overflow_scroll /
 overflow_x_scroll / overflow_y_scroll (div.rs ~1474), ScrollHandle +
 track_scroll() for programmatic control, restrict_scroll_to_axis for their
@@ -239,7 +239,7 @@ nested-scroll gotcha. AGENTS.md gotcha text is stale (fixed same day).
 Cross-ref: PLAN.md Phase 2 roadmap (S8 entry)
 
 ### 2026-08-24 - S9: focus & keyboard (Phase 2)
-status: active
+status: done (2026-08-24)
 Recon: gpui FocusHandle has native tab_index (isize) + tab_stop (bool) fields;
 focusable()/track_focus() on Stateful<Div>; cx.on_focus_in/on_focus_out per
 handle (window.rs / app/context.rs); window.focus_next/focus_prev for Tab;
@@ -275,7 +275,7 @@ optional key:String + modifiers{ctrl,alt,shift,cmd}; focus/blur need neither.
 Cross-ref: PLAN.md Phase 2 roadmap (S9 entry)
 
 ### 2026-08-24 - S10: text input (Phase 2)
-status: active
+status: done (2026-08-24)
 Recon: gpui InputHandler trait (platform.rs ~1673) = the NSTextInputClient
 surface: selected_text_range/marked_text_range/text_for_range/replace_text_in_range/
 replace_and_mark_text_in_range/unmark_text/bounds_for_range (IME composing,
@@ -313,7 +313,7 @@ crosses the wire on change (controlled value sync both ways).
 Cross-ref: PLAN.md Phase 2 roadmap (S10 entry)
 
 ### 2026-08-24 - S11: virtual list (Phase 2)
-status: active
+status: done (2026-08-24)
 Recon: gpui has UniformList (crates/gpui/src/elements/uniform_list.rs) — a
 high-performance virtualized list WITH built-in follow-tail
 (FollowState::Tail: auto-scroll when scrolled to bottom; stops following on
@@ -355,7 +355,7 @@ Design sketch:
 Cross-ref: PLAN.md Phase 2 roadmap (S11 entry)
 
 ### 2026-08-24 - S12: animations (Phase 2)
-status: active
+status: done (2026-08-25)
 Recon: gpui has a first-class animation API (crates/gpui/src/elements/
 animation.rs): `Animation::new(duration)` + `.with_easing(fn)` +
 `AnimationExt::with_animation(id, anim, |el, t| ...)` — the animator receives
@@ -1486,3 +1486,11 @@ of the completed technical assessment, then rerun the same workflow.
 - [x] Windows headless: locked fmt, Clippy, and protocol/helper tests passed.
 - [x] macOS, TypeScript, and Node smoke jobs passed; only the expected
       Node.js 20 action deprecation annotations remained.
+
+### 2026-08-27 - Solid 1/Solid 2 optimization roadmap and documentation consistency
+status: active
+
+- [ ] Record the versioned Solid 1 and Solid 2 RC research and a measurement-first optimization roadmap.
+- [ ] Update README platform and compatibility wording to match hosted evidence and current package support.
+- [ ] Add selective ignores for ephemeral Pi state and scratch probes without hiding canonical `.pi` artifacts.
+- [ ] Close stale S7–S12 status metadata and verify the documentation-only diff.

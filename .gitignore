@@ -4,5 +4,14 @@ dist/
 *.log
 .DS_Store
 
-# pi task transcripts (durable artifacts stay tracked)
+# Pi runtime state and scratch probes (canonical docs/artifacts stay tracked)
+.pi/task-registry.json
+.pi/task-session-history.json
+.pi/review-tmp/
 .pi/artifacts/tasks/
+.pi/artifacts/*.tmp
+.pi/batch-dump-*.json
+.pi/effect-probe*.ts
+.pi/probe-*.ts
+.pi/transform-probe*.mjs
+.pi/tsconfig-*.json

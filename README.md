@@ -10,6 +10,8 @@ Solid reactivity → mutation protocol (NDJSON) → Rust helper → GPUI
 Status: **Phase 2 complete through P11; S14b select/combobox slice implemented**.
 Mounts Solid 2 trees into native windows and applies fine-grained updates. P12
 compaction was benchmarked but not adopted, and this is still a prerelease.
+See [ROADMAP.md](./ROADMAP.md) for Solid 1 compatibility and optimization
+plans.
 
 ## The one trap you must know
 
@@ -25,13 +27,21 @@ bun --conditions=browser run examples/counter.ts
 
 [solidjs/solid#2569]: https://github.com/solidjs/solid/issues/2569
 
+## Solid version compatibility
+
+`@solid-gpui/solid` currently targets Solid `2.0.0-rc.3` and the matching
+`@solidjs/universal`, `@solidjs/web`, and compiler packages. Solid 1.x is not
+supported by this package yet; its scheduling, ownership, and universal
+renderer boundaries differ. See [ROADMAP.md](./ROADMAP.md) before attempting a
+separate compatibility adapter.
+
 ## Install (npm, no Rust toolchain)
 
 The helper binary ships in per-platform npm packages selected automatically
 by your platform (the esbuild model):
 
 ```sh
-bun add @solid-gpui/solid solid-js   # or: npm i @solid-gpui/solid solid-js
+bun add @solid-gpui/solid solid-js@2.0.0-rc.3   # or: npm i @solid-gpui/solid solid-js@2.0.0-rc.3
 ```
 
 ```tsx
@@ -171,8 +181,10 @@ loop on every OS, so no Zed fork and no ThreadsafeFunction usage. See
 
 - Solid 2.0.0-rc.3 is still a prerelease; keep the runtime, universal renderer,
   and JSX compiler versions aligned.
-- macOS is validated; Windows/Linux remain pending (the architecture needs no
-  per-OS patches).
+- Platform evidence is split by test type: macOS has local full-suite/window
+  evidence, while hosted CI validates Linux and Windows headless helper/
+  protocol tests plus real stdio transport. GUI/window coverage remains
+  environment-gated there, and prebuilt helper packages are currently macOS-only.
 - Protocol compaction (P12) is intentionally deferred: the numeric candidate
   cut wire bytes but regressed the measured encoder; revisit only with a direct
   encoder and explicit compatibility design.

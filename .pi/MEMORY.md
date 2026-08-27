@@ -754,3 +754,13 @@
 - [verification] Hosted CI run 33042831853 passed Linux, Windows, macOS,
   TypeScript, and Node smoke on commit `94ab0fc`; the platform gates are now
   backed by actual runner evidence.
+
+## Optimization roadmap (2026-08-27)
+
+- [decision] Solid 2.0.0-rc.3 remains the supported primary; Solid 1.x is a
+  separate, time-boxed compatibility spike rather than runtime feature detection.
+- [decision] Optimization work is measurement-first across Solid, renderer,
+  NDJSON/IPC, helper, and memory; P12 stays gated on a direct encoder and
+  explicit compatibility design.
+- [pattern] Ignore only ephemeral Pi state and scratch probes; keep
+  `.pi/MEMORY.md` and canonical `.pi/artifacts/*.md` trackable.
