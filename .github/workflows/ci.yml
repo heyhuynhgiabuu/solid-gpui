@@ -27,6 +27,7 @@ jobs:
       - run: bun install --frozen-lockfile
       - run: bun run typecheck
       - run: bun run check:consumer-jsx
+      - run: bun run check:consumer-h
       - run: bun run test
 
   rust:
@@ -103,3 +104,4 @@ jobs:
       - run: bun install --frozen-lockfile
       - run: bunx tsx scripts/node-smoke.ts
       - run: bun run smoke:consumer-jsx
+      - run: bun run smoke:consumer-h
