@@ -88,6 +88,20 @@ intentional: this isolates Solid and renderer scheduling; JSON timing, real
 child-process IPC, GPUI layout/paint, and memory measurements remain separate
 follow-up dimensions.
 
+The next headless boundary baseline is available with:
+
+```sh
+cargo build -p solid-gpui-helper
+bun run benchmark:stdio
+```
+
+It uses the real `@solid-gpui/client` and helper in `--stdio` transport mode,
+with sequential unique sequence numbers and acknowledgement checks for every
+request. It reports local `encodeBatch`/`decodeBatch` distributions plus
+end-to-end client-write → helper-decode/apply/ack → client-correlation
+round-trip distributions. Transport mode deliberately excludes GPUI layout,
+paint, and window startup; those remain a separate host benchmark.
+
 ### 2. Solid 2 RC maintenance and optimization
 
 - Keep the existing `flushSolid()`-then-microtask drain contract and test that

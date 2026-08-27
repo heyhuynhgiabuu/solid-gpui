@@ -1515,3 +1515,11 @@ status: done | updated: 2026-08-27
 - `bun run test` passed with 195 tests and `bun run typecheck` passed for protocol, client, and solid packages.
 - Dedicated strict typecheck for `scripts/benchmark-solid.ts` passed with Bun types and DOM libraries.
 - Independent review of commit `b1abdfd` returned `CLEAN/MERGEABLE`.
+
+### 2026-08-27 - Measurement foundation: real stdio client/helper baseline
+status: active
+
+- [ ] Add a real client-to-helper stdio benchmark with sequential acknowledgement and sequence-correlation checks.
+- [ ] Measure local protocol encode/decode and end-to-end transport latency/UTF-8 request size with p50/p95/p99 distributions.
+- [ ] Document the transport boundary and command in the roadmap without claiming GPUI window coverage.
+- [ ] Run focused tests/typecheck and obtain an independent review before closing the slice.
