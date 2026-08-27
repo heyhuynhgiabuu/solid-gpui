@@ -1517,9 +1517,16 @@ status: done | updated: 2026-08-27
 - Independent review of commit `b1abdfd` returned `CLEAN/MERGEABLE`.
 
 ### 2026-08-27 - Measurement foundation: real stdio client/helper baseline
-status: active
+status: done | updated: 2026-08-27
 
-- [ ] Add a real client-to-helper stdio benchmark with sequential acknowledgement and sequence-correlation checks.
-- [ ] Measure local protocol encode/decode and end-to-end transport latency/UTF-8 request size with p50/p95/p99 distributions.
-- [ ] Document the transport boundary and command in the roadmap without claiming GPUI window coverage.
-- [ ] Run focused tests/typecheck and obtain an independent review before closing the slice.
+- [x] Add a real client-to-helper stdio benchmark with sequential acknowledgement and sequence-correlation checks.
+- [x] Measure local protocol encode/decode and end-to-end transport latency/UTF-8 request size with p50/p95/p99 distributions.
+- [x] Document the transport boundary and command in the roadmap without claiming GPUI window coverage.
+- [x] Run focused tests/typecheck and obtain an independent review before closing the slice.
+
+#### Verification
+
+- `bun run benchmark:stdio` passed against the real helper: 50 measured requests, 600/600 mutations acknowledged, and sequence correlation verified.
+- `bun --conditions=browser test packages/client` passed with 19 tests; `bun run typecheck` passed for protocol, client, and solid packages.
+- Dedicated strict typecheck for `scripts/benchmark-stdio.ts` passed with Bun types and DOM libraries.
+- Independent review of commit `bb07858` returned `CLEAN/MERGEABLE`.
