@@ -751,3 +751,6 @@
 - [pattern] For timer tests that combine real sleeps with synthetic Instants,
   assert completion relative to the later transition clock; fixed wall-clock
   boundaries are vulnerable to hosted-runner scheduling overhead.
+- [verification] Hosted CI run 33042831853 passed Linux, Windows, macOS,
+  TypeScript, and Node smoke on commit `94ab0fc`; the platform gates are now
+  backed by actual runner evidence.

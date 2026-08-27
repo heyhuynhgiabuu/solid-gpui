@@ -1458,7 +1458,7 @@ Implementation order completed 2026-08-27:
 - [x] Independent reviews: wire/lifecycle `MERGEABLE`, headless `MERGEABLE`, CI `MERGEABLE`, deferred S14b `MERGEABLE`; only optional wording nits were resolved.
 
 ### 2026-08-27 - Repair hosted CI platform gates
-status: active | updated: 2026-08-27
+status: done | updated: 2026-08-27
 
 Goal: repair only the platform-specific failures exposed by the first hosted run
 of the completed technical assessment, then rerun the same workflow.
@@ -1472,6 +1472,17 @@ of the completed technical assessment, then rerun the same workflow.
       flake; preserve the per-key-clock invariant. The hosted failure was
       reproduced as the fixed t0+450ms boundary; the revised test passed 25
       repeated focused local runs and the full local helper/protocol suite.
-- [ ] Run focused local regressions and CI syntax checks, then push the smallest
+- [x] Run focused local regressions and CI syntax checks, then push the smallest
       fix and obtain fresh hosted Linux, Windows, macOS, TypeScript, and Node
-      results before closing this block.
+      results before closing this block. Hosted run 33042831853 for commit
+      `94ab0fc` passed all five jobs: Linux headless, Windows headless, macOS,
+      TypeScript, and Node smoke. The run is recorded at
+      https://github.com/heyhuynhgiabuu/solid-gpui/actions/runs/33042831853.
+
+#### Hosted verification (2026-08-27)
+
+- [x] Linux headless: `cargo fmt`, locked Clippy, and locked protocol/helper
+      tests passed after installing `libgbm-dev`.
+- [x] Windows headless: locked fmt, Clippy, and protocol/helper tests passed.
+- [x] macOS, TypeScript, and Node smoke jobs passed; only the expected
+      Node.js 20 action deprecation annotations remained.
