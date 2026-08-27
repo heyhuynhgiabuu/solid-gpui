@@ -1589,10 +1589,17 @@ status: done | updated: 2026-08-27
 - Independent final review of commit `78c22a3` returned `CLEAN/MERGEABLE`; the type-only follow-up introduced no behavioral changes.
 
 ### 2026-08-27 - Solid 1 compatibility spike
-status: active | updated: 2026-08-27
+status: done | updated: 2026-08-27
 
-- [ ] Establish the pinned Solid 1.9.15 runtime/universal/compiler boundary and an isolated, repeatable probe command.
-- [ ] Verify effect, batching, ownership, disposal, keyed-reorder, input, and event behavior against the existing renderer contract without changing the Solid 2 entry point.
-- [ ] Run lifecycle, keyed reorder, input, event, and real helper-pipe checks through the isolated adapter boundary.
-- [ ] Produce a support matrix, compatibility/non-equivalence notes, and a recommendation for a separate package/entry point or explicit unsupported status.
-- [ ] Run focused verification and obtain an independent review before closing the spike.
+- [x] Establish the pinned Solid 1.9.15 runtime/universal/compiler boundary and an isolated, repeatable probe command.
+- [x] Verify effect, batching, ownership, disposal, keyed-reorder, input, and event behavior against the existing renderer contract without changing the Solid 2 entry point.
+- [x] Run lifecycle, keyed reorder, input, event, and real helper-pipe checks through the isolated adapter boundary.
+- [x] Produce a support matrix, compatibility/non-equivalence notes, and a recommendation for a separate package/entry point or explicit unsupported status.
+- [x] Run focused verification and obtain an independent review before closing the spike.
+
+#### Verification
+
+- `npm ci --prefix compat/solid1 --ignore-scripts --no-audit --no-fund` and `bun run compat:solid1` passed with exact Solid/preset `1.9.15` and `@babel/core` `7.28.3` lockfile pins under the `browser` condition.
+- The probe reported schema `solid-gpui-solid1-compat/v1`, three lifecycle cycles with one mount/update/destroy batch each, cleanup and ownership checks, keyed IDs reordered by `insertBefore` without recreation, compiled input/event updates, and 15 correlated client/helper acknowledgements.
+- `bun run test` passed 195 tests; `bun run typecheck`, `bun run check:release`, GUI-skipped cargo tests, `cargo clippy --all-targets -- -D warnings`, and `cargo fmt --all -- --check` passed. The only cargo output was the known non-blocking `block v0.1.6` future-incompatibility warning.
+- Independent review of commit `28b0b07` returned `CLEAN/MERGEABLE`. The root package remains Solid 2-only; no Solid 1 imports or dependencies entered the production workspace.
