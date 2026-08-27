@@ -768,3 +768,8 @@
   `TestAppWindow::draw()` benchmark: `RetainedTree::apply`, full render/layout/
   prepaint/paint, and production HostView build samples are separate metrics;
   the Bun wrapper requires exactly one schema-marked report.
+- [discovery] First local macOS arm64 GPUI baseline (50 measured updates):
+  small-tree draw p50/p95/p99 `0.105/0.108/0.113ms`, HostView build
+  `0.013/0.014/0.014ms`; fanout-200 draw `10.608/10.892/11.396ms`,
+  HostView build `0.961/1.000/1.121ms`, and apply `0.059/0.067/0.068ms`.
+  These are observations, not CI thresholds.
