@@ -1624,9 +1624,15 @@ status: done | updated: 2026-08-27
 - Exact local versions were Bun `1.4.0`, Solid/universal/compiler `2.0.0-rc.3`, and GPUI pinned to the repository's Zed commit. Official Bun executable guidance was checked at https://bun.sh/docs/bundler/executables. Independent fit review found the project claims honest but the prospective user's Tailwind, turnkey TypeScript JSX, and single-file packaging requirements are not met.
 
 ### 2026-08-27 - Customer-fit roadmap rewrite
-status: active | updated: 2026-08-27
+status: done | updated: 2026-08-27
 
-- [ ] Rewrite ROADMAP.md around release gates for Node/Bun, JSX/TypeScript, styling, overlays, platform evidence, and helper packaging.
-- [ ] Sync the README's consumer-facing support claims with the audited gaps without changing renderer semantics.
-- [ ] Verify the roadmap against the current manifests, source, tests, and official Bun executable guidance.
-- [ ] Record the final roadmap and documentation verification, leaving speculative Tailwind and single-file work as explicit gates.
+- [x] Rewrite ROADMAP.md around release gates for Node/Bun, JSX/TypeScript, styling, overlays, platform evidence, and helper packaging.
+- [x] Sync the README's consumer-facing support claims with the audited gaps without changing renderer semantics.
+- [x] Verify the roadmap against the current manifests, source, tests, and official Bun executable guidance.
+- [x] Record the final roadmap and documentation verification, leaving speculative Tailwind and single-file work as explicit gates.
+
+#### Verification
+
+- `git diff --check` and structural roadmap/README assertions passed.
+- `bun run test` passed 195 tests; `bun run typecheck`, `bun run check:release`, GUI-skipped cargo tests, `cargo clippy --all-targets -- -D warnings`, and `cargo fmt --all -- --check` passed. Cargo emitted only the known non-blocking `block v0.1.6` future-incompatibility warning.
+- Independent review of commit `9c90ab6` returned `CLEAN/MERGEABLE`; the roadmap is gate-based and its Node/Bun, JSX, Tailwind, popup, helper, and platform claims match the source and ADRs.
