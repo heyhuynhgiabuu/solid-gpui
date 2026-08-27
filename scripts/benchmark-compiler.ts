@@ -12,6 +12,8 @@
  * limitations under the License.
  */
 
+/// <reference path="./benchmark-compiler-types.d.ts" />
+
 import { unlink, writeFile } from "node:fs/promises"
 import { fileURLToPath, pathToFileURL } from "node:url"
 import { resolve } from "node:path"
@@ -264,7 +266,7 @@ function compile(): string {
     plugins: [[solidPlugin, { moduleName: "@solid-gpui/solid/jsx", generate: "universal" }]],
     parserOpts: { plugins: ["jsx", "typescript"] },
   })
-  if (!output.code) throw new Error("compiler returned no JavaScript output")
+  if (!output?.code) throw new Error("compiler returned no JavaScript output")
   return output.code
 }
 
