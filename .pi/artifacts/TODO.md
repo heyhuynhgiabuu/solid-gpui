@@ -1502,9 +1502,16 @@ status: done | updated: 2026-08-27
 - Independent review of commit `a1c026c` returned `CLEAN/MERGEABLE`.
 
 ### 2026-08-27 - Measurement foundation: deterministic Solid 2 baseline
-status: active
+status: done | updated: 2026-08-27
 
-- [ ] Add a headless Solid 2 benchmark matrix for signal-to-mutation and flush/batch metrics without changing renderer semantics.
-- [ ] Report reproducible p50/p95/p99 timings, mutation counts/categories, batch sizes, and runtime/compiler metadata.
-- [ ] Add the benchmark command and document the baseline methodology in the roadmap.
-- [ ] Run focused tests/typecheck and obtain an independent review before closing the slice.
+- [x] Add a headless Solid 2 benchmark matrix for signal-to-mutation and flush/batch metrics without changing renderer semantics.
+- [x] Report reproducible p50/p95/p99 timings, mutation counts/categories, batch sizes, and runtime/compiler metadata.
+- [x] Add the benchmark command and document the baseline methodology in the roadmap.
+- [x] Run focused tests/typecheck and obtain an independent review before closing the slice.
+
+#### Verification
+
+- `bun run benchmark:solid` passed under `--conditions=browser`: four scenarios, 400 measured updates each, expected one batch per update, and expected mutation categories/counts.
+- `bun run test` passed with 195 tests and `bun run typecheck` passed for protocol, client, and solid packages.
+- Dedicated strict typecheck for `scripts/benchmark-solid.ts` passed with Bun types and DOM libraries.
+- Independent review of commit `b1abdfd` returned `CLEAN/MERGEABLE`.
