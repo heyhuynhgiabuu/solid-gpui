@@ -14,7 +14,7 @@
 
 import { describe, expect, test } from "bun:test"
 import { createSignal } from "solid-js"
-import type { Mutation, MutationBatch, SolidGpuiEvent } from "@solid-gpui/protocol"
+import { EVENT_TYPES, type Mutation, type MutationBatch, type SolidGpuiEvent } from "@solid-gpui/protocol"
 import {
   createComponent,
   createElement,
@@ -166,6 +166,84 @@ describe("select primitives", () => {
       resetJsxRuntime()
     }
   })
+})
+
+test("keeps deferred S14b edges explicit", async () => {
+  const rec = recording()
+  const suite = initJsxRuntime(rec.send)
+  const container = createElement("#root")
+
+  try {
+    const dispose = suite.render(
+      () =>
+        createComponent(
+          select.Root,
+          {
+            value: "red",
+            onValueChange: () => {},
+            children: () => [
+              createComponent(select.Trigger, { children: () => createTextNode("Color") }),
+              createComponent(select.Content, {
+                children: () => createComponent(select.Item, {
+                  value: "red",
+                  children: () => createTextNode("Red"),
+                }),
+              }),
+            ],
+          },
+        ) as HostNode,
+      container,
+    )
+    await suite.flush()
+
+    const mutations = (): Mutation[] => rec.batches.flatMap((batch) => batch.mutations)
+    const triggerId = rec.batches[0]?.mutations.find(
+      (mutation): mutation is Extract<Mutation, { op: "setEventListener" }> =>
+        mutation.op === "setEventListener" && mutation.eventType === "click",
+    )?.id
+    expect(triggerId).toBeDefined()
+    expect(
+      mutations().some(
+        (mutation) =>
+          mutation.op === "setEventListener" &&
+          (mutation.eventType === "mouseDown" || mutation.eventType === "mouseUp"),
+      ),
+    ).toBe(false)
+
+    // Outside-click dismissal and IME composition suppression are deliberate
+    // deferred edges: there is no global pointer listener or composition event
+    // in this protocol contract for S14b to consume.
+    const protocolEvents = EVENT_TYPES as readonly string[]
+    expect(protocolEvents).not.toContain("compositionStart")
+    expect(protocolEvents).not.toContain("compositionEnd")
+
+    if (triggerId === undefined) throw new Error("select trigger listener was not mounted")
+    suite.handler(triggerId, "click")?.(event(triggerId, "click"))
+    await suite.flush()
+
+    const opened = mutations()
+    const contentId = opened.find(
+      (mutation): mutation is Extract<Mutation, { op: "setDeferred" }> =>
+        mutation.op === "setDeferred" && mutation.deferred,
+    )?.id
+    expect(contentId).toBeDefined()
+    if (contentId === undefined) throw new Error("select content was not deferred")
+    expect(opened).toContainEqual(
+      expect.objectContaining({ op: "setAnchored", id: contentId, anchor: "topLeft" }),
+    )
+    expect(opened).toContainEqual(
+      expect.objectContaining({
+        op: "setAccessibility",
+        id: contentId,
+        accessibility: expect.objectContaining({ role: "listbox" }),
+      }),
+    )
+
+    dispose()
+    await suite.flush()
+  } finally {
+    resetJsxRuntime()
+  }
 })
 
 describe("combobox primitives", () => {

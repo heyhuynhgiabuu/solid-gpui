@@ -113,9 +113,19 @@ selected state:
 `combobox.Root` uses the same `Content`/`Item` primitives with an editable
 `combobox.Trigger`. Values are controlled; item `value`/`disabled` are static definitions (remount
 an item when they change), filtering remains caller-owned, and multi-select,
-uncontrolled state, native popup windows, and outside-click dismissal are not
-part of S14b. Try the real window demo with
-`bun run example/select`.
+uncontrolled state, native popup windows, outside-click dismissal, and
+IME-composition arrow suppression are not part of S14b. Try the real window
+demo with `bun run example/select`.
+
+## Trust boundary for JavaScript
+
+The TypeScript renderer is a **trusted-code API**, not a sandbox. Component
+functions, event handlers, reactive props, and desktop command arguments run
+in the caller's JavaScript process; validate application data before passing it
+to `render`, `mountJsx`, `h`, or command APIs. The protocol decoder validates
+JSON shape, version, and supported operation/event/element names, but it does
+not authorize filesystem or shell paths, or make arbitrary JavaScript safe.
+The helper never evaluates JavaScript received over the wire.
 
 ## Window, dialogs, shell (P4)
 
