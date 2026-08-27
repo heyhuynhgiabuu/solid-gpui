@@ -134,6 +134,23 @@ those host-side states and the benchmark asserts zero retained host state
 after every cycle. The RSS result remains an observation rather than an
 optimization claim or threshold.
 
+The compiler comparison baseline is available with:
+
+```sh
+bun run benchmark:compiler
+```
+
+It transforms a 200-row Solid 2 JSX fixture with the pinned
+`@solidjs/babel-plugin@2.0.0-rc.3` under the `browser` condition, then compares
+compiled JSX with a runtime `h()` builder through the same renderer, signal,
+flush, and recording-send boundary. It reports transform/output size,
+helper imports, mount/update mutation shapes, cleanup counts, and p50/p95/p99
+runtime timings. It intentionally excludes real IPC, helper/GPUI work, and
+font/GPU presentation. The current fixture flags operation-shape differences:
+compiled universal insertion emits more mount and per-update create/remove
+work than `h()`; the benchmark records that result rather than assuming that
+smaller generated JavaScript means a faster renderer path.
+
 ### 2. Solid 2 RC maintenance and optimization
 
 - Keep the existing `flushSolid()`-then-microtask drain contract and test that

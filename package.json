@@ -12,6 +12,7 @@
     "benchmark:stdio": "bun run scripts/benchmark-stdio.ts",
     "benchmark:gpui": "bun run scripts/benchmark-gpui.ts",
     "benchmark:lifecycle": "bun run scripts/benchmark-lifecycle.ts",
+    "benchmark:compiler": "bun --conditions=browser run scripts/benchmark-compiler.ts",
     "build": "(cd packages/protocol && bunx tsdown) && (cd packages/client && bunx tsdown) && (cd packages/solid && bunx tsdown)",
     "check:release": "node scripts/check-release.mjs",
     "demo": "bun scripts/demo.ts",

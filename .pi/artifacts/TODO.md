@@ -1572,3 +1572,11 @@ status: done | updated: 2026-08-27
 - RED was observed before the fix: cycle 0 retained `focusSubscriptions=2`; the post-fix probe reports all host-state counts zero after every cycle.
 - `cargo test -p solid-gpui-helper headless_lifecycle -- --nocapture` passed both non-ignored lifecycle regressions; Clippy and fmt passed.
 - Independent review of commit `dc28844` returned `CLEAN/MERGEABLE`.
+
+### 2026-08-27 - Measurement foundation: compiled JSX versus runtime h()
+status: active
+
+- [ ] Define a version-pinned compiler comparison that measures compiled JSX and runtime `h()` output at the same trusted renderer boundary.
+- [ ] Report transform output, mount/update mutation parity, and timing/size observations without changing compiler or renderer semantics.
+- [ ] Document the compiler comparison command, Solid 2 browser condition, and interpretation limits.
+- [ ] Run focused/full verification and obtain an independent review before closing the slice.

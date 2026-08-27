@@ -783,3 +783,10 @@
   `1.227/1.328/1.371ms`; update draw `1.217/1.275/1.564ms`; destroy
   draw `0.041/0.047/0.051ms`. RSS rose about 10.8MB in this process, so it
   remains an observational signal rather than an allocation conclusion.
+- [discovery] One macOS arm64 compiler comparison (Solid/universal/plugin
+  `2.0.0-rc.3`, browser condition, 200 rows) found operation-shape parity
+  false: compiled JSX emitted 2,003 mount mutations and 800 per update,
+  while runtime `h()` emitted 1,203 and 200. Update latency p50/p95/p99 was
+  `0.152/0.260/3.418ms` compiled vs `0.047/0.055/0.057ms` with `h()`.
+  Treat this as a fixture-specific interoperability/optimization signal, not
+  evidence to change the renderer or add a threshold.

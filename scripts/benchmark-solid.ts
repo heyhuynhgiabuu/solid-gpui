@@ -374,7 +374,7 @@ const report = {
   },
   compiler: {
     exercised: false,
-    note: "This baseline uses runtime h()/renderer calls; compiler output is a separate benchmark dimension.",
+    note: "This baseline uses runtime h()/renderer calls; compare compiled JSX with benchmark:compiler.",
   },
   config: {
     rows: ROWS,
