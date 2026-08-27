@@ -795,3 +795,21 @@
   compiled input/event, and real client→helper stdio checks (15 acks), but its
   `solid-js/universal` plus one-callback compiler effect contract requires a
   separately named adapter/package rather than runtime feature detection.
+
+## Prospective SaaS fit audit (2026-08-27)
+
+- [audit] The bridge is a credible native UI prototype for a macOS-first,
+  sidecar-helper app, not a turnkey native-client distribution. JSX executes via
+  the Solid 2 rc.3 universal Babel plugin, but the public README still leads
+  with `h()` and the custom package lacks renderer-owned `jsx-runtime` type
+  entries, so standard consumer TypeScript JSX currently fails.
+- [gap] Tailwind/class-based styling is absent. `StyleMap` is a limited
+  camelCase string/number surface and unknown props, including `className`, are
+  ignored; do not describe the project as Tailwind-compatible.
+- [gap] `bun build --compile` bundles the JS/Bun side only. The client resolves
+  a separate helper executable from an env path, dev target, or platform npm
+  package; a compiled app needs an explicit sidecar or extraction/signing
+  design. The local compiled resolver probe failed without that external helper.
+- [fit] S14b covers only controlled in-window single-select/combobox overlays;
+  P9 covers a macOS application menu bar. Neither is a general native popup
+  subsystem, and multi-window is one helper process/window per connection.

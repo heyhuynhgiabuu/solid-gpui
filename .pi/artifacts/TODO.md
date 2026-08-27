@@ -1603,3 +1603,21 @@ status: done | updated: 2026-08-27
 - The probe reported schema `solid-gpui-solid1-compat/v1`, three lifecycle cycles with one mount/update/destroy batch each, cleanup and ownership checks, keyed IDs reordered by `insertBefore` without recreation, compiled input/event updates, and 15 correlated client/helper acknowledgements.
 - `bun run test` passed 195 tests; `bun run typecheck`, `bun run check:release`, GUI-skipped cargo tests, `cargo clippy --all-targets -- -D warnings`, and `cargo fmt --all -- --check` passed. The only cargo output was the known non-blocking `block v0.1.6` future-incompatibility warning.
 - Independent review of commit `28b0b07` returned `CLEAN/MERGEABLE`. The root package remains Solid 2-only; no Solid 1 imports or dependencies entered the production workspace.
+
+### 2026-08-27 - Brutal SaaS fit audit
+status: done | updated: 2026-08-27
+
+- [x] Map the Reddit user's native-client, JSX, popup/menu, Tailwind/TypeScript DX, and packaging expectations to verified repository behavior.
+- [x] Check current packaging and helper-binary distribution against the `bun build --compile` assumption.
+- [x] Report hard blockers, partial fits, unknowns, and a recommendation without implying prerelease behavior is production-ready.
+- [x] Capture source/version evidence and independently sanity-check the audit.
+
+#### Findings and verification
+
+- Native UI is real but the architecture is two processes: `render()`/`mountJsx()` starts one Rust GPUI helper window. Multiple windows are not a first-class shared application model.
+- JSX is executable through the pinned Solid 2 rc.3 Babel universal plugin and custom runtime, but the public README still leads with `h()` and the package lacks the custom `jsx-runtime`/`jsx-dev-runtime` type entries required for standard TypeScript JSX configuration.
+- S14b provides an in-window anchored/deferred controlled single-select and combobox; native popup windows, pointer outside-click dismissal, IME arrow suppression, and richer menu behavior remain outside the contract. P9's application menu bar is a separate macOS surface.
+- Tailwind is not supported: there is no Tailwind/CSS integration, `StyleMap` is a limited camelCase key/value API, and an empirical `className` probe emitted only `createElement` because unknown props are ignored (`packages/solid/src/renderer.ts:651`).
+- The naive compiled-app assumption is false for this architecture. `bun build --compile --target=bun-darwin-arm64` produced a Bun executable, but running it without an external helper reported the compiled `/target/debug/solid-gpui-helper` path and no optional helper package. A sidecar/extraction/signing strategy is required.
+- `bunx tsc` against a representative consumer `.tsx` exited 2 with missing `JSX.IntrinsicElements` and `@solid-gpui/solid/jsx-runtime`; the installed `@solidjs/universal@2.0.0-rc.3` guidance requires those renderer-owned entries.
+- Exact local versions were Bun `1.4.0`, Solid/universal/compiler `2.0.0-rc.3`, and GPUI pinned to the repository's Zed commit. Official Bun executable guidance was checked at https://bun.sh/docs/bundler/executables. Independent fit review found the project claims honest but the prospective user's Tailwind, turnkey TypeScript JSX, and single-file packaging requirements are not met.
