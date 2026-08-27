@@ -1488,9 +1488,15 @@ of the completed technical assessment, then rerun the same workflow.
       Node.js 20 action deprecation annotations remained.
 
 ### 2026-08-27 - Solid 1/Solid 2 optimization roadmap and documentation consistency
-status: active
+status: done | updated: 2026-08-27
 
-- [ ] Record the versioned Solid 1 and Solid 2 RC research and a measurement-first optimization roadmap.
-- [ ] Update README platform and compatibility wording to match hosted evidence and current package support.
-- [ ] Add selective ignores for ephemeral Pi state and scratch probes without hiding canonical `.pi` artifacts.
-- [ ] Close stale S7–S12 status metadata and verify the documentation-only diff.
+- [x] Record the versioned Solid 1 and Solid 2 RC research and a measurement-first optimization roadmap in `ROADMAP.md` (`a1c026c`).
+- [x] Update README platform and compatibility wording to match hosted evidence and current package support.
+- [x] Add selective ignores for ephemeral Pi state and scratch probes without hiding canonical `.pi` artifacts.
+- [x] Close stale S7–S12 status metadata and verify the documentation-only diff with exact historical-content preservation.
+
+#### Verification
+
+- `git diff --check`, documentation whitespace checks, and `bun run check:release` passed.
+- Official Solid documentation links and npm version metadata were checked for Solid `1.9.15` and `2.0.0-rc.3`.
+- Independent review of commit `a1c026c` returned `CLEAN/MERGEABLE`.
