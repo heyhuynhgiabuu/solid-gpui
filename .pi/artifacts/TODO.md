@@ -1500,3 +1500,11 @@ status: done | updated: 2026-08-27
 - `git diff --check`, documentation whitespace checks, and `bun run check:release` passed.
 - Official Solid documentation links and npm version metadata were checked for Solid `1.9.15` and `2.0.0-rc.3`.
 - Independent review of commit `a1c026c` returned `CLEAN/MERGEABLE`.
+
+### 2026-08-27 - Measurement foundation: deterministic Solid 2 baseline
+status: active
+
+- [ ] Add a headless Solid 2 benchmark matrix for signal-to-mutation and flush/batch metrics without changing renderer semantics.
+- [ ] Report reproducible p50/p95/p99 timings, mutation counts/categories, batch sizes, and runtime/compiler metadata.
+- [ ] Add the benchmark command and document the baseline methodology in the roadmap.
+- [ ] Run focused tests/typecheck and obtain an independent review before closing the slice.

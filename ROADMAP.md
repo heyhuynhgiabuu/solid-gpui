@@ -73,6 +73,21 @@ measurement is headless or GUI-backed. Establish baselines before adding CI
 performance thresholds; platform-specific thresholds must not be inferred
 from macOS measurements.
 
+The first headless Solid 2 baseline is available with:
+
+```sh
+bun run benchmark:solid
+```
+
+It emits schema `solid-gpui-solid-benchmark/v1` and asserts deterministic
+mutation expectations for a single dependent text update, a 200-row fan-out,
+100 independent signals committed by one flush, and a single dependent style
+update. It reports update latency, mutation counts/categories, encoded UTF-8
+batch sizes, and the pinned runtime/compiler metadata. The recording send is
+intentional: this isolates Solid and renderer scheduling; JSON timing, real
+child-process IPC, GPUI layout/paint, and memory measurements remain separate
+follow-up dimensions.
+
 ### 2. Solid 2 RC maintenance and optimization
 
 - Keep the existing `flushSolid()`-then-microtask drain contract and test that
