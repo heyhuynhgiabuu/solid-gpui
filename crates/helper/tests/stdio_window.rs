@@ -350,40 +350,46 @@ fn window_mode_focus_events_via_focus_element() {
     std::thread::sleep(std::time::Duration::from_millis(150));
 
     // Focus element 2. gpui defers focus-event dispatch to the next frame,
-    // so the reply precedes the event line: assert the reply, then wait for
-    // the frame that dispatches the focus event.
+    // but the reply and the event are written by DIFFERENT threads (replies
+    // by the stdin thread, events by the GPUI main thread) under the same
+    // process-global stdout lock — which line wins the lock first is a
+    // scheduling race, not a contract (observed flipping with machine load
+    // and build configuration). Assert the pair order-free, like the
+    // blur/focus pair below.
     let line = r#"{"type":"focusElement","seq":71,"id":2}"#;
     writeln!(stdin, "{line}").unwrap();
     stdin.flush().unwrap();
-    assert_eq!(
-        lines.next().unwrap().unwrap(),
-        r#"{"type":"result","seq":71,"value":{"applied":true}}"#
-    );
+    let first = lines.next().unwrap().unwrap();
     std::thread::sleep(std::time::Duration::from_millis(150));
-    assert_eq!(
-        lines.next().unwrap().unwrap(),
-        r#"{"type":"event","id":2,"eventType":"focus"}"#
-    );
-
-    // Move focus to 3: element 2 blurs, element 3 focuses (order-free).
-    let line = r#"{"type":"focusElement","seq":72,"id":3}"#;
-    writeln!(stdin, "{line}").unwrap();
-    stdin.flush().unwrap();
-    assert_eq!(
-        lines.next().unwrap().unwrap(),
-        r#"{"type":"result","seq":72,"value":{"applied":true}}"#
-    );
-    std::thread::sleep(std::time::Duration::from_millis(150));
-    let mut pair = [
-        lines.next().unwrap().unwrap(),
-        lines.next().unwrap().unwrap(),
-    ];
+    let mut pair = [first, lines.next().unwrap().unwrap()];
     pair.sort();
     assert_eq!(
         pair,
         [
+            r#"{"type":"event","id":2,"eventType":"focus"}"#.to_string(),
+            r#"{"type":"result","seq":71,"value":{"applied":true}}"#.to_string(),
+        ]
+    );
+
+    // Move focus to 3: element 2 blurs, element 3 focuses. Same cross-thread
+    // ordering race as above — all three lines arrive order-free.
+    let line = r#"{"type":"focusElement","seq":72,"id":3}"#;
+    writeln!(stdin, "{line}").unwrap();
+    stdin.flush().unwrap();
+    let first = lines.next().unwrap().unwrap();
+    std::thread::sleep(std::time::Duration::from_millis(150));
+    let mut trio = [
+        first,
+        lines.next().unwrap().unwrap(),
+        lines.next().unwrap().unwrap(),
+    ];
+    trio.sort();
+    assert_eq!(
+        trio,
+        [
             r#"{"type":"event","id":2,"eventType":"blur"}"#.to_string(),
             r#"{"type":"event","id":3,"eventType":"focus"}"#.to_string(),
+            r#"{"type":"result","seq":72,"value":{"applied":true}}"#.to_string(),
         ]
     );
 

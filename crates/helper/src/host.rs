@@ -4203,3 +4203,86 @@ mod scrollbar_tests {
         assert_eq!(travel * 0.5, px(37.5));
     }
 }
+
+/// Headless render-path regression (approved seam slice): gpui's in-memory
+/// `TestApp` drives the REAL `HostView::render` -> `build_element` ->
+/// layout/prepaint/paint path through `TestAppWindow::draw` (which calls
+/// `Window::draw`) — no window server, no sleeps, no GUI skip gate. The
+/// observable is the frame counter: `FrameStats::push` is ONLY called from
+/// `HostView::render`, which only runs when the draw path re-renders the
+/// root view, so a draw that short-circuited (mock render, cached frame)
+/// would leave the counter untouched.
+#[cfg(test)]
+mod headless_render_tests {
+    use super::*;
+
+    /// The production wire shape, applied through the same entry point the
+    /// stdin thread uses (`RetainedTree::apply`): a root div with a styled
+    /// text child.
+    fn apply_seam_tree(view: &mut HostView) {
+        let mutations = [
+            Mutation::CreateElement {
+                id: ElementId(1),
+                element_type: ElementType::Div,
+            },
+            Mutation::CreateElement {
+                id: ElementId(2),
+                element_type: ElementType::Text,
+            },
+            Mutation::SetRoot { id: ElementId(1) },
+            Mutation::AppendChild {
+                parent_id: ElementId(1),
+                child_id: ElementId(2),
+            },
+            Mutation::SetStyle {
+                id: ElementId(1),
+                style: [(
+                    "backgroundColor".to_string(),
+                    StyleValue::Text("#1e1e2e".to_string()),
+                )]
+                .into_iter()
+                .collect(),
+                state: None,
+            },
+            Mutation::SetText {
+                id: ElementId(2),
+                text: "headless render seam".to_string(),
+            },
+        ];
+        for m in mutations {
+            view.tree.apply(&m).expect("seam mutation applies");
+        }
+    }
+
+    #[test]
+    fn draw_runs_host_view_render_through_layout_prepaint_paint() {
+        let mut app = gpui::TestApp::new();
+        let mut window = app.open_window(|_, _cx| HostView::new());
+
+        // Every draw() must run the real render path: the frame counter
+        // advances per draw, even on an empty tree (placeholder path).
+        let before = window.read(|view, _| view.stats.frames());
+        window.draw();
+        let after = window.read(|view, _| view.stats.frames());
+        assert!(
+            after > before,
+            "draw() must run HostView::render (frames {before} -> {after})"
+        );
+
+        // A retained tree applied through the wire entry point reaches
+        // build_element: the next draw re-renders and counts another frame.
+        window.update(|view, _, _| apply_seam_tree(view));
+        let before = window.read(|view, _| view.stats.frames());
+        window.draw();
+        let after = window.read(|view, _| view.stats.frames());
+        assert!(
+            after > before,
+            "draw() after applying a retained tree must re-render (frames {before} -> {after})"
+        );
+
+        // Cleanup: shut the in-memory app down so the test leaves nothing
+        // behind (mirrors gpui's own TestApp tests).
+        drop(window);
+        app.update(|cx| cx.shutdown());
+    }
+}

@@ -43,3 +43,12 @@ tree-sitter-html = "=0.23.2"
 gpui_platform = { git = "https://github.com/zed-industries/zed", features = [
     "font-kit",
 ] }
+
+[dev-dependencies]
+# Headless render seam: gpui's in-memory TestApp/TestWindow drive the real
+# Render -> layout/prepaint/paint path with no window server. Same git source
+# as the production dep (Cargo.lock pins the exact commit); the feature only
+# exists in test builds.
+gpui = { git = "https://github.com/zed-industries/zed", features = [
+    "test-support",
+] }
