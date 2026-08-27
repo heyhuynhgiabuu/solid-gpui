@@ -1547,16 +1547,28 @@ status: done | updated: 2026-08-27
 - Independent review of commit `cf28b81` returned `CLEAN/MERGEABLE`.
 
 ### 2026-08-27 - Measurement foundation: lifecycle and retention baseline
-status: active
+status: done | updated: 2026-08-27
 
-- [ ] Define a deterministic mount/update/destroy measurement that checks retained-tree and HostView lifecycle counts after every cycle.
-- [ ] Measure lifecycle apply/draw timings and test-only live allocation observations without changing runtime ownership semantics or adding thresholds.
-- [ ] Document the lifecycle boundary, allocator/platform limits, and command in the roadmap.
-- [ ] Run focused/full verification and obtain an independent review before closing the slice.
+- [x] Define a deterministic mount/update/destroy measurement that checks retained-tree and HostView lifecycle counts after every cycle.
+- [x] Measure lifecycle apply/draw timings and test-only live allocation observations without adding thresholds.
+- [x] Document the lifecycle boundary, allocator/platform limits, and command in the roadmap.
+- [x] Run focused/full verification and obtain an independent review before closing the slice.
+
+#### Verification
+
+- `bun run benchmark:lifecycle` passed 20 unique-id mount/update/destroy cycles, clearing 1,120 retained ids and reporting p50/p95/p99 lifecycle timings plus RSS observations.
+- The initial RED run exposed retained list/focus host state; cleanup now passes the non-ignored regression and reports zero host state after every destroy draw.
+- Independent review of commit `dc28844` returned `CLEAN/MERGEABLE`.
 
 ### 2026-08-27 - Lifecycle cleanup for measured host-state retention
-status: active
+status: done | updated: 2026-08-27
 
-- [ ] Prune host-side list caches, focus subscriptions, pending key state, and drag/autofocus state when retained ids disappear.
-- [ ] Add a regression assertion that unique-id mount/destroy cycles leave no host state behind.
-- [ ] Re-run lifecycle/full verification and obtain an independent review before closing the follow-up.
+- [x] Prune host-side list caches, focus subscriptions, pending key state, and drag/autofocus state when retained ids disappear.
+- [x] Add a regression assertion that unique-id mount/destroy cycles leave no host state behind.
+- [x] Re-run lifecycle/full verification and obtain an independent review before closing the follow-up.
+
+#### Verification
+
+- RED was observed before the fix: cycle 0 retained `focusSubscriptions=2`; the post-fix probe reports all host-state counts zero after every cycle.
+- `cargo test -p solid-gpui-helper headless_lifecycle -- --nocapture` passed both non-ignored lifecycle regressions; Clippy and fmt passed.
+- Independent review of commit `dc28844` returned `CLEAN/MERGEABLE`.

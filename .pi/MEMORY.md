@@ -778,3 +778,8 @@
   prunes all id-keyed host state and rebuilds focus subscriptions when any
   subscribed id disappears. A 20-cycle stateful probe now clears 1,120 ids
   and all host-state maps after every destroy draw.
+- [discovery] Post-fix macOS arm64 lifecycle observations over 20 cycles:
+  mount apply/draw p50/p95/p99 `0.178/0.202/0.239ms` and
+  `1.227/1.328/1.371ms`; update draw `1.217/1.275/1.564ms`; destroy
+  draw `0.041/0.047/0.051ms`. RSS rose about 10.8MB in this process, so it
+  remains an observational signal rather than an allocation conclusion.
