@@ -25,13 +25,13 @@ Solid JSX + signals → NDJSON mutation batches → Rust helper → GPUI window
 The project should make the following distinction explicit:
 
 - **Supported today:** a macOS-first, prerelease native UI with Solid
-  `2.0.0-rc.3`, a separate helper process, typed GPUI style maps, and basic
-  in-window select/combobox overlays.
+  `2.0.0-rc.3`, a separate helper process, renderer-owned JSX/TypeScript
+  declarations, typed GPUI style maps, and basic in-window select/combobox
+  overlays.
 - **Supported direction:** the same client transport from Node.js or Bun.js,
   with the same renderer contract and browser-conditioned Solid runtime.
-- **Not supported today:** full Tailwind/CSS compatibility, turnkey consumer
-  TypeScript JSX types, a single-file native executable, or packaged Linux and
-  Windows GUI support.
+- **Not supported today:** full Tailwind/CSS compatibility, a single-file native
+  executable, or packaged Linux and Windows GUI support.
 
 A prospective application that requires the last line is **no-go until the
 corresponding gates below pass**. A macOS-first application that accepts a
@@ -45,7 +45,7 @@ sidecar helper and custom style maps can run an early vertical spike now.
 | Process model | One JavaScript client process talks to one Rust helper process over NDJSON | Keep as the current default; do not replace it merely to simplify packaging. ADR 002 leaves room for a future in-process N-API backend behind the same protocol seam if the upstream runloop support lands |
 | JavaScript host | Client uses Node-compatible `node:` APIs; real Bun and Node smoke paths exist | Formalize both Node and Bun support with consumer fixtures |
 | Solid | `solid-js`, `@solidjs/universal`, `@solidjs/web`, and compiler pinned to `2.0.0-rc.3` | Solid 2 only; every entry point needs `--conditions=browser` |
-| JSX | Universal Babel plugin and `mountJsx()` work; `h()` remains the lower-level API | Make JSX and consumer TypeScript first-class before calling it polished |
+| JSX | Universal Babel plugin and `mountJsx()` work; renderer-owned types pass an external `.tsx` fixture and Bun/Node real-helper smoke; `h()` remains the lower-level API | Keep the Solid compiler/runtime versions aligned and retain the universal Babel transform |
 | Styling | Typed camelCase `StyleMap` with a GPUI subset; unknown props are ignored | Do not claim Tailwind support |
 | Overlays | Controlled single-select/combobox uses in-window `anchored` + `deferred` content | Basic dropdown fit; generic popover semantics incomplete |
 | Application menus | P9 application menu bar with submenus, separators, shortcuts, and macOS native actions | Separate macOS app-chrome feature, not a dropdown replacement |
@@ -152,7 +152,9 @@ must say so.
 Keep the existing S14b controlled primitives as the minimum baseline, then
 finish the semantics a SaaS client normally needs:
 
-- pointer outside-click dismissal;
+- pointer outside-click dismissal (headless-landed in Gate 3-a: protocol
+  `outsideClick` event, helper detector, select wiring, TestApp proof; real
+  GUI evidence still owed for full Gate 3 closure);
 - focus transfer and restoration;
 - keyboard navigation and selection behavior;
 - IME-composition-safe arrow handling;

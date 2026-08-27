@@ -800,9 +800,11 @@
 
 - [audit] The bridge is a credible native UI prototype for a macOS-first,
   sidecar-helper app, not a turnkey native-client distribution. JSX executes via
-  the Solid 2 rc.3 universal Babel plugin, but the public README still leads
-  with `h()` and the custom package lacks renderer-owned `jsx-runtime` type
-  entries, so standard consumer TypeScript JSX currently fails.
+  the Solid 2 rc.3 universal Babel plugin, and Gate 1 now provides renderer-owned
+  `jsx-runtime`/`jsx-dev-runtime` declarations plus a passing external `.tsx`
+  fixture and Bun/Node real-helper smoke. Runtime lowering still requires the
+  universal Babel transform; the React-style automatic JSX transform is not
+  supported.
 - [gap] Tailwind/class-based styling is absent. `StyleMap` is a limited
   camelCase string/number surface and unknown props, including `className`, are
   ignored; do not describe the project as Tailwind-compatible.
@@ -832,3 +834,23 @@
   order rather than a strict P0/P1 priority sort, and the out-of-process helper is
   the current default while ADR 002 permits a future protocol-compatible N-API
   backend if upstream runloop support lands.
+- [warning] Repo-root `bun test` discovers any `tests/*.test.ts` with no bunfig
+  filter — a wrapper test that spawns a real-helper smoke breaks the CI ts job
+  (ubuntu builds no helper). Pattern: repo-root wrappers keep typecheck-only
+  tests unconditional and `test.skip` anything needing `target/debug/
+  solid-gpui-helper`, using the smoke script's exact resolution predicate.
+- [learning] The herdr task backend can terminate reviewer agents mid-run
+  (`stopReason error/terminated`; six occurrences 2026-08-27). If the final
+  verdict message was emitted before termination, it survives in the persisted
+  `.pi/artifacts/tasks/sessions/<id>/*.jsonl` transcript and counts as the
+  review evidence; record the truncation caveat in TODO instead of silently
+  claiming or discarding the review. WORKAROUND that completed when herdr kept
+  dying: launch `agent_type: general` instead of reviewer — it routes to the
+  openai-codex backend, which finished its envelope normally.
+- [feature] Gate 2 shipped (2026-08-27): `class` prop = Tailwind-compatible
+  SUBSET compiler (packages/solid/src/utilities.ts), merged UNDER the explicit
+  `style` prop into one complete base map per emission; hover:/active:
+  variants ride P1-c state layers; everything outside docs/tailwind-subset.md
+  warns by token. Deviations: flex-1 has no basis-0 component, bare `rounded`
+  = 4px, minus prefix is margins-only, 4-digit #rgba hex refused (8-digit
+  passes through host rgba path).

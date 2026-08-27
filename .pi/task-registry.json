@@ -1,1 +1,23 @@
-[]
+[
+  {
+    "id": "mtah5dxt-6ecf",
+    "agentType": "general",
+    "description": "Implement headless render seam",
+    "sessionName": "task-mtah5dxt-6ecf",
+    "startedAt": 1787771770387,
+    "handle": {
+      "backend": "herdr",
+      "resourceId": "wQ:p1",
+      "socketPath": "/Users/huynhgiabuu/.config/herdr/herdr.sock",
+      "terminalId": "term_659f80cf8141735",
+      "agentName": "general-mtah5dxt",
+      "foregroundProcessGroupId": 45455,
+      "workspaceId": "wQ",
+      "workspaceGroup": "technical-probes"
+    },
+    "piDir": "/Users/huynhgiabuu/dev/projects/solid-gpui/.pi",
+    "dir": "/Users/huynhgiabuu/dev/projects/solid-gpui/.pi/artifacts/tasks",
+    "cwd": "/Users/huynhgiabuu/dev/projects/solid-gpui-headless",
+    "backend": "herdr"
+  }
+]

@@ -1,20 +1,5 @@
 # TODO
 
-### 2026-08-24 - Phase 0: architecture due diligence for Solid + GPUI OSS repo
-status: done (2026-08-24 — Q1–Q3 decided, spec frozen; community probe moved to Phase 1 block)
-
-- [x] Research the prior-art bridge repo (architecture, license gap, npm traction, fork burden) — prior session
-- [x] Analyze fork embed patch (`MacPlatform::new_embedded` + `pump_events`, 1 file, +316/−31)
-- [x] Verify upstream PR zed-industries/zed#63077 status: open, not merged, bot-review only, created 2026-08-22
-- [x] Verify licensing: `gpui` + platform subcrates are Apache-2.0; Zed repo carries dual LICENSE-APACHE/LICENSE-GPL
-- [x] User decision Q1: process architecture → **C: out-of-process helper** (ADR 002, 2026-08-24)
-- [x] User decision Q2: repo license → **Apache-2.0** (ADR 003, 2026-08-24)
-- [x] User decision Q3: repo name → **solid-gpui** (local dir `gpuis` still to be renamed by user; renaming under a live session breaks cwd)
-- [x] Freeze Phase 1 spec + slices in PLAN.md after Q1–Q3 (spec frozen 2026-08-24)
-- [x] Community probe (r/solidjs, Solid Discord) — drafts written (casual
-      tone, 3 variants) in .pi/artifacts/community-post-draft.md (27dc273);
-      posting itself is the user's action. 2026-08-25.
-
 ### 2026-08-24 - Slice 6: event backchannel (GPUI clicks → Solid handlers)
 status: Phase 1 CLOSED 2026-08-24 (reviewer: mergeable, 0 blocker/major).
 Three reviewer minors fixed in a39c08f (handler-throw containment, SIGINT
@@ -50,488 +35,6 @@ client tries decodeReply then decodeEvent per line. bun --hot remount works via
 setRoot-replace semantics (previous root destroyed on second mount).
 
 Cross-ref: PLAN.md#2026-08-24---solid--gpui-oss-repo-spec-frozen-2026-08-24-after-q1q3
-
-### 2026-08-24 - Slice 5: Solid renderer (@solid-gpui/solid)
-status: done (2026-08-24, commits 250e7e2 + review fixes b8e5c42)
-
-Seam under test: `createSolidRenderer({ send })` — universal-renderer methods map to
-protocol mutations; `send` injectable (RecordingSend in unit tests, real helper
-connection in demo). JSX via automatic runtime through our jsx-runtime (no
-babel-preset-solid in bun).
-
-- [x] Verify solid-js 2.0.0-rc.1 universal API surface — createRenderer in
-      @solidjs/universal (separate pkg now); solid-js main has no renderer;
-      **critical discovery**: node/worker/deno conditions → SSR stubs, need
-      --conditions=browser (upstream issue #2569)
-- [x] RED: unit test — exact mount sequence + minimal-diff updates (5 tests,
-      all failing on stub/absent renderer)
-- [x] GREEN: renderer + flush (drains solid queue first) + own dispose
-      lifecycle (universal dev-build render lacks cleanupNodes — shadow guard)
-      + makeH hyperscript (JSX needs babel/vite — documented limitation)
-- [x] Integration demo: real helper window renders Solid tree — **user saw the
-      counter window** (Count: 0→3 fine-grained ticks, button color toggle)
-- [x] VERIFY: commit 250e7e2; review mt6ywxoq→mt6z73l2-35e4 verdict
-      findings-should-fix (1 critical: shadow dup entries on keyed moves;
-      3 majors: send-failure loss, live conditions trap in root test,
-      broken jsx-runtime export; minors/notes) — ALL fixed in b8e5c42 with
-      regression tests (For-move+clear unique removals, poison policy,
-      remount destroy, container tracking); README added; root test script
-      browser-conditioned. Slice 5 CLOSED.
-
-Cross-ref: PLAN.md#2026-08-24---solid--gpui-oss-repo-spec-frozen-2026-08-24-after-q1q3
-
-### 2026-08-24 - Slice 4: retained tree + real GPUI rendering
-status: done (2026-08-24, commits 35900a6 + 72d7059 + review fixes 9b57c55)
-
-Seam under test: `RetainedTree` apply/validation (pure data, protocol crate,
-no gpui) → helper `--stdio-window` mode (channels: stdin thread ↔ gpui main,
-applied counts real, apply errors become seq-correlated error replies) →
-style-subset mapping → gpui elements → e2e (GUI-gated) + demo script.
-
-Part 4a (this commit):
-- [x] RED: retained-tree unit tests (apply fixture, error semantics, cycles)
-- [x] GREEN: `retained` module in protocol crate; cargo tests green (12/12)
-- [x] VERIFY: full test suite + clippy/fmt; commit 35900a6
-
-Part 4b:
-- [x] Helper `--stdio-window`: stdin thread + channels + cx.spawn apply loop (72d7059)
-- [x] Style subset mapping → gpui elements; repaint via cx.notify()
-- [x] e2e GUI-gated (bun: fixture ack applied=12; correlated ReplyError test)
-      (rust: stdio_window 1/1; bun client 7/7 window e2e included)
-- [x] Demo script; user visual check — **user saw the fixture render 2026-08-24**
-- [x] Independent review verdict — findings-should-fix: Major cycle hole +
-      3 minors + notes; ALL fixed with regression tests in 9b57c55 (ancestor
-      walk + MAX_DEPTH 256, root-clear on destroy, rgba() 8-digit colors,
-      text-node children rejected, fmt, GUI gating, window-closed reply).
-      Slice 4 CLOSED (commits 35900a6, 72d7059, 9b57c55).
-
-Semantics decided (documented in retained.rs): child must be parentless on
-append/insert (cycle-proof), removeChild keeps element alive for re-append,
-destroyElement returns destroyed ids, setRoot replaceable (bun --hot remount),
-setText requires text-type element.
-
-Cross-ref: PLAN.md#2026-08-24---solid--gpui-oss-repo-spec-frozen-2026-08-24-after-q1q3
-
-### 2026-08-24 - Slice 3: stdio NDJSON IPC (JS client ↔ helper)
-status: done (2026-08-24, commits bf02123 + review fixes 89337fe)
-
-Seam under test: real child process over stdio — helper `--stdio` mode
-(NDJSON in → ack/error NDJSON out, no gpui/GUI), TS `@solid-gpui/client`
-(spawn, per-seq correlation, supervision: pending-reject on exit), `Reply`
-wire type added to the shared protocol (fixture-parity both sides).
-Transport decision: stdio v1 (UDS deferred until measured) — announced to user.
-
-- [x] RED: Rust stdio integration test (spawn binary, ack/error lines, EOF exit 0)
-- [x] GREEN: protocol crate `Reply` + fixture parity; helper `--stdio` loop
-- [x] RED: TS reply-decode test + client tests (module absent)
-- [x] GREEN: `decodeReply` in protocol pkg; `@solid-gpui/client` implementation
-- [x] Node compatibility smoke — NODE SMOKE OK under Node 24 (tsx + root tsconfig
-      paths; bun workspaces emit no node_modules links; import.meta.dir avoided)
-- [x] VERIFY: all tests (bun ×2 pkgs, cargo ×2 crates), typecheck, clippy, fmt;
-      commit; independent review before closing
-
-Run report (2026-08-24): RED observed all four stages. GREEN: bun protocol 20/20,
-bun client 6/6 (real child), cargo 16 tests (incl. stdio integration), tsc ×2,
-clippy clean, NODE SMOKE OK. Reviewer mt6wo1j7-380b verdict findings-should-fix:
-Major 1 (spawn-failure crash/hang) + minors 2-7 + notes — ALL fixed in 89337fe with
-regression tests under both runtimes; note-C missing tests partially covered
-(in-flight kill, dup seq, spawn failure); ReplyError-branch e2e deferred to Slice 4
-(helper cannot emit correlated errors yet, by design). Reviewer fact-check also
-corrected two of my beliefs (see MEMORY).
-
-Cross-ref: PLAN.md#2026-08-24---solid--gpui-oss-repo-spec-frozen-2026-08-24-after-q1q3
-
-### 2026-08-24 - Slice 2: helper binary opens a GPUI window (stock upstream gpui)
-status: done (2026-08-24, commits 31a97d2; user visual confirmation received)
-
-Seam under test: committed Rust→TS cross-language parity (Rust `to_json` output
-snapshotted in-repo and parsed by bun test) and helper smoke run
-(`solid-gpui-helper --smoke <ms>` opens a window, draws, self-quits, exit 0).
-
-- [x] RED: TS parity test fails (rust-emitted fixture absent) + Rust emission test fails
-- [x] GREEN: generate rust-emitted snapshot from `to_json`; both sides pass (cargo 11/11, bun 15/15; commit 61f65f3)
-- [x] Scout: current gpui API on zed main — done directly from upstream sources:
-      `gpui_platform::application()` entry, macOS feature `font-kit`, examples
-      hello_world.rs / on_window_close_quit.rs / window.rs (spawn syntax)
-- [x] Helper crate: git dep gpui, `--smoke` mode — built clean after adding
-      `move` to the run closure; Metal toolchain installed by user (commit 31a97d2)
-- [x] VERIFY: `cargo test -p solid-gpui-helper` 2/2 green (smoke exit 0,
-      ≥700ms elapsed), `cargo run -- --smoke 2000` exit 0 in 2.6s; clippy clean
-      (zed-tree 'block' future-incompat warning only); fmt; commit 31a97d2.
-      User visual confirmation of the window: **confirmed 2026-08-24**
-      (window seen during `--smoke 2000` run). Slice 2 fully done.
-
-Cross-ref: PLAN.md#2026-08-24---solid--gpui-oss-repo-spec-frozen-2026-08-24-after-q1q3
-
-### 2026-08-24 - Slice 1: mutation protocol (TS + Rust) with shared fixture
-status: done (2026-08-24, commit c73e89d)
-
-Seam under test: `encodeBatch`/`decodeBatch` (TS, `@solid-gpui/protocol`) and
-`from_json`/`to_json` + `MutationHandler` (Rust, `solid-gpui-protocol`), plus one shared
-JSON fixture consumed by both languages (cross-language wire contract).
-
-- [x] Scaffold: workspace roots, LICENSE (Apache-2.0), packages/protocol, crates/protocol
-- [x] RED: TS tests (bun test) fail on stubbed encode/decode — 0 pass / 13 fail, stub throw observed
-- [x] GREEN: TS decode/encode with typed ProtocolError (Result, no throw for recoverable) — 13/13 pass
-- [x] RED: Rust tests (cargo test) fail on stubbed from_json — 0 pass / 8 fail, stub Err observed
-- [x] GREEN: Rust serde types + pre-checks (unknownOp, version, eventType, id>=1) — 8/8 pass
-- [x] VERIFY: bun test 13/13 + cargo test 10/10 + tsc noEmit OK + clippy clean; reviewer verdict **clean** (0 critical/major; 5 minors fixed or documented); commit c73e89d
-
-Run report (2026-08-24): RED observed both languages on stubs; GREEN: bun 13/13,
-cargo 8/8→10/10 after review fixes, tsc OK, clippy clean. Reviewer mt6udsof-f64a
-verdict clean (empirical cross-language probes incl. serde byte-shape, __proto__,
-bounds, dup keys); minors fixed: u64 version (no truncation), zero-id field paths,
-NDJSON \n test live, dead branch removed; documented: serde error-path parity
-deferred to Slice 2; note: JS number lossy >2^53 (doc'd in style.ts).
-
-Cross-ref: PLAN.md#2026-08-24---solid--gpui-oss-repo-spec-frozen-2026-08-24-after-q1q3
-
-### 2026-08-24 - S7: perf & visual-test instrumentation (Phase 2 opener)
-status: done (2026-08-24)
-
-- [x] S7a FrameStats (Rust): ring-buffer of build durations, p50/p90/p99/max,
-      frames count; unit-tested (percentile math incl. wraparound/unsorted)
-- [x] S7a Wire into HostView::render (measures build_element wall time);
-      SOLID_GPUI_DEBUG_OVERLAY=1 paints stats block bottom-left via native
-      gpui styling (no StyleValue protocol change); overlay run verified no-crash
-- [x] S7b Wire command family: type field carries the command name
-      ({"type":"getStats","seq":N} / {"type":"captureFrame","seq","path"});
-      Reply gains Result{seq,value}; ReplyCode gains unsupported +
-      unknownCommand; TS decodeCommand/encodeCommand + client sendCommand
-      with seq correlation; fixtures parsed by BOTH languages (d1b3520)
-- [x] S7b captureFrame {path} command: helper grabs own window by pid via
-      xcap and writes PNG; verified end-to-end in stdio_window test
-- [x] S7c bun perf harness: 200-row tree via render(), 30 paced updates,
-      getStats over the wire; baseline p95 = 0.942ms vs 10ms budget (0986260)
-- [x] VERIFY S7: 3 review rounds (r1 Major seq-union fixed, r2 tsc-gate
-      lapse fixed, r3 mergeable); suites green
-
-Review rounds: r1 Major (error routing) fixed 9266b9d; r2 caught broken tsc
-gate (stale map generic) fixed b64f979 with visible-marker verification;
-r3 verdict: **S7 mergeable**. Closed 2026-08-24.
-
-Cross-ref: PLAN.md#2026-08-24---phase-2-candidate-roadmap-prior-art-informed
-
-### 2026-08-24 - S8: scrolling (Phase 2)
-status: done (2026-08-24)
-Recon: upstream gpui HAS overflow scroll again — Styled::overflow_scroll /
-overflow_x_scroll / overflow_y_scroll (div.rs ~1474), ScrollHandle +
-track_scroll() for programmatic control, restrict_scroll_to_axis for their
-nested-scroll gotcha. AGENTS.md gotcha text is stale (fixed same day).
-
-- [x] S8a Style mapping: overflow accepts "scroll"|"scrollX"|"scrollY" —
-      closed set in style.ts docs; parse_overflow is the single source of
-      truth (60a9b8a)
-- [x] S8a Handle lifecycle: per-element ScrollHandle map on HostView (Rc<RefCell>),
-      get-or-create at render, pruned per frame for dropped ids (60a9b8a)
-- [x] S8a Tests: parse_overflow unit tests (closed set + unknown) and
-      window-mode smoke: 200px scroll container over 2000px child, ack 9/9
-      (60a9b8a). Behavioral scroll proof lands in S8b via scrollTo commands.
-- [x] S8b Commands: scrollTo {id,x,y} / getScrollOffset {id} -> Result;
-      fixtures parsed by both suites; apply-time handle materialization fixes
-      the pre-first-paint race; behavioral proof scrollTo(0,500) ->
-      getScrollOffset {offsetX:0.0,offsetY:500.0} (6c28687)
-- [x] VERIFY S8: suites green; commits 60a9b8a + 6c28687 + f088fb2; two
-      review rounds — r1 found sign inversion (real scroll bug, clamped to
-      0), masked test, clippy; all fixed in f088fb2 with old-code-fail
-      regression proof; r2 verdict: **S8 mergeable**. Closed 2026-08-24.
-
-Cross-ref: PLAN.md Phase 2 roadmap (S8 entry)
-
-### 2026-08-24 - S9: focus & keyboard (Phase 2)
-status: done (2026-08-24)
-Recon: gpui FocusHandle has native tab_index (isize) + tab_stop (bool) fields;
-focusable()/track_focus() on Stateful<Div>; cx.on_focus_in/on_focus_out per
-handle (window.rs / app/context.rs); window.focus_next/focus_prev for Tab;
-KeyDownEvent/KeyUpEvent carry keystroke.key:String + Modifiers. Event wire is
-a single-variant enum (tag type:event) with optional x/y — extend with
-optional key:String + modifiers{ctrl,alt,shift,cmd}; focus/blur need neither.
-
-- [x] S9a Focusable core: tabIndex -> FocusHandle map (created via app focus
-      map so Tab sees it); focus/blur events via cx.on_focus_in/out (deduped —
-      per-frame re-registration emitted 3x duplicates); focusElement command;
-      Event::Input gains optional key+modifiers (95828b6)
-- [x] S9a Tests: event-keydown + focusElement fixtures both languages; window
-      test focusElement(2)->focus, focusElement(3)->blur(2)+focus(3)
-      (95828b6). Window tests serialized via global lock (parallel macOS
-      windows flaked)
-- [x] S9b Keyboard: keyDown/keyUp carry key+modifiers; handler registry passes
-      full event to JS (DOM-callback contract, tested); Rust modifier mapping
-      unit-tested byte-exact; wire covered by fixture (dee9e38)
-- [x] S9c Tab navigation (per-focusable-element Tab -> focus_next/prev, no
-      IPC; window.on_key_event panics in render — helper SIGABRT crash — so
-      moved to element path); autoFocus focused next frame via defer_in
-      (subscription-activation race); window test autoFocus->focus event
-      (dee9e38). Tab cycling itself needs real input (no key injection in
-      window tests)
-- [x] VERIFY S9: suites green; commits 95828b6 + dee9e38; reviewer r1:
-      **mergeable** (0 blocker/major). Minor follow-ups (non-blocking, tracked):
-      focus_subscriptions never freed for long-lived sessions (bounded by
-      distinct focusable ids); autoFocus on a node with no onFocus listener
-      focuses but emits no event; window tests use fixed sleeps (acceptable,
-      serialized by lock).
-      Closed 2026-08-24.
-
-Cross-ref: PLAN.md Phase 2 roadmap (S9 entry)
-
-### 2026-08-24 - S10: text input (Phase 2)
-status: done (2026-08-24)
-Recon: gpui InputHandler trait (platform.rs ~1673) = the NSTextInputClient
-surface: selected_text_range/marked_text_range/text_for_range/replace_text_in_range/
-replace_and_mark_text_in_range/unmark_text/bounds_for_range (IME composing,
-native caret/undo) — a view implements it and gpui routes native text input
-to it. Needs a TextInput element (elementType "input"/"textarea") that the
-focused input's InputHandler drives; value lives in the retained node and
-crosses the wire on change (controlled value sync both ways).
-
-- [x] S10a Protocol: elementType input/textarea (closed set both languages);
-      setValue op (JS→helper controlled value; retained tree rejects it on
-      non-inputs); EventType change+submit; Event.value (helper→JS change);
-      simulateInput command (IME-path test seam + a11y hook) (b20eed5)
-- [x] S10a Helper: InputState (value+caret+marked, UTF-16 code units) shared
-      via Rc<RefCell>; ImeAnchor element registers gpui InputHandler in paint
-      (window.handle_input is paint-only) so native IME/caret/undo edit the
-      wire-driven state; change event + repaint per edit; inputs natural tab
-      stops; Enter→submit (1556825)
-- [x] S10a Tests: event-change + command-simulate-input fixtures both
-      languages; UTF-16 unit tests (emoji=2 units); window test simulateInput
-      → change {value} before result; window suite 7/7 × 5 runs (1556825)
-- [x] S10b Textarea: multiline (flex-col, newline text), minRows/maxRows
-      autosize (v1 = logical lines, no wrap-aware measure), Enter → newline,
-      Shift+Enter → submit; input Enter → submit (1556825 + d70cd8e)
-- [x] S10c Controlled sync: JS value→setValue overwrites helper state
-      (caret to end — the controlled-input contract, unit+window tested);
-      edits→change event→JS signal→setValue; no loop because Solid only
-      re-sends setValue when the value prop actually changed. Demo input
-      proves the round-trip live (d70cd8e)
-- [x] VERIFY S10: r1 found 2 Majors (input/textarea children accepted while
-      renderer drops them; encodeCommand mis-encoded simulateInput as
-      getStats) — both fixed in 0d3d77e; r2: mergeable, 1 new Minor (TS
-      suite didn't parse the simulateInput fixture) — added parity test
-      (d8df9f5). Closed 2026-08-24.
-
-Cross-ref: PLAN.md Phase 2 roadmap (S10 entry)
-
-### 2026-08-24 - S11: virtual list (Phase 2)
-status: done (2026-08-24)
-Recon: gpui has UniformList (crates/gpui/src/elements/uniform_list.rs) — a
-high-performance virtualized list WITH built-in follow-tail
-(FollowState::Tail: auto-scroll when scrolled to bottom; stops following on
-manual scroll up) and track_scroll integration. Item height is uniform
-(pixel-estimated). This is the native building block for chat/tail lists.
-
-Design sketch:
-- [x] S11a Protocol: elementType "list" (children allowed — they ARE the
-      items); style keys itemHeight (uniform height hint seeding unmeasured
-      items) + followTail (chat mode); listInfo command {itemCount,
-      paintedCount, atEnd} where paintedCount = items actually built last
-      frame (virtualization proof). Fixtures batch-list-01.json +
-      command-list-info.json parsed by BOTH suites (9ee5d9e).
-- [x] S11a Helper: retained List node → gpui List (not UniformList — the
-      fuller element: FollowMode::Tail + ListAlignment::Bottom + splice +
-      remeasure) over the retained children (retain-all in the tree,
-      paint-visible by the List, overdraw 500px). followTail → Bottom
-      alignment + Tail armed ONCE (set_follow_mode resets scroll every call);
-      alignment recreate on toggle; count reconcile via precise prefix/suffix
-      splice (81b9d3b + 9d7362b); render_item re-enters the view via
-      Entity::update so clicks/focus work inside items. Layout lesson: gpui
-      divs default to BLOCK (child takes measured content height — List
-      measured ALL items); wrapper must be flex ROW + definite pixel height.
-- [x] S11a Tests: window test — 500 items + followTail → itemCount 500,
-      atEnd true, paintedCount ≈63 < 200 (virtualization); append/remove
-      reconcile + re-engage follow; followTail-toggle keeps items (c047c36);
-      listInfo fixture parity both languages (81b9d3b).
-- [x] S11b remeasure: content mutations (setText/setStyle/setValue) inside an
-      item → remeasure_items(range) (gpui re-anchors scroll when the
-      remeasured item is at the scroll top); pure list_item_containing() maps
-      id→(list,item) unit-tested; window test exercises it. The List already
-      measures real heights as items render — the hint only seeds off-screen
-      items. No windowed mounting needed: gpui List virtualization suffices.
-- [x] VERIFY S11: r1 = 3 findings (scroll reset on splice, tsc gate, non-root
-      wrapper height) fixed in 9d7362b; r2 = 1 Major (list_children baseline
-      not reset on followTail-toggle recreation → list emptied) fixed in
-      c047c36; r3: mergeable. Closed 2026-08-24.
-
-Cross-ref: PLAN.md Phase 2 roadmap (S11 entry)
-
-### 2026-08-24 - S12: animations (Phase 2)
-status: done (2026-08-25)
-Recon: gpui has a first-class animation API (crates/gpui/src/elements/
-animation.rs): `Animation::new(duration)` + `.with_easing(fn)` +
-`AnimationExt::with_animation(id, anim, |el, t| ...)` — the animator receives
-normalized time (eased, may overshoot) and rebuilds the element; the element
-id preserves identity across frames. Springs (`with_spring`, SpringTarget)
-preserve velocity across target changes — ideal for width/height/opacity
-transitions (a chat list growing, a panel collapsing).
-
-Design sketch:
-- [x] S12a Protocol: Mutation::SetAnimation {id, target, transitionMs,
-      easing?} — closed ANIMATABLE_STYLE_KEYS set (width/height/minWidth/
-      minHeight/padding/gap/borderRadius/fontSize/flexGrow/flexShrink/
-      opacity) + Easing enum (linear|easeIn|easeOut|easeInOut, default
-      easeOut). TS decode = invalidShape; Rust retained apply =
-      InvalidMutation (rejected on both sides). Target merged into the
-      static style at apply time so the end state sticks without further
-      traffic. Fixture batch-animation-01.json round-trips byte-identically
-      in both suites (71d7389).
-- [x] S12a Helper: ActiveAnimation (transitions + started + duration +
-      easing) captured at APPLY time via prepare_animation (starts read
-      BEFORE the merge destroys old values); render substitutes interpolated
-      numbers in every build loop (div/input/textarea/list wrapper/items
-      share a frame-start clock snapshot), request_animation_frame while
-      any transition runs, entries dropped when complete/element
-      gone/reduce-motion (17c7b06).
-- [x] S12a Tests: fixture parity both suites; window test
-      window_mode_animation_frames_flow_and_settle (frames climb >= +3
-      during a 400ms transition, settle <= +1 after — observed RED with RAF
-      disabled); easing endpoint/monotonic/midpoint-shape + lerp/clamp unit
-      tests (17c7b06).
-- [x] S12b continuity: resolve_start prefers the in-flight interpolated
-      value (unit test: halfway 200->300 retarget starts at 250, not the
-      merged 300); destroyed elements dropped by the render retain;
-      reduce-motion drops entries (jump to end — static style already rests
-      at the target) (17c7b06). Bonus S12c solid binding: transitionMs/
-      transitionEasing props diff the style bag, changed numeric animatable
-      keys emit setAnimation + companion setStyle omits them (4246191).
-- [x] VERIFY S12: r1 (partial) exposed the h() eager-props gap -> reactive
-      function style prop (c74efb6); r2 NOT MERGEABLE — B1 companion setStyle
-      deleted numeric starts (poison on every animated change), B2 absent-
-      prev keys animated, M1 second setAnimation dropped in-flight keys ->
-      all fixed in 8930c2a; r3 verified fixes but timed out on a window
-      flake -> root-caused (fresh ListState's first prepaint wipes height
-      hints with no settle frame; poisoned lock cascade) and fixed in
-      dcd25cb (settle frame, suite now 2x faster and stable 10x11/11); r4:
-      MERGEABLE at dcd25cb. bun 85/85, tsc x3, cargo 93/93 (window 11/11),
-      clippy, fmt. Closed 2026-08-25.
-
-Cross-ref: PLAN.md Phase 2 roadmap (S12 entry)
-
-### 2026-08-25 - S13: rich text — markdown/code/diff ported from Comet (MIT)
-status: done (2026-08-25; markdown core complete. Syntax highlighting,
-diff rendering, streaming = S13e+ future slices. USER confirmed the demo
-works 2026-08-25 — window renders, swap + theme toggle operate as
-intended.)
-
-Phase 3 opener per PLAN roadmap order (S7–S12 closed). Legal source: Comet
-(github.com/zeronsh/comet, MIT, Copyright 2026 Wing) — port with attribution
-headers per ADR 001. User gave choice (rich text OR op-group/batching perf);
-rich text is the PLAN-ordered slice, perf idea stays parked.
-
-- [x] Recon Comet markdown subsystem (parser/render/syntax/diff) — PLAN.md
-      S13 spec block has path:line-verified findings + frozen design
-- [x] S13a protocol: elementType markdown + setText-on-markdown (validation
-      both sides) + batch-markdown-01.json fixture parsed by BOTH suites
-      (RED observed: TS decode fail + Rust compile fail → GREEN; commit 41b0837)
-- [x] S13b helper: parser port (pulldown-cmark 0.12 → BlockTree; parse_full +
-      autolink + merge only) with ported unit tests — pure data, no gpui
-      (9/9 parser tests green; streaming machinery deliberately not ported)
-- [x] S13c helper: render port (paragraph/headings/inline/code blocks/
-      lists/blockquote/rule/table; links via InteractiveText; inline-code
-      square washes; fixed MdTheme + color/backgroundColor/fontSize overrides)
-      + window smoke test (mutation-observed RED, 3× stable; commit f002429)
-- [x] S13d Solid API: h("markdown", {source}) → setText; children refused
-      client-side (warn, no wire op); reactive function source in makeH;
-      demo examples/markdown.ts mounts + swaps + theme-toggles (mounted
-      verified; SIGINT teardown hang is pre-existing, affects counter too;
-      user visual check pending). Commit f44d03d.
-- [x] Review r1 (mt8dt6vq-068b): FINDINGS-SHOULD-FIX — 2 Majors + 3 Minors,
-      ALL fixed with regression tests (RED observed via stash/mutation):
-      M1 gpui id collisions (render ix schemes → pre-order Ids counter;
-      table_cell_ix(top_ix) port regression → counter-allocated cell ids),
-      M2 insertNode refusal (shadow bookkeeping + refusedChildren set;
-      shadow-only removeNode; destroySubtree frees refused ids; sentinel/
-      dispose/move-out tests RED→GREEN), m3 setEventListener/setAnimation
-      rejected on markdown BOTH sides (retained.rs + client guards),
-      m4 stale module doc, m5 TODO state, n6 per-frame comment honest.
-- [x] VERIFY: bun 96/96 · tsc ×3 · cargo 7 suites (window 12/12) · clippy ·
-      fmt · node smoke · demo mounts. Review r1 FINDINGS-SHOULD-FIX (2 Major
-      + 3 Minor) all fixed in 679aa77 with RED-observed regression tests;
-      review r2 (mt8eovd1-ddb1) verdict **CLEAN** — all 6 findings verified
-      fixed, suites independently re-run green. r2 notes addressed: dead
-      guard removed, move-out test strengthened to full op-list assert;
-      Note 2 (mid-session detached nodes never destroyed — pre-existing,
-      ALL element types, universal wrapper property) recorded in MEMORY as
-      a future GC slice.
-
-Not in this session (later slices): syntax highlighting (tree-sitter), diff
-(changes.rs), streaming (mend/veil), text selection.
-
-Cross-ref: PLAN.md#2026-08-24---phase-2-candidate-roadmap-prior-art-informed
-
-### 2026-08-25 - S13e: code-block syntax highlighting (Comet crates/syntax port)
-status: done (2026-08-25; r1 NOT MERGEABLE — language-keyed resolver Blocker
-fixed content-keyed + span clamp; r2 verdict CLEAN, all suites independently
-green. Diff rendering + streaming remain future slices.)
-
-Port Comet's standalone syntax crate (tree-sitter based) into the helper,
-wire into markdown code blocks. No protocol changes - highlighting is
-entirely helper-side (fence tag already parsed into Block::CodeBlock).
-
-- [x] S13e-a syntax.rs port: HighlightKind/precedence, normalize_line,
-      from_absolute_spans, highlight_with_limits, alias/path/shebang tables;
-      thiserror dropped (manual Display/Error); bundled grammar subset =
-      rust/js/jsx/ts/tsx/python/go/json/jsonc/bash/toml/yaml/css/html
-      (unbundled variants -> GrammarUnavailable -> plain-text fallback);
-      Markdown-as-parent dropped; Html keeps injections. 12/12 ported tests.
-      Grammar versions pinned EXACTLY like Comet (constant names differ
-      between releases — caret deps broke the build once already).
-- [x] S13e-b render: SyntaxPalette (zeron-dark) in MdTheme +
-      runs_for_syntax_line; render_code_block consumes per-line spans;
-      syntax_runs_recolor_without_changing_layout test pins exact-cover +
-      single-font + recolor contract.
-- [x] S13e-c host cache: per-element MarkdownCacheEntry {source, tree,
-      highlights} compared by EXACT source text; kills the per-frame
-      parse_full debt (n6) as a side effect; pruned per frame like other
-      per-id maps; content-keyed resolver (identical fences share docs).
-- [x] S13e-d demo: python + yaml fences added to DOC_B.
-- [x] Review r1 (mt8gbici-7028): NOT MERGEABLE — Blocker fixed: resolver
-      was LANGUAGE-keyed so two same-language fences with different code got
-      the first fence's spans → over-length TextRuns → gpui panic (debug AND
-      release). Fix: MarkdownCacheEntry::build/resolve CONTENT-keyed API +
-      render passes (lang, code); defensive span clamp in runs_for_syntax_line;
-      regression tests RED→GREEN. Minors: demo python/yaml fences actually
-      added now (earlier script silently no-op'd — assert anchors!), notices
-      extended for syntax.rs + builtins.rs palette, minified-lines perf test
-      re-ported.
-- [x] VERIFY: bun 96/96 · tsc ×3 · cargo all suites green · clippy · fmt ·
-      node smoke. Review r2 (mt8grjo3-4bd4) verdict **CLEAN**: blocker fix
-      verified end-to-end (resolver threading, clamp edges, cache lifecycle),
-      minors/notes confirmed addressed; 3 non-blocking notes only. S13e
-      CLOSED.
-
-Cross-ref: TODO.md#2026-08-25---s13-rich-text--markdowncodediff-ported-from-comet-mit
-
-### 2026-08-25 - S13f: ```diff fence rendering (Comet LineKind port)
-status: done (2026-08-25; r1 FINDINGS-SHOULD-FIX both minors fixed; r2
-verdict CLEAN with an empirical taffy reproduction of the scroll fix.
-S13 rich text now fully closed: markdown core + syntax highlighting +
-diff fences. Remaining future slices: streaming, full Changes pane.)
-
-Lightweight completion of the original "markdown/code/diff" scope: pulldown
-already yields CodeBlock{language:"diff"} - render those fences with per-
-line kind coloring instead of tree-sitter. NOT the 5248-LOC Changes viewer
-(that is app-coupled: rpc/comments/folds/watch streams).
-
-- [x] S13f-a markdown/diff.rs: DiffLineKind::classify (Add/Del/Hunk/Meta/
-      Context, prefix-only markers, +++/--- before +/-) + 2 test fns
-- [x] S13f-b MdTheme diff palette (emerald-400 add / red-400 del / accent
-      hunk text per upstream builtins) + render_code_block wiring: diff
-      branch precedes syntax; full-bleed row washes via negative mx/px pair
-- [x] S13f-c window test mounts a ```diff fence (ack+frames proof); demo
-      DOC_B shows one
-- [x] Review r1 (mt8hdejr-d712): FINDINGS-SHOULD-FIX, both minors fixed:
-      (1) +++/--- space-gate so ADDED content like `+++i;` classifies Add
-      not Meta (+ plumbing lines new file mode/Binary files/rename → Meta;
-      header-shaped content documented as stateless limit); (2) wash rows
-      use taffy default stretch instead of negative mx/px — scroll extent
-      no longer inflated 2×padding; fence tag now case-insensitive;
-      notices add changes.rs source.
-- [x] VERIFY: bun 96/96 · tsc ×3 · cargo all suites green · clippy · fmt.
-      Review r2 (mt8igv0v-05a7) verdict **CLEAN**: both minors verified
-      fixed with code evidence + an empirical taffy 0.13 model (scroll_max
-      24→0). S13f CLOSED.
-
-Cross-ref: TODO.md#2026-08-25---s13-rich-text--markdowncodediff-ported-from-comet-mit
 
 ### 2026-08-25 - S15: JSX pipeline (universal preset track)
 status: CLOSED 2026-08-25 (review r1 CLEAN; minor + coverage notes fixed)
@@ -819,29 +322,6 @@ connection (render() handle exposes it).
       được reviewer xác nhận. Gates: bun 144/144 · cargo 32+79+15 · clippy/
       fmt. P4 CLOSED.
 
-### 2026-08-26 - P4 session note (artifact refresh)
-status: done 2026-08-26 (superseded by the main P4 block — closed above; kept per no-delete rule)
-
-- [x] P4-b protocol lockstep (7 commands) done; P4-c helper dispatch done
-      (clean re-apply after a mangled layered edit; cargo 79+15 green)
-- [x] P4-d: desktop.ts (appWindow/dialog/shell over connection) + RenderHandle
-      sugar (handle.window/dialog/shell) + 5 fake-channel tests + decodeCommand
-      round-trip pin + index exports + README section — all in 17b0b31, hardened
-      in a50a335 (encode regressions, camelCase round-trips, empty-answers guard)
-- [x] VERIFY: gates + independent review — r1 (mt9liwgo-b1c3) NOT MERGEABLE:
-      B1 encodeCommand không có 7 branch mới — MỌI command P4 lên wire thành
-      {type:getStats} (client là path duy nhất; test cũ dùng JSON.stringify
-      nên không bao giờ đụng encoder — bài học encode/decode phải test ĐÔI);
-      M1 serde enum-level rename_all không rename variant FIELDS →
-      suggestedName bị drop im lặng (Option hấp thụ unknown key) + re-encode
-      hiện null thừa → variant-level camelCase + skip_serializing_if toàn
-      optional; m0 empty answers mở NSAlert không đóng được → throw ở API.
-      Fixes a50a335: 8 encode regression tests (không fallthrough getStats),
-      Rust round-trip pin camelCase CẢ HAI chiều. Pre-checks của tôi (D
-      transport-mode Unsupported từ trước, C re-entrancy tuần tự job loop)
-      được reviewer xác nhận. Gates: bun 144/144 · cargo 32+79+15 · clippy/
-      fmt. P4 CLOSED.
-
 ### 2026-08-26 - P5: variable-height list (chat-log UX)
 status: CLOSED 2026-08-26 (r1 Major → fixes verified below)
 
@@ -1063,516 +543,6 @@ r2 NOT MERGEABLE: tint fallback alpha-0; fixes c3b25a8+225d09a; r3 CLEAN)
       f32) vẫn invisible; fix = One Dark text OPAQUE hsla(221,.11,.86,1)
       khớp default hiệu lực của gpui (cite fallback_themes.rs). r3 CLEAN.
 
-### 2026-08-26 - P11: span styled runs inside text
-status: done (2026-08-26; commit 5e13f7d; independent review mt9yz59o-1d31 CLEAN)
-
-- [x] Recon current text protocol, renderer, and pinned gpui styled-text APIs;
-      `StyledText::with_runs` is the version-matched wrapping seam; `TextRun`
-      lengths are UTF-8 bytes and exact-cover is panic-sensitive.
-- [x] PLAN/contract (assumed under resume): public `<text runs={...}>`; each
-      segment carries its own substring + optional `color`, numeric `weight`,
-      `style` (`normal|italic|oblique`), and boolean `underline`; new
-      `setTextRuns` replaces all segments atomically. Rust concatenates and
-      validates, avoiding JS UTF-16 offsets. Only Text accepts runs; empty
-      array clears content; plain `setText` clears runs. P12 stays parked.
-- [x] RED: fixture/parity + renderer tests failed before implementation
-      (`setTextRuns` was unknown/no-op); helper smoke initially exposed the
-      r# delimiter collision and was corrected to r### before GREEN.
-- [x] GREEN: protocol/helper/renderer/demo implemented; `setTextRuns` is
-      wholesale, Rust derives UTF-8 ranges, client validates boundary shapes,
-      plain `setText` clears runs, and list-height remeasure sees the new op.
-- [x] VERIFY: fresh full gates all exited 0: `bun run test` = 171 pass / 0
-      fail; `bun run typecheck` = 0; `cargo test -p
-      solid-gpui-protocol -p solid-gpui-helper` = 0 (146 tests, including 22
-      real-window tests); `cargo clippy --all-targets -- -D warnings` = 0;
-      `cargo fmt --all -- --check` = 0. The text-runs demo exited 0 and logged
-      mount + three style toggles. Independent review mt9yz59o-1d31 is
-      CLEAN/MERGEABLE with 0 blocker/major/minor findings. Non-blocking notes:
-      fixture seq 27 is arbitrary; Rust style/underline/color shape errors use
-      serde rather than bespoke paths; `runs: () => null` preserves prior runs,
-      matching the existing style-bag precedent. Visual pixels were not
-      compared; P11 remains complete within its stated smoke-test scope.
-
-### 2026-08-26 - Solid 2 rc.3 compatibility migration
-status: done | updated: 2026-08-26
-
-- [x] Verify the version-matched rc.3 runtime, universal renderer, and JSX
-      compiler contract against this repository; capture a failing RED probe
-      before production changes. Exact installed runtime/universal/web/compiler
-      packages resolve to 2.0.0-rc.3; the missing-plugin compile-surface probe
-      was observed RED before installation.
-- [x] Upgrade the Solid dependency graph and migrate the Bun JSX preload and
-      compile-surface test without changing the GPUI protocol contract. The
-      official `@solidjs/babel-plugin` replaced `babel-preset-solid`; the
-      compiler-generated `memo` helper is exported from `@solid-gpui/solid/jsx`.
-- [x] Run the full TypeScript, JSX/demo, and package verification gates; record
-      any rc.3 incompatibility or intentional pin. The green run is recorded
-      below; a later rerun also exposed the existing GUI frame-server limitation.
-- [x] Obtain an independent review, resolve findings, and close this task only
-      after all checklist items and verification gates are green. Independent
-      reviewer `mta1z9zq-a07c` returned CLEAN/MERGEABLE with no blocker, major,
-      or important findings.
-
-#### Run report
-
-- `bun install --frozen-lockfile` — exit 0; lockfile unchanged.
-- `bun run test` — latest rerun after resume is green at 171 pass / 0 fail;
-  the window perf test reported `frames=31`, p50 1.288 ms, p95 1.509 ms.
-  The earlier headless rerun was 170 pass / 1 skipped with
-  `SOLID_GPUI_SKIP_GUI_TESTS=1`.
-- `bun run typecheck`, `bun run smoke:node`, `bun run check:release`, and
-  `bun run pack:all` — exit 0; all three packages built and packed.
-- JSX smoke probes for counter, text-runs, and menus — exit 0. The menus probe
-  exercises the dynamic ternary that requires `memo`.
-- `cargo test -p solid-gpui-protocol -p solid-gpui-helper` — exit 0 in the
-  green run: 84 helper unit + 2 smoke + 1 stdio + 22 real-window + 37 retained
-  + 39 round-trip tests (one ignored generator); `cargo clippy --all-targets
-  -- -D warnings` and `cargo fmt --all -- --check` — exit 0.
-- A later isolated GUI perf/animation rerun returned one initial frame while
-  stdio mutations still acked; the same behavior reproduced without the JS
-  migration and is covered by the repository's `SOLID_GPUI_SKIP_GUI_TESTS=1`
-  headless escape hatch. No Rust/protocol files are in this migration diff;
-  treat that rerun as window-server/environment evidence, not an rc.3 failure.
-- Independent review: `.pi/review-tmp/rc3_r1_brief.md`; reviewer verdict
-  CLEAN/MERGEABLE, no blocker/major/important finding.
-
-### 2026-08-26 - P12 protocol compaction benchmark
-status: done | updated: 2026-08-26
-
-#### Benchmark contract
-
-- Baseline is the shipped object envelope and `encodeBatch`/`decodeBatch`.
-- Candidate is benchmark-only `[v, seq, rows]`, with one positional row per
-  mutation; measure both string op names and numeric op tags to separate field
-  overhead from an op-table design.
-- Recommend P12 only when the numeric candidate saves at least 20% of total
-  UTF-8 wire bytes and does not regress median encode time by more than 10%
-  across the representative fixture suite. Decode timing is informational until
-  the candidate has a validator-equivalent decoder.
-
-- [x] Define deterministic representative mutation batches and a positional-array
-      comparison without changing the production protocol.
-- [x] Measure encoded bytes and repeated encode/decode cost for both shapes,
-      including warmup, fixed iterations, and reproducible runtime metadata.
-- [x] Decide P12 from observed data: the numeric candidate saves 49.60% of
-      aggregate wire bytes, but its encode path regresses 27.59–30.04%; keep
-      the object wire format and do not reopen P12 automatically.
-- [x] Obtain an independent review of the benchmark methodology, then close
-      this benchmark block without changing the production protocol. Reviewer
-      `mta4sj65-daff` returned CLEAN/MERGEABLE; no blocker, major, or important
-      finding remained.
-
-#### Run report
-
-- `bun run benchmark:protocol` — exit 0 in two consecutive runs on Bun 1.4.0
-  across 11 protocol fixtures with 1,000 warmups, 10,000 measured iterations,
-  and 5 samples.
-- Aggregate UTF-8 bytes: object `4504`, positional string-op `2964`
-  (`-34.19%`), positional numeric-op `2270` (`-49.60%`).
-- Aggregate median encode timing: object `456–464 ns/op`, numeric
-  `592–593 ns/op` (`+27.59–30.04%`); numeric decode was faster in this
-  representation-only probe (roughly `26–31%`, informational only).
-- The compact decoder checks envelope/row arity and expands generated rows; it
-  deliberately does not duplicate `decodeBatch`'s full untrusted-input validator.
-  Its decode timing is therefore informational and excluded from the pass gate;
-  the result is a wire-size and representation-overhead decision, not approval
-  for a protocol implementation.
-- Decision: the byte reduction is real, but the measured encoder regression
-  fails the declared threshold. Keep the current object wire format; revisit
-  only with an explicit wire-version/compatibility design and a direct encoder
-  benchmark.
-
-#### Independent review
-
-- Reviewer `mta4sj65-daff` independently reran `bun run benchmark:protocol`
-  successfully and reproduced the aggregate byte totals and no-op decision.
-- Review verdict: **CLEAN/MERGEABLE**. Minor follow-ups were resolved by
-  making decode timing informational (not part of the pass gate) and changing
-  the benchmark description from “generic direct encoder” to “generic
-  row-building encoder”. Notes remain explicit: `setValue` is not in the
-  existing fixture set, and the compact decoder is not a full validator.
-
-### 2026-08-26 - S14: headless controls (tooltip, select, combobox)
-status: done | updated: 2026-08-26
-
-Goal: add the next desktop interaction primitives without reopening P12 or
-changing the out-of-process architecture. Tooltip is first because P7 explicitly
-deferred it; select/combobox follow only after their controlled-value and focus
-contracts are concrete.
-
-Scope:
-- Tooltip trigger/content behavior and an element-safe overlay boundary.
-- Headless select/combobox API only where the existing input, focus, key-binding,
-  command, and event seams can support it without speculative native widgets.
-- Cross-language protocol changes, fixtures, retained validation, renderer,
-  helper behavior, tests, and docs in lockstep when the contract requires them.
-
-Non-goals:
-- Protocol compaction, multi-window support, React, or Windows/Linux validation.
-- Copying prior-art source or adding a runtime dependency.
-- Implementing select/combobox before recon proves the required GPUI primitives
-  and the public API/error contract.
-
-#### First vertical contract (safe assumption from the approved roadmap)
-
-- The first implementation is tooltip-only; select/combobox remains a separate
-  reassessment after this slice.
-- `tooltip` accepts a non-empty string on generic div-backed tags, `input`,
-  `textarea`, and `list`. `null`, `undefined`, and `""` clear it. Text, canvas,
-  svg, img, markdown, and scrollbar do not accept it; the client warns and
-  emits nothing for those tags, while the Rust boundary rejects a direct invalid
-  mutation.
-- The wire adds `setTooltip` with `tooltip: string | null`; no tooltip event is
-  sent back to JS. The helper uses GPUI's native tooltip overlay and default
-  show delay, with a non-interactive tooltip that hides when the trigger loses
-  hover. Element-valued content and custom delay are deferred.
-- The tooltip view is helper-owned native text with explicit styling; it is not
-  inserted into the retained child tree and therefore cannot affect layout or
-  create a cleanup/ref leak.
-
-- [x] Recon current anchored/deferred, hover, focus, keyboard, input, and command
-      seams; native GPUI already provides tooltip timing/placement through the
-      stateful element path, so tooltip is the smallest vertical slice.
-- [x] Write the approved API/wire contract and RED tests before production code;
-      RED observed in protocol and renderer tests before the implementation.
-- [x] Implement tooltip first with protocol/renderer/helper parity: `setTooltip`
-      is validated in TS/Rust, rendered through GPUI's native tooltip overlay,
-      and covered by unit, fixture, and stdio-window tests.
-- [x] Reassess select/combobox from evidence: pinned GPUI exposes low-level
-      `PopupOptions` but no project-level select/combobox primitive; the current
-      protocol also has no popup lifecycle or accessibility-role contract. Defer
-      implementation until S14b's public contract is approved.
-- [x] Run the relevant tooltip tests, typecheck, Rust gates, and obtain an
-      independent review. `bun run test` is green at 176 pass / 0 fail;
-      `bun run typecheck`, `cargo test -p solid-gpui-protocol -p solid-gpui-helper`,
-      `cargo clippy --all-targets -- -D warnings`, and `cargo fmt --all -- --check`
-      all exit 0. Reviewer `mta8mvh9-f090` returned CLEAN/MERGEABLE after the
-      missing-field parity fix from `mta8bdf4-aa8b`.
-- [x] Close the parent S14 block after the select/combobox contract was separately
-      reassessed and explicitly deferred.
-
-
-#### Tooltip slice verification
-
-- `bun run benchmark:protocol` still exits 0 after adding `setTooltip` and
-  `setAccessibility`: 13 fixtures, numeric candidate `51.77%` smaller on wire
-  but its measured encode regression remains above the 10% gate, so P12 remains
-  a no-op.
-- `batch-tooltip-01.json` round-trips in both protocol suites; null clearing,
-  missing/empty field rejection, unsupported target rejection, renderer refusal,
-  stateful-path wiring, and real `--stdio-window` acknowledgement are covered.
-- Select/combobox has a separately recorded deferred contract; no implementation
-  is claimed by this tooltip slice.
-
-
-#### S14b select/combobox contract outcome (explicitly deferred)
-
-Known seams are input/textarea host-side buffers, focus handles and key bindings,
-retained lists, and in-window anchored/deferred elements. The contract outcome is:
-
-- [x] Public API target: primitives namespace (`Root`/`Trigger`/`Content`/`Item`),
-      so Solid owns state and composition remains headless.
-- [x] Value target: one controlled string value first; multi-select and
-      uncontrolled state are outside S14b.
-- [x] Popup target: in-window anchored/deferred content first; native
-      `PopupOptions` and its platform focus/dismiss surface are outside S14b.
-- [x] Accessibility target: typed role/expanded/selected semantics are required
-      before claiming select/combobox support; styling alone is insufficient.
-- [x] Explicit deferral: do not implement select/combobox in S14. Reopen it as a
-      new implementation slice only with this contract, a concrete wire/API
-      proposal, and RED tests.
-
-### 2026-08-26 - S14b: headless select/combobox implementation
-status: done | updated: 2026-08-26
-
-Goal: implement the separately approved S14b headless select/combobox contract
-without reopening P12 or changing the out-of-process architecture.
-
-Contract:
-- Public API is a composable primitives namespace (`Root`, `Trigger`, `Content`,
-  `Item`) so Solid owns state and composition.
-- Initial value model is one controlled string; multi-select and uncontrolled state
-  are out of scope.
-- Options render in-window through existing anchored/deferred seams; native
-  `PopupOptions` is out of scope.
-- Typed role/expanded/selected semantics are required; styling-only behavior is
-  not sufficient.
-
-Non-goals:
-- Protocol compaction, native popup commands, multi-select, Windows/Linux
-  validation, React, runtime dependencies, and prior-art source copying.
-
-- [x] Map the contract onto the existing Solid renderer, input/focus/key, list,
-      anchored/deferred, and event seams; identify the smallest API surface.
-      Existing `setProp`/event routing supports a pure Solid state machine;
-      accessibility needs one new validated `setAccessibility` mutation because
-      the helper previously mapped no role/expanded/selected state.
-- [x] RED: add failing renderer/component tests for controlled value, open/close,
-      keyboard navigation, selection, dismissal, and typed semantics. RED was
-      observed as unknown `setAccessibility`/missing select module, plus the
-      real helper rejection of the pre-existing Rust `input` event-set omission.
-- [x] GREEN: implement the primitives with existing host seams and the verified
-      `setAccessibility` protocol extension: controlled select and editable
-      combobox, Escape/blur/selection close, disabled-skipping wrap navigation,
-      and deferred anchored content.
-- [x] Add a focused example and user-facing documentation: `examples/select.tsx`,
-      `bun run example/select`, and the S14b README section.
-- [x] Run the relevant Bun tests, typecheck, Rust gates, and independent review.
-      `bun run test` = 183 pass / 0 fail; protocol/helper cargo suites pass
-      (86 unit + 24 window + 39 retained + 46 round-trip, one ignored);
-      typecheck, build, clippy, fmt, release check, and benchmark exit 0.
-      Reviewer `mtac9ahf-af7c` returned MERGEABLE with no blocker/critical/major/
-      important findings; only static-item, IME, and environmental-window notes.
-
-#### Run report
-
-- Cross-language fixture `batch-accessibility-01.json` round-trips byte-for-byte
-  in Rust and parses/re-encodes in TypeScript. `setAccessibility` rejects missing,
-  null optional fields, unknown roles, and wrong field types symmetrically;
-  `accessibility: null` clears the state. Rust and TS `EVENT_TYPES` now both
-  include `input`.
-- The helper applies AccessKit `ComboBox`, `ListBox`, and `ListBoxOption` roles
-  plus value/expanded/selected fields on the stateful div/input render paths.
-  The isolated new stdio-window test passed 4/4 under the reviewer; the full
-  window suite had a non-reproducible GUI contention flake in two earlier runs.
-- `bun run example/select` mounted and auto-disposed successfully. Outside-click
-  dismissal and IME-composition arrow suppression remain explicitly deferred.
-
-### 2026-08-26 - Assess upstream solid-gpui problems and parity plan
-status: done | updated: 2026-08-27
-
-Goal: identify which real problems, gaps, and useful lessons around the upstream
-`lxsmnsyc/solid-gpui` repository should be solved in this Apache-2.0 clean-room
-project, then implement only an evidence-backed, prioritized subset.
-
-Scope:
-- inventory upstream documentation, issues, workflows, platform claims, and
-  externally observable failure modes;
-- compare those findings with this repository's architecture and existing gates;
-- derive a phased plan that preserves the out-of-process helper, protocol parity,
-  and clean-room attribution rules.
-
-Non-goals:
-- copying upstream source or dependencies, silently adopting its architecture,
-  promising to fix every historical issue without acceptance criteria, or making
-  Windows/Linux claims before running those platforms.
-
-- [x] Research upstream problems and classify each as applicable, already
-      solved, out of scope, or requiring user approval. Upstream `main` at
-      `196aa6e` (2026-08-24) has no issue/PR/release corpus; its main defects are
-      missing wire acknowledgements/versioning, cycle/depth protection, tests,
-      Windows support, and runtime platform evidence.
-- [x] Map applicable risks to local files, tests, and independent verification
-      gates; identify the smallest safe first slice. Local audit found five gaps;
-      the highest-value new probe is cross-flush detach/reattach, followed by
-      wire-level failure and cycle/depth verification.
-- [x] Confirm priority, compatibility, licensing, and platform expectations with
-      the user before behavior-changing implementation. User clarified that the
-      request is technical; approved scope is this repository (not a direct
-      upstream patch), preserving Apache-2.0 clean-room rules, ADR 002's
-      out-of-process architecture, protocol v1 compatibility, and evidence-based
-      platform claims. Upstream API parity is not promised; existing public APIs
-      remain backward-compatible unless a separately reviewed change says otherwise.
-- [x] Implement and review approved slices, then close this block with evidence.
-      Commits 319d8b5, 5053ac8, 2ed8a7c, 9590ad2, and be4c9c4 were independently
-      reviewed; final Bun/Rust/typecheck/fmt/clippy gates are recorded below.
-
-#### Approved technical slices
-
-- [x] Prove the existing failure/poison/version/sequence guarantees through the
-      real client→helper wire; prove retained cycle/depth rejection and subtree
-      drop behavior without stack overflow. Tests landed in 319d8b5: real stdio
-      malformed/version/unknown-input liveness, client sequence/error probes,
-      real window partial-apply/cycle/self-ancestor/MAX_DEPTH checks, and
-      helper-death/apply-failure poison/no-requeue coverage. An empty poisoned
-      flush also exposed and fixed a renderer invariant (RED→GREEN).
-- [x] Reproduce or retire the cross-flush detach/reattach `Drop` hazard with a
-      failing regression test first; change lifecycle semantics only if the probe
-      demonstrates a bug. Cross-flush same-node, cross-parent, keyed-reorder,
-      and listener-identity regressions pass; no Drop/lifecycle change was needed.
-- [x] Add a deterministic mock/headless host seam for render-path coverage and
-      wire it into CI without weakening real-window tests. Commit 5053ac8 adds
-      the pinned GPUI `TestApp`/`TestAppWindow::draw` seam; the frame counter
-      proves `HostView::render` runs through the real layout/prepaint/paint path
-      without a window server. The helper suite ran 116/116 with and without
-      the GUI skip environment.
-- [x] Add cross-platform CI/build validation (Linux first, Windows next) and only
-      add platform npm packages after the corresponding runtime gates exist.
-      Commit 2ed8a7c adds locked Ubuntu and Windows headless jobs, Linux native
-      dependencies, and real stdio execution under the GUI skip environment;
-      real-window and smoke gates remain intact. Release/npm platform packages
-      remain intentionally unchanged until hosted jobs produce runtime evidence.
-- [x] Add regression coverage for explicitly deferred S14b edges and document the
-      trusted-JS path policy; do not add speculative image/network behavior.
-      Commits 9590ad2 and be4c9c4 pin pointer-based outside-click and IME
-      composition deferrals, anchored/deferred listbox output, and the
-      trusted-code boundary. The README makes clear that the helper never
-      evaluates JavaScript and that path/command authorization remains the
-      application's responsibility.
-
-#### Research report
-
-Upstream evidence: `https://github.com/lxsmnsyc/solid-gpui` at commit
-`196aa6edc779cb39f37a3ade4517ed197ad58813` has no GitHub issues, PRs, releases,
-tags, or published npm packages. `docs/protocol.md` and the protocol/session
-sources show no ack, applied count, protocol version, or structured apply error;
-`docs/releasing.md` explicitly warns that mismatched positional peers fail
-strangely. The Rust tree has no cycle/depth guard or Rust tests, Windows is absent,
-and Linux is build-only in its release workflow. These are research findings,
-not instructions to copy the implementation.
-
-Local classification:
-- Already solved by design: structured replies and sequence correlation, poison
-  on failed batches with no requeue, protocol version/error validation, retained
-  ancestor/depth protection, shared TS/Rust fixtures, accessibility bridge, and
-  host-owned input/IME state (`DECISIONS.md` ADR 002/007; protocol/retained/client/
-  renderer tests).
-- Applicable probes: all approved wire, cycle/depth, subtree, and cross-flush
-  probes are verified through real helper pipes or the renderer seam. The
-  cross-flush probe found no Drop hazard; the only behavior fix was making an
-  already-poisoned empty flush reject, matching the documented poison invariant.
-- Platform/release gap: `.github/workflows/ci.yml` now validates locked headless
-  helper/protocol builds and real stdio on Linux and Windows, with source-mapped
-  Linux native dependencies. Hosted execution is still the evidence gate for
-  platform support; `release.yml` intentionally publishes no Linux/Windows
-  packages until those jobs are green.
-- Explicit non-gaps/out of scope: upstream's unpublished release state, its
-  multi-window absence, P12 compaction, and HTTP image policy before this project
-  adds image elements. Do not claim Linux/Windows support from a build alone.
-
-Implementation order completed 2026-08-27:
-1. Cross-flush detach/reattach and real wire failure/cycle probes — 319d8b5.
-2. Deterministic TestApp render seam — 5053ac8; CI integration follows in 2ed8a7c.
-3. Linux/Windows CI configuration and deferred-edge/trust-boundary coverage —
-   2ed8a7c, 9590ad2, and be4c9c4. Hosted jobs remain the required runtime gate;
-   platform npm packages were not added prematurely.
-
-#### Final verification (2026-08-27)
-
-- [x] `bun run test` — 195 passed, 0 failed across 19 files.
-- [x] `bun run typecheck` — protocol, client, and solid `tsc --noEmit` passed.
-- [x] `SOLID_GPUI_SKIP_GUI_TESTS=1 cargo test -p solid-gpui-protocol -p solid-gpui-helper --locked` — all unit, transport, and headless gates passed.
-- [x] `cargo test -p solid-gpui-protocol -p solid-gpui-helper --locked` — full macOS suite passed, including 25 real window tests and smoke.
-- [x] `cargo fmt --all -- --check` and `cargo clippy --all-targets --locked -- -D warnings` — passed.
-- [x] CI YAML structural validation and locked Linux/Windows dependency-graph resolution — passed locally; hosted runtime execution remains external.
-- [x] Independent reviews: wire/lifecycle `MERGEABLE`, headless `MERGEABLE`, CI `MERGEABLE`, deferred S14b `MERGEABLE`; only optional wording nits were resolved.
-
-### 2026-08-27 - Repair hosted CI platform gates
-status: done | updated: 2026-08-27
-
-Goal: repair only the platform-specific failures exposed by the first hosted run
-of the completed technical assessment, then rerun the same workflow.
-
-- [x] Add the missing Linux development package identified by the hosted linker
-      failure and validate the workflow remains scoped to headless/stdio tests.
-      Added `libgbm-dev` for the hosted `-lgbm` linker failure; workflow YAML
-      parsing and the existing job structure remain valid.
-- [x] Make the staggered animation regression's completion assertions relative to
-      the second transition clock so scheduling overhead cannot create a boundary
-      flake; preserve the per-key-clock invariant. The hosted failure was
-      reproduced as the fixed t0+450ms boundary; the revised test passed 25
-      repeated focused local runs and the full local helper/protocol suite.
-- [x] Run focused local regressions and CI syntax checks, then push the smallest
-      fix and obtain fresh hosted Linux, Windows, macOS, TypeScript, and Node
-      results before closing this block. Hosted run 33042831853 for commit
-      `94ab0fc` passed all five jobs: Linux headless, Windows headless, macOS,
-      TypeScript, and Node smoke. The run is recorded at
-      https://github.com/heyhuynhgiabuu/solid-gpui/actions/runs/33042831853.
-
-#### Hosted verification (2026-08-27)
-
-- [x] Linux headless: `cargo fmt`, locked Clippy, and locked protocol/helper
-      tests passed after installing `libgbm-dev`.
-- [x] Windows headless: locked fmt, Clippy, and protocol/helper tests passed.
-- [x] macOS, TypeScript, and Node smoke jobs passed; only the expected
-      Node.js 20 action deprecation annotations remained.
-
-### 2026-08-27 - Solid 1/Solid 2 optimization roadmap and documentation consistency
-status: done | updated: 2026-08-27
-
-- [x] Record the versioned Solid 1 and Solid 2 RC research and a measurement-first optimization roadmap in `ROADMAP.md` (`a1c026c`).
-- [x] Update README platform and compatibility wording to match hosted evidence and current package support.
-- [x] Add selective ignores for ephemeral Pi state and scratch probes without hiding canonical `.pi` artifacts.
-- [x] Close stale S7–S12 status metadata and verify the documentation-only diff with exact historical-content preservation.
-
-#### Verification
-
-- `git diff --check`, documentation whitespace checks, and `bun run check:release` passed.
-- Official Solid documentation links and npm version metadata were checked for Solid `1.9.15` and `2.0.0-rc.3`.
-- Independent review of commit `a1c026c` returned `CLEAN/MERGEABLE`.
-
-### 2026-08-27 - Measurement foundation: deterministic Solid 2 baseline
-status: done | updated: 2026-08-27
-
-- [x] Add a headless Solid 2 benchmark matrix for signal-to-mutation and flush/batch metrics without changing renderer semantics.
-- [x] Report reproducible p50/p95/p99 timings, mutation counts/categories, batch sizes, and runtime/compiler metadata.
-- [x] Add the benchmark command and document the baseline methodology in the roadmap.
-- [x] Run focused tests/typecheck and obtain an independent review before closing the slice.
-
-#### Verification
-
-- `bun run benchmark:solid` passed under `--conditions=browser`: four scenarios, 400 measured updates each, expected one batch per update, and expected mutation categories/counts.
-- `bun run test` passed with 195 tests and `bun run typecheck` passed for protocol, client, and solid packages.
-- Dedicated strict typecheck for `scripts/benchmark-solid.ts` passed with Bun types and DOM libraries.
-- Independent review of commit `b1abdfd` returned `CLEAN/MERGEABLE`.
-
-### 2026-08-27 - Measurement foundation: real stdio client/helper baseline
-status: done | updated: 2026-08-27
-
-- [x] Add a real client-to-helper stdio benchmark with sequential acknowledgement and sequence-correlation checks.
-- [x] Measure local protocol encode/decode and end-to-end transport latency/UTF-8 request size with p50/p95/p99 distributions.
-- [x] Document the transport boundary and command in the roadmap without claiming GPUI window coverage.
-- [x] Run focused tests/typecheck and obtain an independent review before closing the slice.
-
-#### Verification
-
-- `bun run benchmark:stdio` passed against the real helper: 50 measured requests, 600/600 mutations acknowledged, and sequence correlation verified.
-- `bun --conditions=browser test packages/client` passed with 19 tests; `bun run typecheck` passed for protocol, client, and solid packages.
-- Dedicated strict typecheck for `scripts/benchmark-stdio.ts` passed with Bun types and DOM libraries.
-- Independent review of commit `bb07858` returned `CLEAN/MERGEABLE`.
-
-### 2026-08-27 - Measurement foundation: headless GPUI render baseline
-status: done | updated: 2026-08-27
-
-- [x] Define a deterministic retained-tree → `TestAppWindow::draw()` benchmark boundary using the pinned GPUI APIs.
-- [x] Measure headless apply/layout/prepaint/paint work and frame statistics without changing renderer semantics or adding CI thresholds.
-- [x] Document the benchmark command, scope, and display-server limitation in the roadmap.
-- [x] Run focused Rust tests/benchmarks and obtain an independent review before closing the slice.
-
-#### Verification
-
-- `bun run benchmark:gpui` passed with two scenarios, 50 measured frames per scenario, and p50/p95/p99 metrics for retained apply, full draw, and HostView build samples.
-- `cargo clippy --all-targets -- -D warnings`, `cargo fmt --all -- --check`, dedicated strict typecheck for both benchmark wrappers, and the existing headless render regression passed.
-- GUI-skipped protocol/helper tests passed: 87 unit, 2 smoke, 2 stdio, 25 stdio_window, 39 retained, and 45 round-trip tests; only intended ignored tests remained.
-- Independent review of commit `cf28b81` returned `CLEAN/MERGEABLE`.
-
-### 2026-08-27 - Measurement foundation: lifecycle and retention baseline
-status: done | updated: 2026-08-27
-
-- [x] Define a deterministic mount/update/destroy measurement that checks retained-tree and HostView lifecycle counts after every cycle.
-- [x] Measure lifecycle apply/draw timings and test-only live allocation observations without adding thresholds.
-- [x] Document the lifecycle boundary, allocator/platform limits, and command in the roadmap.
-- [x] Run focused/full verification and obtain an independent review before closing the slice.
-
-#### Verification
-
-- `bun run benchmark:lifecycle` passed 20 unique-id mount/update/destroy cycles, clearing 1,120 retained ids and reporting p50/p95/p99 lifecycle timings plus RSS observations.
-- The initial RED run exposed retained list/focus host state; cleanup now passes the non-ignored regression and reports zero host state after every destroy draw.
-- Independent review of commit `dc28844` returned `CLEAN/MERGEABLE`.
-
-### 2026-08-27 - Lifecycle cleanup for measured host-state retention
-status: done | updated: 2026-08-27
-
-- [x] Prune host-side list caches, focus subscriptions, pending key state, and drag/autofocus state when retained ids disappear.
-- [x] Add a regression assertion that unique-id mount/destroy cycles leave no host state behind.
-- [x] Re-run lifecycle/full verification and obtain an independent review before closing the follow-up.
-
-#### Verification
-
-- RED was observed before the fix: cycle 0 retained `focusSubscriptions=2`; the post-fix probe reports all host-state counts zero after every cycle.
-- `cargo test -p solid-gpui-helper headless_lifecycle -- --nocapture` passed both non-ignored lifecycle regressions; Clippy and fmt passed.
-- Independent review of commit `dc28844` returned `CLEAN/MERGEABLE`.
-
 ### 2026-08-27 - Measurement foundation: compiled JSX versus runtime h()
 status: done | updated: 2026-08-27
 
@@ -1649,3 +619,318 @@ status: done | updated: 2026-08-27
 
 - `git diff --check` and review-correction assertions passed.
 - Independent review of commit `40f5826` returned `CLEAN/MERGEABLE`; all three prior questions were resolved with no ADR 002 contradiction.
+
+### 2026-08-27 - Gate 1 first-class JSX and TypeScript DX
+status: done | updated: 2026-08-27
+
+Goal: make the renderer-owned JSX runtime and consumer TypeScript surface usable
+without changing the Solid/GPUI protocol or the out-of-process architecture.
+
+- [x] Inspect current JSX exports, Solid rc.3 universal contract, package build outputs, and the smallest public type surface.
+- [x] Add a failing external `.tsx` consumer fixture proving the missing JSX runtime/type declarations. RED recorded missing `@solid-gpui/solid/jsx-runtime`, `JSX.IntrinsicElements`, and the two-argument `mountJsx` API.
+- [x] Implement renderer-owned `jsx-runtime`/`jsx-dev-runtime` exports and intrinsic element types with strict public props. Also export `DrawItem` from the protocol surface and let `mountJsx` reuse a supplied `RenderOptions.connection`.
+- [x] Add a real compile/run smoke path for the fixture under Bun and Node with `--conditions=browser`.
+- [x] Run focused and full verification, obtain independent review, and close this block only with evidence.
+
+#### Verification
+
+- `bun run check:consumer-jsx` passed; both external `.tsx` fixtures typecheck, and unsupported `className`, `tabIndex`, and `autoFocus` remain enforced as type errors.
+- `bun --conditions=browser test tests/consumer-jsx.test.ts` passed 1 test; `bun run test` passed 196 tests across 20 files with 0 failures.
+- `bun run typecheck`, `bun run check:release`, and `cargo fmt --all -- --check` exited 0.
+- `cargo clippy --all-targets --locked -- -D warnings` exited 0; locked GUI-skipped Cargo tests passed (helper, protocol, and stdio suites). Cargo emitted only the known non-blocking `block v0.1.6` future-incompatibility warning.
+- `bun run smoke:consumer-jsx` passed both Bun and Node legs through the real helper; `bun run smoke:node` passed.
+- `bun run build` and staged `node scripts/pack-package.mjs packages/solid --out .pi/review-tmp/gate1-pack-final` passed. The packed `@solid-gpui/solid` manifest exposed both runtime entries, and a packed-consumer `tsc --noEmit` check passed.
+- The final independent reviewer reported `CLEAN/MERGEABLE` with no blocker or should-fix findings. The transport smoke's operation/ack coverage versus native user-event round trips, and a dedicated Vite recipe, remain explicitly non-blocking follow-up questions for later gate work.
+
+### 2026-08-27 - Gate 0 consumer acceptance fixture
+status: done | updated: 2026-08-27
+
+Goal: exercise the supported `h()`/`.ts` consumer path as one small SaaS-like
+screen through both JavaScript hosts and the real helper, before further
+styling, packaging, or optimization work.
+
+#### Scope and inherited decisions
+
+- The fixture uses `render((h) => ...)`, not JSX; external `.tsx` typechecking is
+  covered by Gate 1.
+- The supported host baseline is Bun 1.4.0 and Node 24 with
+  `--conditions=browser`; macOS arm64/x64 is the current GUI target, while
+  headless transport evidence may run on other hosted OSes.
+- A separately shipped Rust helper sidecar is acceptable and remains the
+  default distribution model.
+- Tailwind exact semantics are not claimed; the fixture uses the typed GPUI
+  style-map surface and records unsupported utility-class behavior explicitly.
+- One GPUI window is sufficient for this first acceptance slice; multi-window
+  application management stays out of scope.
+
+#### Acceptance criteria
+
+- [x] Add one external-looking `.ts` fixture containing a styled layout, a
+      form input, signal-driven text, an interactive action, and a controlled
+      select/combobox-like interaction using only the supported `h()` surface.
+- [x] Run the fixture under Bun and Node against the real helper, with the
+      browser condition, and assert the initial and post-action mutations.
+- [x] Prove the same action's event-to-mutation path at the real helper
+      boundary, or record the exact GUI/environment limitation if a native
+      event cannot be injected headlessly. The optional GUI leg uses the
+      helper's `simulateInput` seam and passed locally; default transport mode
+      records that native event injection is GUI-gated.
+- [x] Record every unsupported requirement without silently accepting or
+      advertising it.
+- [x] Run focused/full verification and obtain an independent review before
+      marking this block done.
+
+#### Verification
+
+- RED was observed before wiring: `check:consumer-h` failed on the missing
+  script before any fixture existed; the smoke wrapper test failed before the
+  harness landed; fixture strictness caught the eager `setCount` return-type
+  mismatch in `h()` action props during GREEN.
+- `bun run check:consumer-h` passed; `bun --conditions=browser test
+  tests/consumer-h.test.ts` passed 2/2; `bun run test` passed 198 tests across
+  21 files with 0 failures; `bun run typecheck`, `bun run check:release`, and
+  `git diff --check` exited 0.
+- `bun run smoke:consumer-h` passed Bun and Node legs through the real
+  `--stdio` helper; `SOLID_GPUI_GATE0_GUI=1 bun run smoke:consumer-h` passed
+  both legs through the real `--stdio-window` helper including the
+  `simulateInput` → handler → mutation roundtrip.
+- Review round r1 exposed a CI blocker in this block's own wrapper: the
+  repo-root bun-test suite runs on the helper-less ts job, so wrapping
+  `smoke:consumer-h` unconditionally would fail `bun run test` there. Fixed by
+  skipping that one test with the smoke script's exact binary predicate
+  (verified: `1 pass, 1 skip, exit 0` under a missing-helper env); also added
+  a bounded poll for GUI event arrival (helper window-tests precedent) and
+  removed an unused `mountAcceptanceScreen` export.
+- Independent review attempts mtbjaq05-185d and mtbjgtll-8965 were terminated
+  mid-run before any verdict; their partial analysis produced the fixes above.
+  A fourth attempt completed the full audit and delivered its verdict but was
+  terminated while writing the closing envelope; the complete findings and
+  executed checks are preserved in the persisted transcript at
+  `.pi/artifacts/tasks/sessions/mtbk0utc-569d/2026-08-27T13-24-20-577Z_01a04364-95e1-7a4e-a38d-ed4968152b5e.jsonl`:
+  verdict **CLEAN/MERGEABLE** — all four proposed changes present, CI-skip fix
+  independently re-verified (`1 pass, 1 skip, 0 fail` under a missing-helper
+  env), smoke/typecheck/wrapper re-runs green, no Gate 0 Rust or protocol
+  changes confirmed, single non-blocking [nit] recorded below.
+- Reviewer nit (accepted, non-blocking): the fixture passes `value: query()`
+  eagerly; `h()` reactively wraps only style/source/runs/accessibility, so the
+  input's displayed value is set once and only `accessibility.value` tracks
+  signals. No harness assertion depends on it.
+
+### 2026-08-27 - Gate 2 styling decision: Tailwind-compatible subset
+status: done | updated: 2026-08-27
+
+Goal: adopt ROADMAP Gate 2 option 1 in the smallest honest form — a documented
+Tailwind-compatible utility SUBSET compiled client-side into the existing typed
+`StyleMap` and state layers, with actionable diagnostics for everything else.
+No protocol, helper, or new-dependency changes; everything compiles away before
+the wire.
+
+#### Decisions recorded (safe assumptions under AFK; revisit triggers documented)
+
+- Canonical prop is `class` (Solid convention); a NEW loud warning points
+  `className` users to it instead of today's silent drop.
+- Compilation happens inside the renderer style/class merge: `class` yields
+  UNDER an explicit `style` prop, both merged into ONE setStyle (helper-side
+  setStyle REPLACES the whole map — two base ops would race by ordering).
+- Matrix v0.1 mirrors what the helper actually applies (verified host.rs):
+  spacing 4px scale + negatives + `[..]` brackets (px/rem/%), full default
+  Tailwind palette for bg-/text-, white/black, text size scale, font weight
+  scale, opacity-N, rounded scale, flex/flex-col/items-center/justify-center/
+  flex-1/grow/shrink/gap, cursor-pointer, hover:/active: variants.
+- Unsupported stays unsupported with a named diagnostic: responsive prefixes,
+  group-/focus-/dark:, other alignment values (start/end/between/…), hidden,
+  overflow-hidden, line-height, shadow classes (use boxShadow style),
+  grid/table, pseudo-elements. Unknown tokens warn per compile call.
+- Variants map onto P1-c state layers; state-layer helper refusals (markdown
+  etc.) keep firing unchanged.
+- Reactive `class` functions are NOT added in this slice: h() eager-prop rule
+  stands; compiled-JSX dynamic attrs re-call setProp and recompile correctly.
+
+#### Slices
+
+1. Pure parser module + unit tests (RED first) — verify: bun test utilities
+2. Renderer `class` branch: merge semantics, one-setStyle invariant, className
+   warning, unknown-token diagnostics — verify: focused suite + transport ack
+   through the real helper (standard ops only)
+3. JSX types (`class` on interactive/div props), consumer fixture coverage —
+   verify: check:consumer-jsx
+4. Utility-matrix doc + README honesty pass, full gates, independent review,
+   close block
+
+#### Review outcome
+
+- Reviewer run mtblc7hk-d2d0 (terminated mid-run, deep partial preserved in
+  the session JSONL) validated the palette/scale tables against Tailwind v3
+  defaults, the layout mapping against host.rs, clean crates/, and untouched
+  dependencies — and identified three real defects, all fixed with RED→GREEN
+  tests: bare `rounded` was 6 instead of Tailwind's 4; the minus prefix
+  applied to every length family instead of margins-only (`-p-4`/`-w-8`/
+  `-gap-2` now refuse to unknown); 4-digit `#rgba` bracket hex dropped its
+  alpha digit (now refused; 8-digit passes through — host parse_color maps it
+  via rgba(), host.rs:3102-3109).
+- Reviewer mtblk7d2-3cbe terminated before verdict. Fix verification was then
+  completed by an independent general agent (mtbln5uj-7b2c, full envelope:
+  status success, confidence high): 19/19 utilities tests, exit 0, all three
+  claims VERIFIED with path:line evidence.
+- With no remaining blocker/major/should-fix, Gate 2 closes as done; the
+  six-termination backend flake is recorded in MEMORY with the working
+  general-agent fallback.
+
+### 2026-08-27 - Gate 4 runtime contract + sidecar packaging baseline
+status: done | updated: 2026-08-27
+
+Goal: close Gate 4's headlessly-verifiable half — a production helper-
+resolution guard, packaged-binary permission enforcement, declared runtime
+ranges, and the signing/packaging runbook — leaving hosted GUI evidence and
+cert-dependent signing as explicit user/hosted actions.
+
+#### Scope decisions (safe assumptions under AFK)
+
+- Production guard is opt-in via `SOLID_GPUI_NO_DEV_FALLBACK=1`, set by the
+  app launcher; library users keep the dev-target convenience untouched.
+- The explicit helper-path API (SOLID_GPUI_HELPER / spawnHelper binary) is the
+  sanctioned "launcher" contract; no bespoke bundle-layout resolver is added
+  until a concrete app layout exists (ROADMAP allows launcher OR API).
+- Declared runtimes: Bun ≥ 1.4, Node ≥ 20 (LTS 20/22/24 verified for the
+  client's node: APIs). engines fields are advisory.
+- Signing/notarization steps are documented for the user to run (certs are
+  user-held); release workflow keeps packaging + exec smoke as CI evidence.
+
+#### Slices
+
+1. Production resolution guard in binary.ts (RED first): skip dev target,
+   production-specific guidance error — verify: focused client tests
+2. pack-helper.mjs chmod 0o755 after copy — verify: script dry-run + release
+   workflow packaged-binary smoke as evidence
+3. engines fields + README runtime-declaration section
+4. docs/packaging.md runbook (bundle layout, launcher contract, signing,
+   upgrades, cleanup); full gates; independent review; close
+
+#### Verification
+
+- RED observed: the two production-guard tests failed before the binary.ts
+  change (dev target still won under the flag; error mentioned cargo).
+- `bun run test` 227 pass / 0 fail across 23 files; `bun run typecheck`,
+  `bun run check:release` (with the new engines field), and
+  `git diff --check` exited 0.
+- Pack evidence: `node scripts/pack-helper.mjs --target darwin-arm64
+  --binary target/debug/solid-gpui-helper` produced a packaged binary at mode
+  0755 (`.pi/review-tmp/g4-pack/`); the release workflow's existing packaged-
+  binary smoke remains the CI-side execution proof.
+- docs/packaging.md records the launcher contract (`SOLID_GPUI_HELPER` +
+  `SOLID_GPUI_NO_DEV_FALLBACK=1` before spawn), bundle layout, codesign/
+  notarytool steps with user-held certs, version pinning, and crash-cleanup
+  expectations; README declares Bun ≥ 1.4 / Node ≥ 20 and links it.
+- Remaining Gate 4 exit items are explicitly external: clean-machine launch
+  with user-signed artifacts and hosted Windows/Linux GUI evidence.
+
+#### Review outcome
+
+- Independent review (general agent, full envelope) returned `partial` with a
+  single [blocker]: engines lived only in the private root manifest, so the
+  published packages did not declare Node ≥ 20. Fixed by adding `engines:
+  {node: ">=20"}` to the client, solid, and protocol package manifests;
+  re-verified by repacking `@solid-gpui/client` and inspecting the staged
+  manifest (engines present), plus `check:release`, the full 227-test suite,
+  both consumer typechecks, and `git diff --check` — all green.
+- Reviewer-verified evidence carried into the record: guard tests 7/7
+  (binary.test.ts:31-90), chmod observed mode 755 on the packaged helper,
+  runbook accuracy (signing/clean-machine marked external), release smoke
+  path release.yml:89-92.
+
+### 2026-08-27 - Gate 3-a pointer outside-click dismissal
+status: done | updated: 2026-08-27
+
+Goal: close the most user-visible deferred S14b edge — click outside an open
+overlay dismisses it — via one protocol event, helper detection, renderer
+prop, and select wiring. Protocol v1 discipline: both languages lockstep, new
+parity fixture, no snapshot regen (batch-01 untouched).
+
+#### Design (from recon of pinned gpui 35aab21)
+
+- New EventType `outsideClick` (variant-name camelCase is automatic). Wire:
+  `{type:event,id,eventType:outsideClick,x?,y?}` — decodeEvent already
+carries optional coords generically.
+- Helper detection: when a node subscribes OutsideClick, its rendered element
+  is wrapped in a tiny custom element (ImeAnchor precedent) whose paint()
+  records bounds and registers a next-frame window-level MouseDown listener
+  (paint-phase-only API, cleared per frame — no accumulation); Bubble-phase
+  press outside the recorded bounds emits the event through the injectable
+  sink. Bounds map rebuilds each render frame (no stale pruning debt).
+- Renderer: `onOutsideClick` prop → setEventListener; select.Root subscribes
+  and maps it to closeMenu() so every select/combobox instance dismisses.
+- Testability: gpui TestAppWindow::simulate_mouse_down/up works HEADLESSLY —
+  the helper slice gets a real end-to-end test (mount via TestApp, click
+  outside → sink sees outsideClick; click inside → nothing) with no window
+  server.
+
+#### Slices
+
+1. Protocol both sides + event parity fixture + renderer/select RED→GREEN
+2. Helper wrapper element + sink emission (TestApp RED→GREEN, headless)
+3. select dismissal unit coverage + deferred-edges test update + README
+   deferral wording
+4. Full gates + cross-language + independent review; close block
+
+#### Verification
+
+- RED observed on every layer before its GREEN: TS fixture decode rejected
+  `outsideClick`; the outside-click suite failed with no listener registered;
+  Rust fixture test failed on the f64 canonical-form trap (fixed by writing
+  `401.0`/`93.0` — the known serde lesson); the helper TestApp test failed
+  with zero emissions until the detector existed, then caught its own test-
+  setup bug (a TEXT child ignores size styles → bounds 1920×26) before going
+  green with a real 100×100 DIV.
+- Headless end-to-end proof: mount → paint registration →
+  `simulate_mouse_down(300,300)` emits exactly one outsideClick with
+  position; second frame re-registration → press at (50,50) emits nothing
+  (crates/helper/src/host.rs, `headless_render_tests`).
+- Cross-language: `event-outside-click-01.json` parses and re-emits
+  byte-exact in Rust and decodes in TS; `EventType` union + EVENT_TYPES +
+  Rust enum variant in lockstep; no fixture-snapshot regen owed (batch-01
+  untouched).
+- `bun run test` 231 pass / 0 fail across 24 files (select deferral test
+  updated: composition assertions retained, outside-click wording now
+  shipped); `bun run typecheck`, both consumer typechecks, `check:release`,
+  `cargo fmt --check`, `cargo clippy --all-targets --locked -- -D warnings`,
+  and full locked protocol+helper suites all green (only the known block
+  v0.1.6 future-incompat note remains).
+
+#### Review outcome
+
+- Independent review (full envelope, status success, confidence high) verdict
+  **MERGEABLE**: event sets 17/17 in lockstep, fixture byte-exact round trip,
+  snapshot untouched, paint-only next-frame-cleared registration verified
+  against pinned gpui source (window.rs:4848-4861), wrap-after-overlays
+  confirmed, helper-owned refusal intact both sides, all commands green
+  (231 bun tests, helper/protocol cargo suites, clippy, fmt, tsc).
+- One comment-only should-fix applied: select.Root comment now states that
+  anchored-menu presses DO emit outsideClick and why Bubble ordering makes
+  that safe. Reviewer suggestions also applied: the headless test now
+  asserts non-accumulation directly (3 frames → exactly 2 events), the
+  Bubble-over-Capture rationale lives on the detector doc comment, and the
+  ROADMAP Gate 3 bullet is annotated headless-landed with GUI evidence still
+  owed.
+- Open Gate 3 remainder (not this slice's debt, recorded by reviewer):
+  focus transfer/restoration, keyboard-nav hardening, IME-composition-safe
+  arrows, generic popover positioning/clipping, and per-OS GUI evidence.
+
+#### Verification
+
+- RED observed twice before implementation: `utilities.test.ts` failed on the
+  missing module; `class-prop.test.ts` failed on missing merge/diagnostic
+  behavior (class produced nothing, className stayed silent, variants absent).
+- First GREEN attempt regressed four existing suites (phantom empty
+  hover/active/dragOver setStyle ops per style touch); fixed by refusing
+  empty-vs-undefined layer emissions; suites re-ran green before proceeding.
+- `bun run test` 225 pass / 0 fail across 23 files (was 198 pre-slice);
+  `bun run typecheck`, `bun run check:consumer-jsx`, `bun run check:release`,
+  and `git diff --check` exited 0.
+- Real-helper proof: class-compiled styles (spacing + palette + variant
+  layers + radius) acked with an honest applied count through `--stdio`
+  (transport); `smoke:consumer-jsx` compiled `class="p-4 flex gap-4
+  hover:bg-blue-500"` through the universal plugin and the helper acked it on
+  both Bun and Node legs; `smoke:consumer-h` still green.
+- Matrix doc `docs/tailwind-subset.md` documents every supported family, the
+  exact deviation policy, and the refusal list; README's limitation bullet now
+  points to it instead of claiming Tailwind is wholly unsupported.

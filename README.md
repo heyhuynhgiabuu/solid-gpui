@@ -47,8 +47,13 @@ bun add @solid-gpui/solid solid-js@2.0.0-rc.3   # or: npm i @solid-gpui/solid so
 ```
 
 ```tsx
-import { render } from "@solid-gpui/solid"
-await render((h) => h("div", { style: { padding: 24 } }, "hello gpui"))
+import { mountJsx } from "@solid-gpui/solid/jsx"
+
+function App() {
+  return <div style={{ padding: 24 }}>hello gpui</div>
+}
+
+await mountJsx(() => <App />)
 ```
 
 Run every entry point with `--conditions=browser` (Node and Bun alike —
@@ -73,6 +78,23 @@ Configure your Babel pipeline with
 `@solidjs/babel-plugin` (`{ generate: "universal", moduleName: "@solid-gpui/solid/jsx" }`)
 as a plugin; see `scripts/solid-jsx-preload.ts` for a zero-config Bun dev setup.
 
+For consumer TypeScript, point JSX type resolution at the renderer package:
+
+```json
+{
+  "compilerOptions": {
+    "jsx": "preserve",
+    "jsxImportSource": "@solid-gpui/solid"
+  }
+}
+```
+
+The Babel universal plugin remains the runtime transform; do not use the
+React-style `jsx: "react-jsx"` transform for Solid reactivity. The renderer
+owns both `jsx-runtime` and `jsx-dev-runtime` type entries. A compiled `.tsx` entry can mount through the shared path shown above. Use
+`render((h) => ...)` when a low-level hyperscript or dynamic host-node escape
+hatch is required.
+
 ## Quick start (from a checkout)
 
 Prerequisites: Bun ≥1.4, Rust stable, full Xcode with the Metal toolchain
@@ -87,6 +109,19 @@ bun run example/counter                  # counter in a real GPUI window;
 bun test                                  # runs with --conditions=browser
 cargo test                                # protocol + helper suites
 ```
+
+The Gate 0 consumer acceptance fixture uses the supported `h()`/`.ts` surface
+and runs against the real helper in both hosts:
+
+```sh
+bun run check:consumer-h
+bun run smoke:consumer-h
+SOLID_GPUI_GATE0_GUI=1 bun run smoke:consumer-h  # also exercises simulateInput events
+```
+
+The default smoke is transport-only so it is usable without a window server;
+the GUI leg is the event-roundtrip check. It does not imply full Tailwind
+semantics, multi-window application management, or a single-file executable.
 
 ## Tooltips (S14)
 
@@ -124,9 +159,10 @@ selected state:
 
 `combobox.Root` uses the same `Content`/`Item` primitives with an editable
 `combobox.Trigger`. Values are controlled; item `value`/`disabled` are static definitions (remount
-an item when they change), filtering remains caller-owned, and multi-select,
-uncontrolled state, native popup windows, pointer-based outside-click
-dismissal, and IME-composition arrow suppression are not part of S14b. Try the real window
+an item when they change), filtering remains caller-owned. Presses outside the
+root subtree dismiss the open menu (`onOutsideClick`, helper-side detection,
+Gate 3-a). Multi-select, uncontrolled state, native popup windows, and
+IME-composition arrow suppression are not part of S14b. Try the real window
 demo with `bun run example/select`.
 
 ## Trust boundary for JavaScript
@@ -172,7 +208,7 @@ batches behind them while open — the dialog is the user's current task.
 | --- | --- |
 | `@solid-gpui/protocol` | Mutation wire types (TS) + `solid-gpui-protocol` crate (Rust). Shared JSON fixtures are the cross-language contract. |
 | `@solid-gpui/client` | Spawns/supervises the helper; NDJSON over stdio; per-seq correlation. |
-| `@solid-gpui/solid` | `@solidjs/universal` renderer → mutations; hyperscript `h()` authoring. |
+| `@solid-gpui/solid` | `@solidjs/universal` renderer → mutations; JSX universal runtime plus hyperscript `h()` authoring. |
 | `solid-gpui-helper` | Rust binary owning the main thread: GPUI window + retained tree. |
 
 Out-of-process on purpose: the helper owns its main thread and native event
@@ -184,12 +220,20 @@ loop on every OS, so no Zed fork and no ThreadsafeFunction usage. See
 - Solid 2.0.0-rc.3 is still a prerelease; keep the runtime, universal renderer,
   and JSX compiler versions aligned. Node.js and Bun.js can host the client,
   but every Solid entry point needs `--conditions=browser`.
-- JSX execution works through the universal Babel plugin, but consumer
-  TypeScript JSX declarations and the standard `jsx-runtime` package entries
-  are not complete yet. The repository's own typecheck does not replace an
-  external consumer `.tsx` typecheck.
-- Tailwind, CSS files, and `className` are not supported. Use the typed GPUI
-  `StyleMap`; unknown props are not styling fallbacks.
+- JSX consumer types and `jsx-runtime`/`jsx-dev-runtime` entries now cover the
+  supported GPUI surface and pass an external `.tsx` fixture. Runtime lowering
+  still requires the universal Babel plugin with `jsx: "preserve"`; the
+  React-style automatic JSX transform is not supported.
+- Supported runtimes: Bun ≥ 1.4 and Node ≥ 20 (LTS 20/22/24) for the client,
+  always with `--conditions=browser`; `engines` declares Node ≥ 20. For app
+  distribution (sidecar helper, production resolution guard, signing), see
+  [docs/packaging.md](./docs/packaging.md).
+- Tailwind authoring is supported through a documented **compatible subset**:
+  the `class` prop compiles approved utility classes (spacing scale, default
+  palette, text sizes, layout, `hover:`/`active:` variants) into typed style
+  maps, and refuses anything outside the matrix with a diagnostic. See
+  [docs/tailwind-subset.md](./docs/tailwind-subset.md). `className` is not
+  supported and warns; browser-CSS equivalence is not claimed.
 - Platform evidence is split by test type: macOS has local full-suite/window
   evidence, while hosted CI validates Linux and Windows headless helper/
   protocol tests plus real stdio transport. GUI/window coverage remains
