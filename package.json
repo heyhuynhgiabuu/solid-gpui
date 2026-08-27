@@ -3,6 +3,9 @@
   "private": true,
   "license": "Apache-2.0",
   "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
   "workspaces": [
     "packages/*"
   ],
@@ -24,6 +27,8 @@
     "example/markdown:hot": "bun --conditions=browser --hot run examples/markdown.ts",
     "pack:all": "bun run build && node scripts/pack-package.mjs packages/protocol && node scripts/pack-package.mjs packages/client && node scripts/pack-package.mjs packages/solid",
     "smoke:node": "tsx scripts/node-smoke.ts",
+    "smoke:consumer-jsx": "bun --conditions=browser run scripts/consumer-jsx-smoke.ts",
+    "check:consumer-jsx": "tsc --noEmit -p tests/consumer-jsx/tsconfig.json",
     "test": "bun --conditions=browser test",
     "typecheck": "tsc --noEmit -p packages/protocol && tsc --noEmit -p packages/client && tsc --noEmit -p packages/solid",
     "example:canvas": "bun --conditions=browser run examples/canvas.tsx",

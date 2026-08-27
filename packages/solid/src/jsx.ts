@@ -16,8 +16,10 @@
 import { Show, For, Switch, Match, createMemo } from "solid-js"
 import { createSolidRenderer, type HostNode } from "./renderer"
 import { mount } from "./render"
-import type { RenderHandle } from "./render"
+import type { RenderHandle, RenderOptions } from "./render"
+export type { RenderOptions } from "./render"
 import type { Send } from "./renderer"
+import type { JSX } from "./jsx-runtime"
 import { spawnHelper } from "@solid-gpui/client"
 
 let suite: ReturnType<typeof createSolidRenderer> | null = null
@@ -64,10 +66,16 @@ function s(): NonNullable<typeof suite> {
   return suite
 }
 
-/** Mount a JSX-authored tree in a fresh helper window (the app entry). */
-export async function mountJsx(code: () => HostNode): Promise<RenderHandle> {
-  const connection = spawnHelper({ mode: "window" })
-  return mount(connection, { onSuite: (next) => (suite = next) }, code)
+/** Mount a JSX-authored tree, optionally reusing an existing helper connection. */
+export async function mountJsx(
+  code: () => JSX.Element,
+  opts: RenderOptions = {},
+): Promise<RenderHandle> {
+  const connection = opts.connection ?? spawnHelper({ mode: "window" })
+  // A mounted root must be a HostNode at runtime. JSX's public element type
+  // also includes component/flow values and primitives for child positions;
+  // the universal renderer validates an invalid root during mount.
+  return mount(connection, { onSuite: (next) => (suite = next) }, code as () => HostNode)
 }
 
 /**

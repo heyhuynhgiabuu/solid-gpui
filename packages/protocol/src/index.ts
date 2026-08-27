@@ -14,6 +14,7 @@ export type {
   AccessibilityRole,
   AccessibilityState,
   AnchorKind,
+  DrawItem,
   AnimatableStyleKey,
   EasingName,
   ElementType,

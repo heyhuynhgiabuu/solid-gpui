@@ -1,0 +1,10 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "jsx": "preserve",
+    "jsxImportSource": "@solid-gpui/solid",
+    "types": ["bun-types"],
+    "noEmit": true
+  },
+  "include": ["fixture.tsx", "runtime-fixture.tsx"]
+}

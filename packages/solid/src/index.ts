@@ -1,5 +1,6 @@
 export { createSolidRenderer } from "./renderer"
 export type { HostNode, Send, SolidGpuiRenderer } from "./renderer"
+export type { JSX, GpuiElementEvent, GpuiEventHandler, GpuiKeyBindings } from "./jsx-runtime"
 export { render } from "./render"
 export type { RenderHandle, RenderOptions } from "./render"
 export { makeH } from "./h"

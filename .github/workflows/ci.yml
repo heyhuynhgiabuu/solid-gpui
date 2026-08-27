@@ -26,6 +26,7 @@ jobs:
           bun-version: latest
       - run: bun install --frozen-lockfile
       - run: bun run typecheck
+      - run: bun run check:consumer-jsx
       - run: bun run test
 
   rust:
@@ -101,3 +102,4 @@ jobs:
       - run: cargo build -p solid-gpui-helper
       - run: bun install --frozen-lockfile
       - run: bunx tsx scripts/node-smoke.ts
+      - run: bun run smoke:consumer-jsx

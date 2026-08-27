@@ -2,10 +2,21 @@
   "name": "@solid-gpui/solid",
   "version": "0.1.0",
   "license": "Apache-2.0",
+  "engines": {
+    "node": ">=20"
+  },
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
-    "./jsx": "./src/jsx.ts"
+    "./jsx": "./src/jsx.ts",
+    "./jsx-runtime": {
+      "types": "./src/jsx-runtime.ts",
+      "default": "./src/jsx-runtime.ts"
+    },
+    "./jsx-dev-runtime": {
+      "types": "./src/jsx-dev-runtime.ts",
+      "default": "./src/jsx-dev-runtime.ts"
+    }
   },
   "dependencies": {
     "@solid-gpui/client": "workspace:*",
