@@ -1,8 +1,9 @@
 # CI for solid-gpui.
 #
-# The helper needs macOS (Metal) for GUI paths, so Rust tests run on macOS
-# with SOLID_GPUI_SKIP_GUI_TESTS=1 (opens no windows on CI). TypeScript suites
-# are platform-independent and run on Linux.
+# The headless helper tests run on Linux, Windows, and macOS. Real-window
+# suites remain GUI-gated: they need a desktop session and stay covered by
+# local macOS runs without weakening the platform-independent gates below.
+# TypeScript suites are platform-independent and run on Linux.
 
 name: ci
 
@@ -28,6 +29,7 @@ jobs:
       - run: bun run test
 
   rust:
+    name: rust (macOS)
     runs-on: macos-14
     env:
       SOLID_GPUI_SKIP_GUI_TESTS: "1"
@@ -38,8 +40,49 @@ jobs:
           components: clippy, rustfmt
       - uses: Swatinem/rust-cache@v2
       - run: cargo fmt --all -- --check
-      - run: cargo clippy --all-targets -- -D warnings
-      - run: cargo test -p solid-gpui-protocol -p solid-gpui-helper
+      - run: cargo clippy --all-targets --locked -- -D warnings
+      - run: cargo test -p solid-gpui-protocol -p solid-gpui-helper --locked
+
+  rust-linux:
+    name: rust (Linux, headless)
+    runs-on: ubuntu-latest
+    env:
+      SOLID_GPUI_SKIP_GUI_TESTS: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install GPUI Linux build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential \
+            pkg-config \
+            libwayland-dev \
+            libegl-dev \
+            libpipewire-0.3-dev \
+            libspa-0.2-dev \
+            libclang-dev
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo fmt --all -- --check
+      - run: cargo clippy --all-targets --locked -- -D warnings
+      - run: cargo test -p solid-gpui-protocol -p solid-gpui-helper --locked
+
+  rust-windows:
+    name: rust (Windows, headless)
+    runs-on: windows-latest
+    env:
+      SOLID_GPUI_SKIP_GUI_TESTS: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo fmt --all -- --check
+      - run: cargo clippy --all-targets --locked -- -D warnings
+      - run: cargo test -p solid-gpui-protocol -p solid-gpui-helper --locked
 
   node-smoke:
     # Real Node runtime against the compiled helper (needs the binary, hence

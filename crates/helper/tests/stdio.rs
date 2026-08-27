@@ -1,21 +1,15 @@
 //! `--stdio` transport contract: the helper reads NDJSON mutation batches from
 //! stdin and replies with one NDJSON line per batch — ack or error. Closing
-//! stdin ends the process with exit 0. No GUI is involved (transport layer).
+//! stdin ends the process with exit 0. No GUI is involved (transport layer),
+//! so these tests intentionally run even when real-window tests are skipped.
 
 use std::io::{BufRead, BufReader, Write};
 use std::process::{Command, Stdio};
 
 use solid_gpui_protocol::{from_json, to_json};
 
-fn skip() -> bool {
-    std::env::var("SOLID_GPUI_SKIP_GUI_TESTS").is_ok()
-}
-
 #[test]
 fn stdio_round_trip_ack_and_error() {
-    if skip() {
-        return;
-    }
     let bin = env!("CARGO_BIN_EXE_solid-gpui-helper");
     let mut child = Command::new(bin)
         .arg("--stdio")
@@ -92,9 +86,6 @@ fn stdio_round_trip_ack_and_error() {
 /// EOF exits 0.
 #[test]
 fn stdio_rejects_malformed_input_but_stays_alive() {
-    if skip() {
-        return;
-    }
     let bin = env!("CARGO_BIN_EXE_solid-gpui-helper");
     let mut child = Command::new(bin)
         .arg("--stdio")
