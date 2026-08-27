@@ -816,3 +816,14 @@
 - [fit] S14b covers only controlled in-window single-select/combobox overlays;
   P9 covers a macOS application menu bar. Neither is a general native popup
   subsystem, and multi-window is one helper process/window per connection.
+
+## Customer-fit roadmap (2026-08-27)
+
+- [plan] Reframed `ROADMAP.md` around a consumer acceptance fixture followed by
+  first-class JSX/TypeScript, an explicit styling decision, overlay semantics,
+  Node/Bun runtime support, sidecar packaging, platform evidence, reliability,
+  measurement, and only then optional P12 wire work.
+- [decision] The distribution baseline remains a signed app plus a separate Rust
+  helper; Bun single-file output is an experiment, not a promise. Any Tailwind
+  support must be a defined compiler subset or an explicitly different utility
+  system, never silent `className` dropping.

@@ -1622,3 +1622,11 @@ status: done | updated: 2026-08-27
 - The quoted compile form also omits `--conditions=browser`: an empirical Bun `1.4.0` compiled signal probe produced `runs: 0` under the default condition and `runs: 2` with `--conditions=browser`. The latter is required for live Solid reactivity.
 - `bunx tsc` against a representative consumer `.tsx` exited 2 with missing `JSX.IntrinsicElements` and `@solid-gpui/solid/jsx-runtime`; the installed `@solidjs/universal@2.0.0-rc.3` guidance requires those renderer-owned entries.
 - Exact local versions were Bun `1.4.0`, Solid/universal/compiler `2.0.0-rc.3`, and GPUI pinned to the repository's Zed commit. Official Bun executable guidance was checked at https://bun.sh/docs/bundler/executables. Independent fit review found the project claims honest but the prospective user's Tailwind, turnkey TypeScript JSX, and single-file packaging requirements are not met.
+
+### 2026-08-27 - Customer-fit roadmap rewrite
+status: active | updated: 2026-08-27
+
+- [ ] Rewrite ROADMAP.md around release gates for Node/Bun, JSX/TypeScript, styling, overlays, platform evidence, and helper packaging.
+- [ ] Sync the README's consumer-facing support claims with the audited gaps without changing renderer semantics.
+- [ ] Verify the roadmap against the current manifests, source, tests, and official Bun executable guidance.
+- [ ] Record the final roadmap and documentation verification, leaving speculative Tailwind and single-file work as explicit gates.

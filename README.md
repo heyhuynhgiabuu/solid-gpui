@@ -182,11 +182,22 @@ loop on every OS, so no Zed fork and no ThreadsafeFunction usage. See
 ## Current limitations (v0.1)
 
 - Solid 2.0.0-rc.3 is still a prerelease; keep the runtime, universal renderer,
-  and JSX compiler versions aligned.
+  and JSX compiler versions aligned. Node.js and Bun.js can host the client,
+  but every Solid entry point needs `--conditions=browser`.
+- JSX execution works through the universal Babel plugin, but consumer
+  TypeScript JSX declarations and the standard `jsx-runtime` package entries
+  are not complete yet. The repository's own typecheck does not replace an
+  external consumer `.tsx` typecheck.
+- Tailwind, CSS files, and `className` are not supported. Use the typed GPUI
+  `StyleMap`; unknown props are not styling fallbacks.
 - Platform evidence is split by test type: macOS has local full-suite/window
   evidence, while hosted CI validates Linux and Windows headless helper/
   protocol tests plus real stdio transport. GUI/window coverage remains
   environment-gated there, and prebuilt helper packages are currently macOS-only.
+- `bun build --compile` packages the JavaScript/Bun side, not the Rust helper.
+  A native application needs a separately shipped helper sidecar or an
+  explicit extraction/signing layer; the current release path is platform npm
+  helper packages.
 - Protocol compaction (P12) is intentionally deferred: the numeric candidate
   cut wire bytes but regressed the measured encoder; revisit only with a direct
   encoder and explicit compatibility design.

@@ -1,280 +1,362 @@
 # solid-gpui roadmap
 
-This roadmap describes the order for performance work and Solid-version
-compatibility. It is a prioritization document, not a promise that every item
-will ship. Every optimization must preserve the protocol, retained-tree, and
-poison-on-failure invariants documented in `AGENTS.md` and
+This roadmap is for maintainers and early adopters evaluating solid-gpui as the
+UI foundation for a native SaaS client. It prioritizes the risks that can make
+an otherwise working demo unusable in a real application: consumer TypeScript
+DX, styling, overlays, runtime support, distribution, and platform evidence.
+It is a sequence of release gates, not a promise that every capability will
+ship.
+
+Every change must preserve the protocol, retained-tree, lifecycle, and
+poison-on-failure invariants in `AGENTS.md` and
 `.pi/artifacts/DECISIONS.md`.
 
-## Current baseline
+## North-star contract
 
-- The supported runtime is Solid `2.0.0-rc.3`, with matching
-  `@solidjs/universal`, `@solidjs/web`, and `@solidjs/babel-plugin` packages.
-- The renderer is out-of-process: Solid emits one NDJSON mutation batch per
-  flush, `@solid-gpui/client` supervises the helper, and Rust owns GPUI layout,
-  input state, animation, and painting.
-- S7–S12, P1–P11, S14b, and packaging are implemented. P12 positional/numeric
-  compaction was measured and parked because the candidate encoder regressed;
-  the object wire format remains the compatibility baseline.
-- Hosted CI validates TypeScript, Node smoke, and protocol/helper headless plus
-  stdio execution on Linux and Windows. macOS has the local full-suite/window
-  evidence; GUI suites remain explicitly environment-gated in CI.
+The target is a native desktop UI authored in Solid JSX and TypeScript, with a
+choice of Bun or Node as the JavaScript host and a Rust/GPUI helper for native
+rendering. The default architecture remains out-of-process:
 
-## Compatibility policy
+```text
+Solid JSX + signals → NDJSON mutation batches → Rust helper → GPUI window
+             Node.js or Bun.js host                 native event loop
+```
 
-| Runtime | Status | Plan |
+The project should make the following distinction explicit:
+
+- **Supported today:** a macOS-first, prerelease native UI with Solid
+  `2.0.0-rc.3`, a separate helper process, typed GPUI style maps, and basic
+  in-window select/combobox overlays.
+- **Supported direction:** the same client transport from Node.js or Bun.js,
+  with the same renderer contract and browser-conditioned Solid runtime.
+- **Not supported today:** full Tailwind/CSS compatibility, turnkey consumer
+  TypeScript JSX types, a single-file native executable, or packaged Linux and
+  Windows GUI support.
+
+A prospective application that requires the last line is **no-go until the
+corresponding gates below pass**. A macOS-first application that accepts a
+sidecar helper and custom style maps can run an early vertical spike now.
+
+## Current verified baseline
+
+| Area | Current truth | Release stance |
 | --- | --- | --- |
-| Solid 2.0.0-rc.3 | Supported | Keep all Solid runtime, universal renderer, web, and compiler packages aligned; test every upgrade as one set. |
-| Solid 1.x (latest 1.9 line) | Not supported by the current package | Time-box a separate adapter/package spike before making a support promise. Do not switch APIs based on runtime feature detection. |
+| Rendering | Real GPUI native rendering, no webview; Rust owns the native event loop | Credible prototype; prerelease |
+| Process model | One JavaScript client process talks to one Rust helper process over NDJSON | Keep; do not turn it into an in-process addon |
+| JavaScript host | Client uses Node-compatible `node:` APIs; real Bun and Node smoke paths exist | Formalize both Node and Bun support with consumer fixtures |
+| Solid | `solid-js`, `@solidjs/universal`, `@solidjs/web`, and compiler pinned to `2.0.0-rc.3` | Solid 2 only; every entry point needs `--conditions=browser` |
+| JSX | Universal Babel plugin and `mountJsx()` work; `h()` remains the lower-level API | Make JSX and consumer TypeScript first-class before calling it polished |
+| Styling | Typed camelCase `StyleMap` with a GPUI subset; unknown props are ignored | Do not claim Tailwind support |
+| Overlays | Controlled single-select/combobox uses in-window `anchored` + `deferred` content | Basic dropdown fit; generic popover semantics incomplete |
+| Application menus | P9 application menu bar with submenus, separators, shortcuts, and macOS native actions | Separate macOS app-chrome feature, not a dropdown replacement |
+| Windows | One helper opens one GPUI window; multiple connections can mean multiple helpers | No first-class multi-window manager |
+| Distribution | Platform npm helper packages and release automation cover macOS arm64/x64 | Linux/Windows GUI packages require hosted runtime evidence |
+| Standalone executable | Bun can compile the JavaScript side, but helper resolution expects a real external executable | Sidecar is the baseline; single-file packaging is a separate experiment |
 
-Solid 1 and Solid 2 differ in more than package names. Solid 1 uses the
-one-callback effect/batch model and the older universal/compiler boundaries;
-Solid 2 uses microtask batching with `flush()`, split tracking/effect phases,
-changed ownership rules, and async computations in the reactive graph. A
-single renderer that silently accepts both would make scheduling and disposal
-bugs difficult to diagnose.
+The exact evidence behind these rows is kept in `README.md`, the release
+workflow, the benchmark scripts, and the completed audit in
+`.pi/artifacts/TODO.md`.
 
-## Optimization principles
+## Product-fit gates
 
-1. **Measure the whole pipeline before changing it.** Separate Solid graph
-   work, renderer/flush work, JSON encoding, child-process round trips, helper
-   layout/paint, and memory/lifecycle costs. A smaller JSON line is not an
-   improvement if it increases encoder or validation time.
-2. **Keep the process boundary out of frame loops.** Animations and other
-   time-sensitive work stay host-side; ordinary Solid updates should remain
-   one mutation batch per flush.
-3. **Optimize identity before bytes.** Stable keyed list identity, skipped
-   unchanged properties, and correct subtree disposal are safer first targets
-   than wire-format changes.
-4. **Keep Solid-specific advice versioned.** Solid 1 guidance may use `batch`,
-   `mapArray`, or `indexArray`; Solid 2 guidance must use its automatic
-   microtask batching and `flush()` semantics instead. Never copy a scheduling
-   recipe across the version boundary without a test.
-5. **No compatibility weakening for a benchmark.** Any mutation coalescing,
-   lifecycle shortcut, or protocol change needs cross-language fixtures,
-   ordering tests, and real client/helper evidence.
+These gates are ordered by the cost of discovering failure late. Do not spend
+time on renderer polish while a gate marked **no-go** is still open.
 
-## Work sequence
+### Gate 0 — Consumer acceptance fixture (next)
 
-### 1. Measurement foundation — next
+Create one small representative SaaS screen outside the renderer unit tests:
+form input, signal-driven text, an interactive action, a select/combobox, and a
+styled layout. Run it through both JavaScript hosts and the real helper.
 
-Build deterministic scenarios that can be run against both a Solid 1 adapter
-(spike) and the supported Solid 2 renderer:
+Record these decisions before implementation expands:
 
-- signal update → mutation count and mutation categories;
-- `flush()`/event-to-ack latency and batch size;
-- JSON encode/decode time and UTF-8 byte count;
-- client/helper round-trip latency;
-- retained-tree apply, GPUI layout/paint, and frame statistics;
-- mount/update/destroy memory and listener/subtree retention.
+- supported Node and Bun versions;
+- target operating systems and CPU architectures;
+- whether a helper sidecar is acceptable;
+- whether Tailwind means exact Tailwind semantics or a familiar utility-class
+  authoring surface;
+- whether one window is sufficient for the first release.
 
-Report p50/p95/p99, sample size, runtime/compiler versions, OS, and whether the
-measurement is headless or GUI-backed. Establish baselines before adding CI
-performance thresholds; platform-specific thresholds must not be inferred
-from macOS measurements.
+**Exit criteria**
 
-The first headless Solid 2 baseline is available with:
+- The fixture is checked by TypeScript and executes from Bun and Node with the
+  browser condition.
+- The same user action produces the expected event and mutation at the real
+  helper boundary.
+- Every unsupported requirement is written down rather than silently degraded.
+
+### Gate 1 — First-class JSX and TypeScript DX (P0)
+
+The user should not have to choose `h()` merely because the package's types or
+build recipe are incomplete.
+
+Work:
+
+- expose renderer-owned `jsx-runtime` and `jsx-dev-runtime` type entries;
+- define `JSX.Element`, `JSX.IntrinsicElements`, children, events, style,
+  input, and custom element props for the supported renderer surface;
+- support the normal `jsxImportSource` TypeScript configuration while retaining
+  the universal Babel transform needed by Solid;
+- provide one tested Babel/Vite-style recipe and one tested Bun development
+  recipe, plus the equivalent Node execution recipe;
+- let `mountJsx()` accept the same connection/helper configuration as the
+  lower-level mount path so packaging does not force a hidden global override;
+- make the JSX example the primary README path and keep `h()` as an explicit
+  trusted/dynamic escape hatch.
+
+**Exit criteria**
+
+- An external `.tsx` fixture passes `tsc --noEmit` with no implicit-`any` JSX
+  errors and resolves `@solid-gpui/solid/jsx-runtime`.
+- The fixture compiles and runs under both Bun and Node with
+  `--conditions=browser`.
+- A click, input edit, and signal update cross the real helper boundary.
+- A compiler upgrade fails the compile-surface test before it reaches users.
+
+### Gate 2 — Styling decision and utility-class DX (P0 if required)
+
+Full browser Tailwind is not automatically transferable to GPUI. CSS layout,
+cascade, pseudo-elements, media queries, arbitrary values, and browser
+semantics do not exist just because a class string is accepted.
+
+Choose one of these deliberately:
+
+1. **Recommended:** a documented Tailwind-compatible subset compiler. It
+   converts approved utility classes and variants into the typed `StyleMap` and
+   explicit state layers. Unsupported utilities fail at build time or produce
+   an actionable diagnostic.
+2. **Smaller scope:** a typed GPUI utility/token library with Tailwind-like
+   naming, explicitly marketed as a different styling system.
+3. **No-go:** promise full Tailwind semantics without implementing and testing
+   the missing CSS behavior.
+
+Do not add a `className` prop that is silently ignored. If utility classes are
+not implemented, the renderer should reject or warn clearly and the README
+must say so.
+
+**Exit criteria**
+
+- The decision and supported utility matrix are documented.
+- A representative fixture covers layout, colors, spacing, hover/active,
+  responsive behavior if claimed, and arbitrary-value policy.
+- TypeScript catches unsupported style authoring where possible.
+- Real GPUI output and mutation behavior are tested; no browser-CSS equivalence
+  is claimed without evidence.
+
+### Gate 3 — Native overlays and application UX (P1)
+
+Keep the existing S14b controlled primitives as the minimum baseline, then
+finish the semantics a SaaS client normally needs:
+
+- pointer outside-click dismissal;
+- focus transfer and restoration;
+- keyboard navigation and selection behavior;
+- IME-composition-safe arrow handling;
+- positioning, clipping, and window-edge behavior for generic popovers;
+- clear separation between in-window popovers, native dialogs, and the macOS
+  application menu bar.
+
+Multi-window support is deliberately after the one-window path. If the
+acceptance fixture requires it, add a first-class window/session manager rather
+than treating multiple independent helper processes as one application.
+
+**Exit criteria**
+
+- A real GUI fixture opens, navigates, selects, dismisses, and destroys an
+  overlay without stale focus/listener state.
+- macOS menu behavior remains separately tested.
+- GUI evidence is reported per OS; headless tests are not presented as visual
+  proof.
+
+### Gate 4 — Node/Bun runtime contract and packaging (P0 for distribution)
+
+The JavaScript host and the native helper are separate deliverables.
+
+#### Runtime contract
+
+Support the same public APIs from:
+
+- Bun at the pinned supported version;
+- a declared Node LTS range using built package output;
+- `--conditions=browser` for every Solid entry point in both hosts.
+
+Keep the transport/runtime boundary free of Bun-only assumptions. Bun's preload
+script is a convenience, not the Node build contract.
+
+#### Distribution baseline
+
+Use an application bundle containing:
+
+```text
+app launcher / Bun or Node runtime
+└── platform-specific solid-gpui-helper sidecar
+```
+
+The existing npm model remains useful for library users: publish the helper
+platform packages first, then the TypeScript packages that pin them. For an
+application distribution, add a launcher or explicit helper-path API that:
+
+- locates the sidecar relative to the installed application;
+- preserves executable permissions;
+- handles macOS signing/notarization and the equivalent Windows/Linux release
+  requirements;
+- never falls back to a development path in a production bundle;
+- reports a useful error when the sidecar is missing.
+
+#### Optional Bun single-file experiment
+
+A compiled Bun executable may still be offered, but it is not the baseline. The
+command must include the Solid condition and an explicit helper strategy:
+
+```sh
+bun build --compile --conditions=browser \
+  --target=bun-darwin-arm64 ./app.ts --outfile myapp
+```
+
+A successful Bun compile is not sufficient. The experiment must prove one of:
+
+- an adjacent helper is shipped and discovered; or
+- the helper is embedded, extracted to a real executable path, permissioned,
+  signed, and launched safely at runtime.
+
+Build a separate Rust helper for every OS/CPU target; Bun's target flag does
+not cross-compile GPUI. Do not call the result single-file until a clean-machine
+launch, first render, input event, teardown, and update flow all pass.
+
+**Exit criteria**
+
+- Fresh-machine install/launch works without Rust, Bun, or Node development
+  dependencies beyond the declared application runtime.
+- Node and Bun execute the same consumer fixture.
+- macOS arm64/x64 are packaged; Windows/Linux are added only after real GUI
+  runtime evidence, not merely a successful compile.
+- Signed artifacts, upgrade behavior, crash/exit cleanup, and helper version
+  compatibility are tested.
+
+### Gate 5 — Platform and operational readiness (P1)
+
+Before calling the project a native-client foundation:
+
+- run real-window tests on every advertised platform and architecture;
+- keep protocol/helper headless tests as the cross-platform baseline;
+- validate startup, window close, helper crash, poisoned-batch recovery, and
+  clean teardown;
+- define logging, crash diagnostics, version reporting, and update/rollback
+  expectations for the application bundle;
+- document OS permissions, filesystem/shell command trust, signing, and
+  notarization responsibilities.
+
+A platform gets a support badge only after hosted or local runtime evidence
+exists for the actual GUI path. Build-only or headless-only evidence stays
+labeled as such.
+
+### Gate 6 — Measurement-led performance (P1)
+
+The measurement foundation is already in place:
 
 ```sh
 bun run benchmark:solid
-```
-
-It emits schema `solid-gpui-solid-benchmark/v1` and asserts deterministic
-mutation expectations for a single dependent text update, a 200-row fan-out,
-100 independent signals committed by one flush, and a single dependent style
-update. It reports update latency, mutation counts/categories, encoded UTF-8
-batch sizes, and the pinned runtime/compiler metadata. The recording send is
-intentional: this isolates Solid and renderer scheduling; JSON timing, real
-child-process IPC, GPUI layout/paint, and memory measurements remain separate
-follow-up dimensions.
-
-The next headless boundary baseline is available with:
-
-```sh
 cargo build -p solid-gpui-helper
 bun run benchmark:stdio
-```
-
-It uses the real `@solid-gpui/client` and helper in `--stdio` transport mode,
-with sequential unique sequence numbers and acknowledgement checks for every
-request. It reports local `encodeBatch`/`decodeBatch` distributions plus
-end-to-end client-write → helper-decode/apply/ack → client-correlation
-round-trip distributions. Transport mode deliberately excludes GPUI layout,
-paint, and window startup; those remain a separate host benchmark.
-
-The retained-tree and headless host baseline is available with:
-
-```sh
 bun run benchmark:gpui
-```
-
-This runs an ignored Rust measurement test through GPUI's in-memory
-`TestAppWindow::draw()` seam. It reports exact retained-tree apply time,
-whole headless draw time (render/layout/prepaint/paint without presentation),
-production `HostView` build samples, and frame counts for a small tree and a
-200-row fan-out. The default `TestApp` text system is not a real font/GPU or
-window-server measurement; those dimensions remain separate and GUI tests stay
-environment-gated.
-
-The lifecycle and retention baseline is available with:
-
-```sh
 bun run benchmark:lifecycle
-```
-
-It runs 20 unique-id mount → update → destroy cycles through the headless
-`TestAppWindow` seam. Every cycle confirms that the retained tree and root are
-cleared, while timing distributions cover mount/update/destroy apply and draw
-work. It also reports host-side handle/cache/subscription counts before and
-after destruction plus best-effort process RSS snapshots. RSS is
-platform-dependent and observational, not an allocator measurement or a CI
-threshold. The initial run exposed growth in list-state and
-focus-subscription maps across unique-id cycles; the lifecycle path now prunes
-those host-side states and the benchmark asserts zero retained host state
-after every cycle. The RSS result remains an observation rather than an
-optimization claim or threshold.
-
-The compiler comparison baseline is available with:
-
-```sh
 bun run benchmark:compiler
 ```
 
-It transforms a 200-row Solid 2 JSX fixture with the pinned
-`@solidjs/babel-plugin@2.0.0-rc.3` under the `browser` condition, then compares
-compiled JSX with a runtime `h()` builder through the same renderer, signal,
-flush, and recording-send boundary. It reports transform/output size,
-helper imports, mount/update mutation shapes, cleanup counts, and p50/p95/p99
-runtime timings. It intentionally excludes real IPC, helper/GPUI work, and
-font/GPU presentation. The current fixture flags operation-shape differences:
-compiled universal insertion emits more mount and per-update create/remove
-work than `h()`; the benchmark records that result rather than assuming that
-smaller generated JavaScript means a faster renderer path.
+Keep the boundaries separate:
 
-### 2. Solid 2 RC maintenance and optimization
+- Solid graph and flush scheduling;
+- renderer mutation creation;
+- JSON encoding and decoding;
+- real client/helper transport;
+- retained-tree apply;
+- GPUI render/layout/paint;
+- lifecycle state and memory retention;
+- compiled JSX versus runtime `h()`.
 
-- Keep the existing `flushSolid()`-then-microtask drain contract and test that
-  one user update still emits one coherent batch.
-- Compare compiled JSX with runtime `h()` paths. Prefer compiler output in
-  application hot paths, while retaining `h()` for trusted dynamic APIs.
-- Use `createMemo`/lazy derivations for expensive values only when a benchmark
-  shows repeated computation; do not replace derived values with write-back
-  effects.
-- Profile mutation emission and helper layout before attempting coalescing.
-  Candidate coalescing is limited to provably redundant writes within one
-  batch; create/destroy, attach/detach, listener, and ordering semantics stay
-  explicit.
-- Track each RC upgrade as a lockstep migration of runtime, universal, web,
-  compiler, tests, and browser-conditioned entry points.
+Use a representative consumer fixture from Gate 0 before optimizing. Prefer
+stable identity, skipped redundant writes, list reconciliation, and measured
+host-side layout work over speculative wire compaction. Report p50/p95/p99,
+sample size, versions, OS, and headless/GUI status. Do not add CI performance
+thresholds until the scenario is stable across supported runners.
 
-### 3. Solid 1 compatibility spike — time-boxed
+A candidate optimization is accepted only when it improves the named metric
+without increasing mutation errors, duplicate removals, stale events, poisoned
+batches, lifecycle retention, or frame instability.
 
-Implement and test a versioned boundary rather than branching on incidental
-runtime properties:
+### Gate 7 — Wire format (P12, optional and last)
 
-- verify the Solid 1 universal renderer and compiler output against the same
-  renderer contract;
-- isolate effect, batching, ownership, and disposal differences in an
-  adapter, with no Solid 1 imports in the Solid 2 entry point;
-- run lifecycle, keyed reorder, input, event, and helper-pipe tests under the
-  pinned Solid 1 version;
-- decide whether the result deserves a separately named package/entry point,
-  or should remain an explicitly unsupported experiment.
+Keep the object JSON wire format as the compatibility baseline. Reopen P12 only
+when transport/encoding is demonstrated to be material in the end-to-end
+measurement.
 
-The spike is successful only if it produces a support matrix and a repeatable
-cross-runtime test command. API compatibility without lifecycle and wire
-parity is not sufficient.
+Before implementation, write and review a direct encoder design covering:
 
-#### Solid 1 spike result (2026-08-27)
+- protocol versioning and capability negotiation;
+- object-format fallback and mixed-version behavior;
+- decode/apply error reporting and sequence correlation;
+- UTF-8 correctness and fixture generation for both TypeScript and Rust;
+- poison-on-failure semantics and recovery/remount behavior;
+- a fair comparison at the same workload and boundary.
 
-The isolated probe in [`compat/solid1`](./compat/solid1) passes with exact
-`solid-js@1.9.15`, `babel-preset-solid@1.9.15`, and `@babel/core@7.28.3`:
+If the direct encoder does not win end-to-end, delete the experiment and keep
+the object format.
 
-```sh
-npm ci --prefix compat/solid1 --ignore-scripts --no-audit --no-fund
-bun run compat:solid1
-```
+## Solid compatibility policy
 
-It exercises three mount/update/destroy cycles, cleanup, keyed reorder without
-row recreation, Solid 1 effect/batch behavior, compiled input/event handling,
-and the real `@solid-gpui/client` → helper `--stdio` boundary. The run produced
-15 correlated acknowledgements and schema
-`solid-gpui-solid1-compat/v1`.
+| Runtime | Status | Rule |
+| --- | --- | --- |
+| Solid 2.0.0-rc.3 | Supported | Keep runtime, universal, web, compiler, JSX types, and browser-conditioned entry points aligned. |
+| Solid 1.9.x | Isolated experiment only | Use `compat/solid1`; never add runtime feature detection or Solid 1 imports to the Solid 2 package. A production adapter needs its own package and release track. |
 
-The result is technically feasible but remains **unsupported** by
-`@solid-gpui/solid`. Solid 1 exposes `solid-js/universal` from the runtime and
-its compiler emits a one-callback effect with a previous-value initializer;
-the supported Solid 2 path uses the separate `@solidjs/universal` package and
-split compute/commit effect contract. Keep these behind a separately named
-package if support is revisited. Do not add runtime feature detection or Solid
-1 imports to the Solid 2 entry point.
+The Solid 1 spike proved technical feasibility for a small contract but did
+not establish package support. Revisit it only after the Solid 2 consumer path
+and distribution gates are stable.
 
-### 4. Semantics-preserving renderer/host work
+## Already delivered
 
-After the baselines and compatibility decision:
+- Protocol v1 with shared TypeScript/Rust fixtures, validation-before-rendering,
+  sequence correlation, and poison-on-failure behavior.
+- Out-of-process GPUI helper with stdio transport, native input/IME state,
+  dialogs, shell commands, menus, media, markdown, canvas, lists, tooltips,
+  and typed accessibility.
+- Solid 2 renderer lifecycle cleanup, keyed reconciliation, event backchannel,
+  S14b controlled select/combobox, and a working universal JSX runtime.
+- Hosted Linux/Windows headless validation plus local macOS window evidence;
+  GUI claims remain environment-dependent.
+- Solid, stdio, GPUI, lifecycle, and compiler benchmark baselines, including
+  the observation that the current compiled-JSX fixture emits more mutations
+  than runtime `h()` and therefore needs measurement rather than assumption.
+- A pinned, non-published Solid 1 compatibility probe at
+  [`compat/solid1`](./compat/solid1), documented as unsupported by the root
+  package.
 
-- remove measured redundant style/text/value mutations;
-- improve list reconciliation and host-side virtualization without changing
-  element identity or retained-tree ownership;
-- profile GPUI layout, text shaping, image/cache, and paint costs separately;
-- add regression budgets only for stable, reproducible scenarios.
+## Explicit non-goals and stop conditions
 
-Each candidate is accepted only when it improves the relevant p95 or memory
-metric without increasing mutation errors, duplicate removals, stale events,
-poisoned batches, or frame instability.
-
-### 5. Wire-format optimization — optional
-
-Revisit P12 only if the measurement foundation shows JSON encoding/transport
-is a material bottleneck. Before implementation, write a direct encoder design
-covering versioning, compatibility, error behavior, fixture generation, and
-fallback/negotiation. Then compare it with the current object encoder at the
-same workload. If the direct encoder does not win end-to-end, keep the object
-format.
-
-## Solid authoring guidance by version
-
-### Solid 1 track
-
-Use compiler-generated universal output, `createMemo` for cached derived
-values, `batch` only around deliberately grouped synchronous writes, and
-`mapArray`/`indexArray` according to whether identity or position is stable.
-Measure these choices against the renderer; they are not substitutes for
-renderer or helper profiling.
-
-### Solid 2 track
-
-Use the compiler/runtime versions as a lockstep set. Rely on automatic
-microtask batching and call `flush()` only at an imperative boundary that
-requires committed state immediately. Keep tracking work separate from side
-effects, avoid writes under owned reactive scope, and use lazy/derived
-primitives for genuinely demand-driven work. The current entry points must be
-run with `--conditions=browser` so Solid does not resolve its non-reactive SSR
-stubs.
-
-## Deferred work and stop conditions
-
-- P12 stays deferred until its direct encoder and compatibility design exist.
-- Outside-click dismissal and IME-composition arrow suppression remain outside
-  S14b’s contract.
-- Do not add Linux/Windows GUI claims or platform packages based on a successful
-  build alone; require hosted runtime evidence.
-- Stop an optimization slice when its benchmark is noisy, its improvement is
-  below the measurement error, or it requires weakening a protocol/lifecycle
-  invariant. Record the result instead of accumulating speculative complexity.
+- Do not turn the helper into an in-process addon to simplify packaging.
+- Do not silently accept `className` or advertise Tailwind without a defined
+  compiler/semantic subset.
+- Do not claim standard TypeScript JSX support until an external `.tsx` fixture
+  typechecks against the published package.
+- Do not claim one-file native distribution until the helper launch path is
+  proven from a clean packaged artifact.
+- Do not claim Linux/Windows GUI support from build or headless tests alone.
+- Do not add Solid 1 branching to the Solid 2 package.
+- Do not weaken lifecycle, retained-tree, protocol, or poison invariants for a
+  benchmark or convenience API.
+- Stop a slice when its measurement is noisy, its benefit is below error, its
+  compatibility contract is unresolved, or it requires speculative complexity.
+  Record the result and keep the simpler path.
 
 ## Research sources
 
-- [Solid 2.0 RC announcement](https://github.com/solidjs/solid/releases/tag/v2.0.0-rc.0)
-- [Solid 2 reactivity, batching, and effects RFC](https://github.com/solidjs/solid/blob/next/documentation/solid-2.0/01-reactivity-batching-effects.md)
-- [Solid 2 signals, derived primitives, and ownership RFC](https://github.com/solidjs/solid/blob/next/documentation/solid-2.0/02-signals-derived-ownership.md)
+- [Solid 2.0 RC releases](https://github.com/solidjs/solid/releases)
+- [Solid 2 migration and JSX ownership](https://github.com/solidjs/solid/blob/refs/heads/next/documentation/solid-2.0/MIGRATION.md)
+- [Solid universal renderer documentation](https://github.com/solidjs/solid/tree/next/packages/solid/universal)
 - [Solid fine-grained reactivity](https://docs.solidjs.com/advanced-concepts/fine-grained-reactivity)
-- [Solid `createMemo`](https://docs.solidjs.com/reference/basic-reactivity/create-memo)
-- [Solid `batch`](https://docs.solidjs.com/reference/reactive-utilities/batch)
-- [Solid `mapArray`](https://docs.solidjs.com/reference/reactive-utilities/map-array)
-- [Solid `indexArray`](https://docs.solidjs.com/reference/reactive-utilities/index-array)
+- [Bun standalone executables](https://bun.sh/docs/bundler/executables)
 
-Version metadata was checked locally with `npm view` for
-`solid-js@1.9.15` and `solid-js@2.0.0-rc.3` on 2026-08-27. The Solid 2 RC
-research reflects the RC documentation and the repository’s pinned RC.3
-packages; future RC changes must be re-verified before adoption.
+Versioned local evidence: Solid/universal/compiler `2.0.0-rc.3`, Solid 1
+`1.9.15`, and Bun `1.4.0` were checked on 2026-08-27. External GUI and
+production-distribution claims remain open until the relevant gates produce
+runtime artifacts and evidence.
