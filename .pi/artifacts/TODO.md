@@ -1638,9 +1638,14 @@ status: done | updated: 2026-08-27
 - Independent review of commit `9c90ab6` returned `CLEAN/MERGEABLE`; the roadmap is gate-based and its Node/Bun, JSX, Tailwind, popup, helper, and platform claims match the source and ADRs.
 
 ### 2026-08-27 - Roadmap review consistency follow-up
-status: active | updated: 2026-08-27
+status: done | updated: 2026-08-27
 
 - [x] Align Gate 0's TypeScript criterion with the fact that consumer JSX types are Gate 1 work.
 - [x] Scope the process-model wording to preserve the conditional ADR 002 future in-process backend option.
 - [x] Clarify that gate sequence expresses risk order, not strict P0/P1 priority.
-- [ ] Verify and independently review the documentation-only correction, then close this block.
+- [x] Verify and independently review the documentation-only correction, then close this block.
+
+#### Verification
+
+- `git diff --check` and review-correction assertions passed.
+- Independent review of commit `40f5826` returned `CLEAN/MERGEABLE`; all three prior questions were resolved with no ADR 002 contradiction.
