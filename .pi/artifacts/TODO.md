@@ -987,3 +987,47 @@ Slices:
   origin could otherwise focus an unrelated live element).
 - Final gates: helper bin 95 tests, protocol suites, clippy -D warnings,
   fmt, bun 232/0, tsc ×3, consumer checks, git diff --check — all green.
+
+### 2026-08-27 - Gate 3-c IME-composition-safe key handling
+status: done | updated: 2026-08-27
+
+ROADMAP Gate 3 bullet "IME-composition-safe arrow handling". Today the
+helper emits keyDown/keyUp to JS regardless of composition state, and the
+Rust-side Enter handler commits+submits mid-composition — so a combobox
+navigates its list or submits while the user is still composing (marked
+text active), where the web contract (isComposing) keeps those keys for
+the IME.
+
+Design (helper-side, zero protocol surface):
+
+- Route emit_key/emit_key_up through the sink (emit_event) like every
+  other emission — production behavior identical (sink IS write_event_line),
+  and key events become observable in TestApp tests.
+- Suppress keyDown/keyUp emission AND the input Enter semantics while the
+  element's InputState.marked is Some (composition owns those keys). Key
+  bindings (cmd-modified app shortcuts) stay untouched.
+- JS side: no change — handlers simply stop receiving mid-composition
+  keys. select.test.ts deferral comment updated (composition events stay
+  deliberately absent from the protocol).
+
+Slices:
+
+1. [x] RED: TestApp test — first assert (sink receives keyDown) failed
+   while emit_key still wrote stdout directly; also caught the TestApp
+   artifact (simulate_keystroke("enter") types "\n" via dispatch_input →
+   replace_text_in_range — a text-path commit, allowed; the leak filter
+   targets KeyDown/KeyUp/Submit only).
+2. [x] GREEN: emit_key/emit_key_up route through the sink via shared
+   emit_key_event + wire_modifiers (production-identical: the sink IS
+   write_event_line); ime_composing(id) predicate guards both plus the
+   build_input Enter listener; dead key_event fn removed, its byte-shape
+   unit test rewritten over wire_modifiers + the full Event.
+3. [x] select.test.ts deferral comment updated (suppression shipped
+   helper-side; composition events stay deliberately absent); README + 
+   ROADMAP annotated, incl. the Tab/bindings stay-live decision.
+4. [x] Full gates (cargo 208 pass / 0 fail, clippy -D warnings, fmt,
+   bun 232/0, tsc ×3, git diff --check) + independent review:
+   **CLEAN/MERGEABLE**, confidence high, 7/7 invariants verified against
+   pinned gpui source (dispatch ordering window.rs:4967, with_simulated_ime
+   keystroke.rs:241); 3 nits/questions recorded (Tab named in docs now,
+   real-IME GUI evidence owed with Gate 3 exit).

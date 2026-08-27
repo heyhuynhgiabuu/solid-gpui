@@ -1013,42 +1013,59 @@ impl HostView {
     }
 
     /// Push a keyDown event to the JS side (keystroke key + modifiers).
+    /// Suppressed while an IME composition is active on this element — the
+    /// IME owns those keys (web-parity isComposing; Gate 3-c).
     fn emit_key(&self, id: ElementId, event: &gpui::KeyDownEvent) {
-        let line = solid_gpui_protocol::event_to_json(&key_event(
-            id,
-            EventType::KeyDown,
-            &event.keystroke,
-        ));
-        let mut out = std::io::stdout().lock();
-        let _ = writeln!(out, "{line}");
-        let _ = out.flush();
+        if self.ime_composing(id) {
+            return;
+        }
+        self.emit_key_event(id, EventType::KeyDown, &event.keystroke);
     }
 
-    /// Push a keyUp event to the JS side.
+    /// Push a keyUp event to the JS side, composition-suppressed like keyDown.
     fn emit_key_up(&self, id: ElementId, event: &gpui::KeyUpEvent) {
-        let line =
-            solid_gpui_protocol::event_to_json(&key_event(id, EventType::KeyUp, &event.keystroke));
-        let mut out = std::io::stdout().lock();
-        let _ = writeln!(out, "{line}");
-        let _ = out.flush();
+        if self.ime_composing(id) {
+            return;
+        }
+        self.emit_key_event(id, EventType::KeyUp, &event.keystroke);
+    }
+
+    /// True while an IME composition (marked range) is active on this
+    /// element: keyDown/keyUp and the Rust-side Enter semantics are the
+    /// IME's until the composition commits (arrows navigate candidates,
+    /// enter commits). Key bindings stay unguarded — they carry app-level
+    /// cmd-modified shortcuts the IME does not consume.
+    fn ime_composing(&self, id: ElementId) -> bool {
+        self.input_states
+            .borrow()
+            .get(&id)
+            .is_some_and(|state| state.borrow().marked.is_some())
+    }
+
+    /// Sink-routed key emission (was a direct stdout write; the sink IS the
+    /// stdout writer in production, so wire behavior is unchanged — key
+    /// events are now observable in tests like every other emission).
+    fn emit_key_event(&self, id: ElementId, event_type: EventType, keystroke: &gpui::Keystroke) {
+        self.emit_event(
+            id,
+            event_type,
+            None,
+            None,
+            Some(keystroke.key.clone()),
+            Some(wire_modifiers(keystroke)),
+            None,
+        );
     }
 }
 
-/// Map a gpui keystroke to the wire event (pure — unit-tested modifier map).
-fn key_event(id: ElementId, event_type: EventType, keystroke: &gpui::Keystroke) -> Event {
-    Event::Input {
-        id,
-        event_type,
-        x: None,
-        y: None,
-        key: Some(keystroke.key.clone()),
-        modifiers: Some(solid_gpui_protocol::Modifiers {
-            ctrl: keystroke.modifiers.control,
-            alt: keystroke.modifiers.alt,
-            shift: keystroke.modifiers.shift,
-            cmd: keystroke.modifiers.platform,
-        }),
-        value: None,
+/// Map gpui modifiers to the wire shape (shared by the Event builder and
+/// the sink-routed key emission).
+fn wire_modifiers(keystroke: &gpui::Keystroke) -> solid_gpui_protocol::Modifiers {
+    solid_gpui_protocol::Modifiers {
+        ctrl: keystroke.modifiers.control,
+        alt: keystroke.modifiers.alt,
+        shift: keystroke.modifiers.shift,
+        cmd: keystroke.modifiers.platform,
     }
 }
 
@@ -2875,6 +2892,11 @@ fn build_input_element(
         if event.keystroke.key != "enter" {
             return;
         }
+        // IME composition active: enter commits the composition, not the
+        // input — neither submit nor a keyDown may fire (Gate 3-c).
+        if view.ime_composing(id) {
+            return;
+        }
         if multiline {
             if event.keystroke.modifiers.shift {
                 view.commit_input_if_dirty(id);
@@ -3724,7 +3746,7 @@ mod tests {
     }
 
     #[test]
-    fn key_event_maps_modifiers_into_wire_shape() {
+    fn key_emission_maps_modifiers_into_wire_shape() {
         let ks = gpui::Keystroke {
             modifiers: gpui::Modifiers {
                 control: true,
@@ -3734,24 +3756,19 @@ mod tests {
             key: "Enter".into(),
             ..Default::default()
         };
-        let event = key_event(ElementId(9), EventType::KeyDown, &ks);
-        match &event {
-            Event::Menu { .. } => panic!("expected an input event"),
-            Event::Input {
-                id,
-                event_type,
-                key,
-                modifiers,
-                ..
-            } => {
-                assert_eq!(*id, ElementId(9));
-                assert_eq!(*event_type, EventType::KeyDown);
-                assert_eq!(key.as_deref(), Some("Enter"));
-                let m = modifiers.expect("modifiers present");
-                assert!(m.ctrl && m.cmd && !m.alt && !m.shift, "{m:?}");
-            }
-        }
-        // Byte check: ctrl+cmd map to the wire flags, alt/shift stay false.
+        let m = wire_modifiers(&ks);
+        assert!(m.ctrl && m.cmd && !m.alt && !m.shift, "{m:?}");
+        // Byte check through the full sink-routed event shape (emit_key_event
+        // builds exactly this Event — the composition-suppression path).
+        let event = Event::Input {
+            id: ElementId(9),
+            event_type: EventType::KeyDown,
+            x: None,
+            y: None,
+            key: Some(ks.key.clone()),
+            modifiers: Some(m),
+            value: None,
+        };
         let json = solid_gpui_protocol::event_to_json(&event);
         assert_eq!(
             json,
@@ -4478,6 +4495,9 @@ mod headless_lifecycle_benchmark;
 mod headless_render_tests {
     use super::*;
 
+    /// Captured event log shared by the sink-swapping tests.
+    type EventLog = Vec<(ElementId, EventType, Option<String>)>;
+
     /// The production wire shape, applied through the same entry point the
     /// stdin thread uses (`RetainedTree::apply`): a root div with a styled
     /// text child.
@@ -4989,6 +5009,150 @@ mod headless_render_tests {
             Some((ElementId(4), ElementId(2))),
             "overlay B must own a fresh origin (its dismissal restores the trigger)"
         );
+
+        drop(window);
+        app.update(|cx| cx.shutdown());
+    }
+
+    #[test]
+    fn ime_composition_suppresses_key_and_submit_events_until_commit() {
+        let mut app = gpui::TestApp::new();
+        let mut window = app.open_window(|_, _cx| HostView::new());
+
+        let events: Rc<RefCell<EventLog>> = Rc::new(RefCell::new(Vec::new()));
+        let sink_events = events.clone();
+        window.update(|view, _, _| {
+            view.sink = Rc::new(move |e: &Event| {
+                if let Event::Input {
+                    id,
+                    event_type,
+                    key,
+                    ..
+                } = e
+                {
+                    sink_events
+                        .borrow_mut()
+                        .push((*id, *event_type, key.clone()));
+                }
+            });
+            for mutation in [
+                Mutation::CreateElement {
+                    id: ElementId(1),
+                    element_type: ElementType::Div,
+                },
+                Mutation::SetRoot { id: ElementId(1) },
+                Mutation::CreateElement {
+                    id: ElementId(2),
+                    element_type: ElementType::Input,
+                },
+                Mutation::AppendChild {
+                    parent_id: ElementId(1),
+                    child_id: ElementId(2),
+                },
+                Mutation::SetValue {
+                    id: ElementId(2),
+                    value: "ab".to_string(),
+                },
+                Mutation::SetEventListener {
+                    id: ElementId(2),
+                    event_type: EventType::KeyDown,
+                    enabled: true,
+                },
+                Mutation::SetEventListener {
+                    id: ElementId(2),
+                    event_type: EventType::KeyUp,
+                    enabled: true,
+                },
+            ] {
+                view.tree.apply(&mutation).expect("input mount applies");
+            }
+        });
+        // Two draws: render materializes the InputState + focus handle, the
+        // second activates the focus machinery before we focus the input.
+        window.draw();
+        window.draw();
+        window.update(|view, w, cx| {
+            view.ensure_focus_handle(ElementId(2), cx);
+            view.focus_element(ElementId(2), w, cx)
+                .expect("input is focusable");
+        });
+
+        // Pre-condition: a keystroke reaches JS through the SINK (this is
+        // also the proof that key emissions stopped bypassing it).
+        window.simulate_keystroke("down");
+        {
+            let borrowed = events.borrow();
+            assert_eq!(
+                borrowed.as_slice(),
+                &[(ElementId(2), EventType::KeyDown, Some("down".to_string()))],
+                "uncomposed keystroke must emit keyDown through the sink: {borrowed:?}"
+            );
+        }
+        events.borrow_mut().clear();
+
+        // IME composition active (marked range set): the IME owns the keys —
+        // arrows navigate candidates, enter commits the composition. Nothing
+        // may reach JS, and the Rust-side Enter must not submit.
+        window.update(|view, _, _| {
+            let state = view
+                .input_states
+                .borrow()
+                .get(&ElementId(2))
+                .cloned()
+                .expect("input state materialized at render");
+            state.borrow_mut().marked = Some(0..2);
+        });
+        window.simulate_keystroke("down");
+        window.simulate_keystroke("enter");
+        // TestApp's enter simulation ALSO types a newline through the
+        // InputHandler (dispatch_input → replace_text_in_range commits the
+        // marked range — correct text semantics, a different subsystem).
+        // What must NOT leak are KEY events and the Enter submit semantics.
+        {
+            let borrowed = events.borrow();
+            let leaked: Vec<_> = borrowed
+                .iter()
+                .filter(|(_, event_type, _)| {
+                    matches!(
+                        event_type,
+                        EventType::KeyDown | EventType::KeyUp | EventType::Submit
+                    )
+                })
+                .collect();
+            assert!(
+                leaked.is_empty(),
+                "keys and submits during composition must be suppressed: {leaked:?}"
+            );
+        }
+
+        // Composition committed: keys flow again — enter emits keyDown AND
+        // the single-line submit semantics.
+        window.update(|view, _, _| {
+            let state = view
+                .input_states
+                .borrow()
+                .get(&ElementId(2))
+                .cloned()
+                .expect("input state materialized at render");
+            state.borrow_mut().marked = None;
+        });
+        window.simulate_keystroke("enter");
+        {
+            let borrowed = events.borrow();
+            // The typed-newline from TestApp's enter simulation lands as an
+            // Input event; the KEY semantics we own are keyDown + submit.
+            assert!(
+                borrowed.contains(&(ElementId(2), EventType::KeyDown, Some("enter".to_string()))),
+                "enter after commit must emit keyDown: {borrowed:?}"
+            );
+            assert!(
+                borrowed
+                    .iter()
+                    .any(|(id, event_type, _)| *id == ElementId(2)
+                        && *event_type == EventType::Submit),
+                "enter after commit must submit: {borrowed:?}"
+            );
+        }
 
         drop(window);
         app.update(|cx| cx.shutdown());

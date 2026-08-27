@@ -160,7 +160,10 @@ finish the semantics a SaaS client normally needs:
   focus target on dismissal — removal hook guards both ids at fire time;
   combobox deliberately keeps input focus);
 - keyboard navigation and selection behavior;
-- IME-composition-safe arrow handling;
+- IME-composition-safe arrow handling (landed in Gate 3-c: while an
+  input's marked range is active the helper suppresses keyDown/keyUp and
+  Enter-submit semantics — no protocol surface, the marked state is
+  helper-owned; TestApp-proven including the typed-text commit path);
 - positioning, clipping, and window-edge behavior for generic popovers;
 - clear separation between in-window popovers, native dialogs, and the macOS
   application menu bar.

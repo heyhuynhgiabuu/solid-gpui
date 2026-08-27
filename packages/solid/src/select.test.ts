@@ -210,11 +210,12 @@ test("keeps deferred S14b edges explicit", async () => {
       ),
     ).toBe(false)
 
-    // IME composition suppression remains a deliberate deferred edge: no
-    // composition event exists in this protocol contract for S14b to consume.
-    // Pointer outside-click dismissal SHIPPED in Gate 3-a: the root now
-    // carries an outsideClick listener and the helper emits it on presses
-    // outside the rendered subtree.
+    // IME-composition key suppression SHIPPED helper-side (Gate 3-c): while
+    // an input's marked range is active, the helper drops keyDown/keyUp and
+    // Enter-submit semantics — the IME owns those keys (web isComposing
+    // parity). Composition events stay deliberately absent from the wire;
+    // suppression needs no protocol surface because the helper owns the
+    // marked state.
     const protocolEvents = EVENT_TYPES as readonly string[]
     expect(protocolEvents).not.toContain("compositionStart")
     expect(protocolEvents).not.toContain("compositionEnd")

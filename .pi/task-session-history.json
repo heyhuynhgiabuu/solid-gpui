@@ -2778,5 +2778,55 @@
     "rawStatus": "success",
     "resultValid": true,
     "completedAt": 1787844682899
+  },
+  {
+    "id": "mtbpm0dq-51aa",
+    "agentType": "reviewer",
+    "description": "Review Gate 3-b focus slice",
+    "sessionName": "task-mtbpm0dq-51aa",
+    "startedAt": 1787846443172,
+    "paneId": "w3:pGK",
+    "handle": {
+      "backend": "herdr",
+      "resourceId": "w3:pGK",
+      "socketPath": "/Users/huynhgiabuu/.config/herdr/herdr.sock",
+      "terminalId": "term_65a097028a9b72e",
+      "agentName": "reviewer-mtbpm0dq",
+      "foregroundProcessGroupId": 87734
+    },
+    "piDir": "/Users/huynhgiabuu/dev/projects/solid-gpui/.pi",
+    "dir": "/Users/huynhgiabuu/dev/projects/solid-gpui/.pi/artifacts/tasks",
+    "cwd": "/Users/huynhgiabuu/dev/projects/solid-gpui",
+    "status": "done",
+    "background": false,
+    "reportedStatus": "success",
+    "rawStatus": "success",
+    "resultValid": true,
+    "completedAt": 1787846879594
+  },
+  {
+    "id": "mtbqv6vj-209c",
+    "agentType": "reviewer",
+    "description": "Review Gate 3-c IME slice",
+    "sessionName": "task-mtbqv6vj-209c",
+    "startedAt": 1787848551113,
+    "paneId": "w3:pGQ",
+    "handle": {
+      "backend": "herdr",
+      "resourceId": "w3:pGQ",
+      "socketPath": "/Users/huynhgiabuu/.config/herdr/herdr.sock",
+      "terminalId": "term_65a09edcd48cb32",
+      "agentName": "reviewer-mtbqv6vj",
+      "foregroundProcessGroupId": 4728
+    },
+    "piDir": "/Users/huynhgiabuu/dev/projects/solid-gpui/.pi",
+    "dir": "/Users/huynhgiabuu/dev/projects/solid-gpui/.pi/artifacts/tasks",
+    "cwd": "/Users/huynhgiabuu/dev/projects/solid-gpui",
+    "status": "done",
+    "background": false,
+    "reportedStatus": "success",
+    "rawStatus": "success",
+    "resultValid": true,
+    "completedAt": 1787848770776
   }
 ]

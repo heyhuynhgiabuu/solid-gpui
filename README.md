@@ -165,8 +165,11 @@ Gate 3-a). Focus semantics (Gate 3-b): opening a `select` transfers focus
 into the listbox (`tabIndex` + helper-side `autoFocus`), keyboard navigation
 runs there, blurring it or dismissing the menu by any path restores focus to
 the element focused before the overlay opened; the combobox keeps focus in
-its input while the menu is open. Multi-select, uncontrolled state, native
-popup windows, and IME-composition arrow suppression are not part of S14b.
+its input while the menu is open. While an IME composition is active on an
+input, the helper suppresses keyDown/keyUp and Enter-submit semantics (the
+IME owns those keys; Gate 3-c) — Tab focus navigation and cmd-modified key
+bindings stay live by design (the IME does not consume them). Multi-select,
+uncontrolled state, and native popup windows are not part of S14b.
 Try the real window demo with `bun run example/select`.
 
 ## Trust boundary for JavaScript
