@@ -1530,3 +1530,11 @@ status: done | updated: 2026-08-27
 - `bun --conditions=browser test packages/client` passed with 19 tests; `bun run typecheck` passed for protocol, client, and solid packages.
 - Dedicated strict typecheck for `scripts/benchmark-stdio.ts` passed with Bun types and DOM libraries.
 - Independent review of commit `bb07858` returned `CLEAN/MERGEABLE`.
+
+### 2026-08-27 - Measurement foundation: headless GPUI render baseline
+status: active
+
+- [ ] Define a deterministic retained-tree → `TestAppWindow::draw()` benchmark boundary using the pinned GPUI APIs.
+- [ ] Measure headless apply/layout/prepaint/paint work and frame statistics without changing renderer semantics or adding CI thresholds.
+- [ ] Document the benchmark command, scope, and display-server limitation in the roadmap.
+- [ ] Run focused Rust tests/benchmarks and obtain an independent review before closing the slice.

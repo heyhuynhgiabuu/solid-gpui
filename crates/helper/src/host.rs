@@ -4207,6 +4207,10 @@ mod scrollbar_tests {
     }
 }
 
+#[cfg(test)]
+#[path = "headless_benchmark.rs"]
+mod headless_benchmark;
+
 /// Headless render-path regression (approved seam slice): gpui's in-memory
 /// `TestApp` drives the REAL `HostView::render` -> `build_element` ->
 /// layout/prepaint/paint path through `TestAppWindow::draw` (which calls

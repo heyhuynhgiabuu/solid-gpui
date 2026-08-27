@@ -102,6 +102,20 @@ end-to-end client-write → helper-decode/apply/ack → client-correlation
 round-trip distributions. Transport mode deliberately excludes GPUI layout,
 paint, and window startup; those remain a separate host benchmark.
 
+The retained-tree and headless host baseline is available with:
+
+```sh
+bun run benchmark:gpui
+```
+
+This runs an ignored Rust measurement test through GPUI's in-memory
+`TestAppWindow::draw()` seam. It reports exact retained-tree apply time,
+whole headless draw time (render/layout/prepaint/paint without presentation),
+production `HostView` build samples, and frame counts for a small tree and a
+200-row fan-out. The default `TestApp` text system is not a real font/GPU or
+window-server measurement; those dimensions remain separate and GUI tests stay
+environment-gated.
+
 ### 2. Solid 2 RC maintenance and optimization
 
 - Keep the existing `flushSolid()`-then-microtask drain contract and test that
