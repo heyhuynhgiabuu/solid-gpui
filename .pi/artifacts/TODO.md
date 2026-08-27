@@ -1574,9 +1574,16 @@ status: done | updated: 2026-08-27
 - Independent review of commit `dc28844` returned `CLEAN/MERGEABLE`.
 
 ### 2026-08-27 - Measurement foundation: compiled JSX versus runtime h()
-status: active
+status: done | updated: 2026-08-27
 
-- [ ] Define a version-pinned compiler comparison that measures compiled JSX and runtime `h()` output at the same trusted renderer boundary.
-- [ ] Report transform output, mount/update mutation parity, and timing/size observations without changing compiler or renderer semantics.
-- [ ] Document the compiler comparison command, Solid 2 browser condition, and interpretation limits.
-- [ ] Run focused/full verification and obtain an independent review before closing the slice.
+- [x] Define a version-pinned compiler comparison that measures compiled JSX and runtime `h()` output at the same trusted renderer boundary.
+- [x] Report transform output, mount/update mutation parity, and timing/size observations without changing compiler or renderer semantics.
+- [x] Document the compiler comparison command, Solid 2 browser condition, and interpretation limits.
+- [x] Run focused/full verification and obtain an independent review before closing the slice.
+
+#### Verification
+
+- `bun run benchmark:compiler` passed with pinned Solid/universal/compiler rc.3 packages, `browser` condition, 200-row paths, 50 measured updates, and parsed schema output.
+- The comparison reports compiled-versus-`h()` mutation shapes and p50/p95/p99 timings without treating the observed parity difference as a renderer change request.
+- Dedicated strict typecheck for the compiler wrapper and the full Bun suite/typecheck passed.
+- Independent review of commit `d30c5a2` returned `CLEAN/MERGEABLE`.
