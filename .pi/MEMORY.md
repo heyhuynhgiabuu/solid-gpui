@@ -745,3 +745,9 @@
 - [security] The TypeScript renderer is a trusted-code boundary, not a sandbox;
   protocol decoding validates shape and known names but does not authorize raw
   filesystem or shell paths, and the Rust helper never evaluates JavaScript.
+- [discovery] Hosted CI run 33040563773 passed TypeScript, Node smoke, and
+  Windows headless tests. Linux failed at link time without `libgbm-dev`, and
+  macOS exposed the staggered-animation test's fixed t0+450ms timing boundary.
+- [pattern] For timer tests that combine real sleeps with synthetic Instants,
+  assert completion relative to the later transition clock; fixed wall-clock
+  boundaries are vulnerable to hosted-runner scheduling overhead.

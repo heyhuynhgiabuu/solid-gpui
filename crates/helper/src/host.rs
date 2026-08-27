@@ -3435,9 +3435,12 @@ mod tests {
         );
         // Opacity runs on the second clock (starts now).
         assert_eq!(entry.value_at("opacity", t1), Some(1.0));
-        // Entry completes only when the OLDER transition completes.
-        assert!(!entry.is_complete(t0 + std::time::Duration::from_millis(350)));
-        assert!(entry.is_complete(t0 + std::time::Duration::from_millis(450)));
+        // Evaluate completion relative to the second clock. A fixed t0+450ms
+        // boundary let runner scheduling overhead make the second 100ms
+        // transition appear just short of complete even though the older
+        // 400ms transition had finished.
+        assert!(!entry.is_complete(t1 + std::time::Duration::from_millis(50)));
+        assert!(entry.is_complete(t1 + std::time::Duration::from_millis(100)));
     }
 
     #[test]

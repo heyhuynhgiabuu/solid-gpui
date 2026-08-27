@@ -1456,3 +1456,22 @@ Implementation order completed 2026-08-27:
 - [x] `cargo fmt --all -- --check` and `cargo clippy --all-targets --locked -- -D warnings` — passed.
 - [x] CI YAML structural validation and locked Linux/Windows dependency-graph resolution — passed locally; hosted runtime execution remains external.
 - [x] Independent reviews: wire/lifecycle `MERGEABLE`, headless `MERGEABLE`, CI `MERGEABLE`, deferred S14b `MERGEABLE`; only optional wording nits were resolved.
+
+### 2026-08-27 - Repair hosted CI platform gates
+status: active | updated: 2026-08-27
+
+Goal: repair only the platform-specific failures exposed by the first hosted run
+of the completed technical assessment, then rerun the same workflow.
+
+- [x] Add the missing Linux development package identified by the hosted linker
+      failure and validate the workflow remains scoped to headless/stdio tests.
+      Added `libgbm-dev` for the hosted `-lgbm` linker failure; workflow YAML
+      parsing and the existing job structure remain valid.
+- [x] Make the staggered animation regression's completion assertions relative to
+      the second transition clock so scheduling overhead cannot create a boundary
+      flake; preserve the per-key-clock invariant. The hosted failure was
+      reproduced as the fixed t0+450ms boundary; the revised test passed 25
+      repeated focused local runs and the full local helper/protocol suite.
+- [ ] Run focused local regressions and CI syntax checks, then push the smallest
+      fix and obtain fresh hosted Linux, Windows, macOS, TypeScript, and Node
+      results before closing this block.
