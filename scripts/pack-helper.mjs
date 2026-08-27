@@ -10,7 +10,7 @@
  * against a missing binary).
  */
 import { parseArgs } from "node:util"
-import { copyFileSync, mkdirSync, readFileSync, writeFileSync } from "node:fs"
+import { chmodSync, copyFileSync, mkdirSync, readFileSync, writeFileSync } from "node:fs"
 import { resolve } from "node:path"
 
 const { values } = parseArgs({
@@ -47,6 +47,10 @@ const outDir = resolve(values.out ?? "dist/pack", `helper-${target}`)
 const rootPkg = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8"))
 mkdirSync(outDir, { recursive: true })
 copyFileSync(resolve(values.binary), resolve(outDir, "solid-gpui-helper"))
+// Gate 4: the packaged sidecar MUST be executable regardless of the source
+// file's mode — a non-exec helper would only fail at first launch on a user
+// machine (release.yml smokes the packaged binary to keep this honest).
+chmodSync(resolve(outDir, "solid-gpui-helper"), 0o755)
 
 const pkg = {
   name: `@solid-gpui/helper-${target}`,

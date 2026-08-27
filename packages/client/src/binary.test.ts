@@ -28,6 +28,42 @@ describe("resolveHelperBinary", () => {
     expect(r).toEqual({ path: "/custom/helper", source: "env" })
   })
 
+  test("production guard skips the dev target even when it exists (Gate 4)", () => {
+    // A packaged app must never grab a stray monorepo debug build: the
+    // launcher sets SOLID_GPUI_NO_DEV_FALLBACK=1 and the dev-target arm of
+    // the chain disappears entirely.
+    const existsPaths: string[] = []
+    const r = resolveHelperBinary(
+      fakeDeps({
+        env: { SOLID_GPUI_NO_DEV_FALLBACK: "1" },
+        exists: (p) => {
+          existsPaths.push(p)
+          return p === "/npm/@solid-gpui/helper-darwin-arm64/solid-gpui-helper"
+        },
+        resolve: (spec) =>
+          spec === "@solid-gpui/helper-darwin-arm64/package.json"
+            ? "/npm/@solid-gpui/helper-darwin-arm64/package.json"
+            : (() => {
+                throw new Error("not found")
+              })(),
+      }),
+    )
+    expect("source" in r && r.source).toBe("platform-package")
+    expect(existsPaths.some((p) => p.includes("target/debug"))).toBe(false)
+  })
+
+  test("production guard error names the sidecar fix, not cargo", () => {
+    try {
+      resolveHelperBinary(fakeDeps({ env: { SOLID_GPUI_NO_DEV_FALLBACK: "1" } }))
+      throw new Error("should have thrown")
+    } catch (e) {
+      const msg = (e as Error).message
+      expect(msg).toContain("production")
+      expect(msg).toContain("SOLID_GPUI_HELPER")
+      expect(msg).not.toContain("cargo build")
+    }
+  })
+
   test("dev target/debug wins when present (monorepo dev flow, no npm needed)", () => {
     const r = resolveHelperBinary(
       fakeDeps({
