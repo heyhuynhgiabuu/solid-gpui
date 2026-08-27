@@ -113,8 +113,8 @@ selected state:
 `combobox.Root` uses the same `Content`/`Item` primitives with an editable
 `combobox.Trigger`. Values are controlled; item `value`/`disabled` are static definitions (remount
 an item when they change), filtering remains caller-owned, and multi-select,
-uncontrolled state, native popup windows, outside-click dismissal, and
-IME-composition arrow suppression are not part of S14b. Try the real window
+uncontrolled state, native popup windows, pointer-based outside-click
+dismissal, and IME-composition arrow suppression are not part of S14b. Try the real window
 demo with `bun run example/select`.
 
 ## Trust boundary for JavaScript
