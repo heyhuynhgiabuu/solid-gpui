@@ -43,7 +43,14 @@ type InputStates = Rc<RefCell<HashMap<ElementId, Rc<RefCell<InputState>>>>>;
 
 /// In-flight scrollbar thumb gesture: everything the window-level mouse
 /// listeners need to keep scrolling between frames.
-pub type ThumbDrag = (ElementId, gpui::ScrollHandle, Pixels, Pixels, Pixels);
+pub type ThumbDrag = (
+    ElementId,
+    ElementId,
+    gpui::ScrollHandle,
+    Pixels,
+    Pixels,
+    Pixels,
+);
 
 /// Which axes scroll for the `overflow` style key. Closed set — single source
 /// of truth so the renderer and the protocol docs agree (AGENTS invariant 1).
@@ -518,7 +525,8 @@ pub struct HostView {
     overlay: bool,
     scroll_handles: ScrollHandles,
     focus_handles: FocusHandles,
-    /// Keeps cx.on_focus_in/out subscriptions alive for the view's lifetime.
+    /// Keeps cx.on_focus_in/out subscriptions alive for live element ids;
+    /// stale subscriptions are dropped and rebuilt when the tree changes.
     focus_subscriptions: Vec<gpui::Subscription>,
     /// Ids that already registered focus subscriptions. Rendering runs every
     /// frame; without this, each render would register a fresh subscription
@@ -532,8 +540,8 @@ pub struct HostView {
     /// frame platform InputHandler so edits persist across frames (the
     /// handler itself is rebuilt every frame by the IME anchor).
     input_states: InputStates,
-    /// Active scrollbar thumb drag (P6): (bar id, target's scroll handle,
-    /// pointer y at grab, track height at grab, target offset at grab).
+    /// Active scrollbar thumb drag (P6): (bar id, target id, target's scroll
+    /// handle, pointer y at grab, track height at grab, target offset at grab).
     pub(crate) scrollbar_drag: RefCell<Option<ThumbDrag>>,
     /// In-progress key-binding sequences: (binding index, keystrokes matched).
     key_pending: Rc<RefCell<HashMap<ElementId, (usize, usize)>>>,
@@ -1438,6 +1446,50 @@ impl Render for HostView {
         md_cache
             .borrow_mut()
             .retain(|id, _| self.tree.get(*id).is_some());
+
+        // List state and its parallel render bookkeeping are owned by the
+        // view, not by the retained tree. Drop entries for destroyed ids so
+        // unique-id mount/destroy cycles cannot retain ListState allocations.
+        let tree = &self.tree;
+        self.list_states.retain(|id, _| tree.get(*id).is_some());
+        self.list_render_counts
+            .retain(|id, _| tree.get(*id).is_some());
+        self.list_alignment.retain(|id, _| tree.get(*id).is_some());
+        self.list_follow_armed.retain(|id| tree.get(*id).is_some());
+        self.list_children.retain(|id, _| tree.get(*id).is_some());
+        self.key_pending
+            .borrow_mut()
+            .retain(|id, _| tree.get(*id).is_some());
+
+        // Focus subscriptions are stored in one vector without a parallel id
+        // list. If any subscribed element disappeared, dropping the vector
+        // and set together lets this render rebuild subscriptions for the
+        // live tree without leaving callbacks attached to dead ids.
+        if self
+            .focus_subscribed
+            .iter()
+            .any(|id| tree.get(*id).is_none())
+        {
+            self.focus_subscriptions.clear();
+            self.focus_subscribed.clear();
+        }
+        if self
+            .autofocus_pending
+            .is_some_and(|id| tree.get(id).is_none())
+        {
+            self.autofocus_pending = None;
+        }
+        let stale_drag =
+            self.scrollbar_drag
+                .borrow()
+                .as_ref()
+                .is_some_and(|(bar_id, target_id, ..)| {
+                    tree.get(*bar_id).is_none() || tree.get(*target_id).is_none()
+                });
+        if stale_drag {
+            self.scrollbar_drag.borrow_mut().take();
+        }
+
         let host = cx.entity().downgrade();
         // Reset the virtualization counters: build_element's list items
         // increment them during layout, after this render call returns.
@@ -1891,7 +1943,7 @@ impl Element for ScrollDragAnchor {
         window.on_mouse_event(
             move |event: &gpui::MouseMoveEvent, _phase, _window, cx: &mut App| {
                 let target = entity.update(cx, |view, _| {
-                    let (_bar, handle, grab_y, track_h, start_off) =
+                    let (_bar, _target, handle, grab_y, track_h, start_off) =
                         view.scrollbar_drag.borrow().clone()?;
                     let dy = event.position.y - grab_y;
                     let max = handle.max_offset().y.max(px(0.));
@@ -2013,8 +2065,14 @@ fn build_scrollbar_element(
                             // it until mouse-up.
                             let off = handle.offset();
                             entity.update(cx, |view, _| {
-                                *view.scrollbar_drag.borrow_mut() =
-                                    Some((id, handle.clone(), event.position.y, track_h, -off.y));
+                                *view.scrollbar_drag.borrow_mut() = Some((
+                                    id,
+                                    target_id,
+                                    handle.clone(),
+                                    event.position.y,
+                                    track_h,
+                                    -off.y,
+                                ));
                             });
                             let entity_id = entity.entity_id();
                             cx.notify(entity_id);
@@ -4210,6 +4268,10 @@ mod scrollbar_tests {
 #[cfg(test)]
 #[path = "headless_benchmark.rs"]
 mod headless_benchmark;
+
+#[cfg(test)]
+#[path = "headless_lifecycle_benchmark.rs"]
+mod headless_lifecycle_benchmark;
 
 /// Headless render-path regression (approved seam slice): gpui's in-memory
 /// `TestApp` drives the REAL `HostView::render` -> `build_element` ->

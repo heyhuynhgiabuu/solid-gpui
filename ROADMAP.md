@@ -116,6 +116,24 @@ production `HostView` build samples, and frame counts for a small tree and a
 window-server measurement; those dimensions remain separate and GUI tests stay
 environment-gated.
 
+The lifecycle and retention baseline is available with:
+
+```sh
+bun run benchmark:lifecycle
+```
+
+It runs 20 unique-id mount → update → destroy cycles through the headless
+`TestAppWindow` seam. Every cycle confirms that the retained tree and root are
+cleared, while timing distributions cover mount/update/destroy apply and draw
+work. It also reports host-side handle/cache/subscription counts before and
+after destruction plus best-effort process RSS snapshots. RSS is
+platform-dependent and observational, not an allocator measurement or a CI
+threshold. The initial run exposed growth in list-state and
+focus-subscription maps across unique-id cycles; the lifecycle path now prunes
+those host-side states and the benchmark asserts zero retained host state
+after every cycle. The RSS result remains an observation rather than an
+optimization claim or threshold.
+
 ### 2. Solid 2 RC maintenance and optimization
 
 - Keep the existing `flushSolid()`-then-microtask drain contract and test that

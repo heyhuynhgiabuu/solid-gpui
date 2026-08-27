@@ -1545,3 +1545,18 @@ status: done | updated: 2026-08-27
 - `cargo clippy --all-targets -- -D warnings`, `cargo fmt --all -- --check`, dedicated strict typecheck for both benchmark wrappers, and the existing headless render regression passed.
 - GUI-skipped protocol/helper tests passed: 87 unit, 2 smoke, 2 stdio, 25 stdio_window, 39 retained, and 45 round-trip tests; only intended ignored tests remained.
 - Independent review of commit `cf28b81` returned `CLEAN/MERGEABLE`.
+
+### 2026-08-27 - Measurement foundation: lifecycle and retention baseline
+status: active
+
+- [ ] Define a deterministic mount/update/destroy measurement that checks retained-tree and HostView lifecycle counts after every cycle.
+- [ ] Measure lifecycle apply/draw timings and test-only live allocation observations without changing runtime ownership semantics or adding thresholds.
+- [ ] Document the lifecycle boundary, allocator/platform limits, and command in the roadmap.
+- [ ] Run focused/full verification and obtain an independent review before closing the slice.
+
+### 2026-08-27 - Lifecycle cleanup for measured host-state retention
+status: active
+
+- [ ] Prune host-side list caches, focus subscriptions, pending key state, and drag/autofocus state when retained ids disappear.
+- [ ] Add a regression assertion that unique-id mount/destroy cycles leave no host state behind.
+- [ ] Re-run lifecycle/full verification and obtain an independent review before closing the follow-up.

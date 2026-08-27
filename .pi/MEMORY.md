@@ -773,3 +773,8 @@
   `0.013/0.014/0.014ms`; fanout-200 draw `10.608/10.892/11.396ms`,
   HostView build `0.961/1.000/1.121ms`, and apply `0.059/0.067/0.068ms`.
   These are observations, not CI thresholds.
+- [bugfix] The lifecycle probe found unique-id destroy cycles retained
+  ListState bookkeeping and focus subscriptions; `HostView::render` now
+  prunes all id-keyed host state and rebuilds focus subscriptions when any
+  subscribed id disappears. A 20-cycle stateful probe now clears 1,120 ids
+  and all host-state maps after every destroy draw.
