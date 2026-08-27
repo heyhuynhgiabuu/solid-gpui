@@ -764,3 +764,7 @@
   explicit compatibility design.
 - [pattern] Ignore only ephemeral Pi state and scratch probes; keep
   `.pi/MEMORY.md` and canonical `.pi/artifacts/*.md` trackable.
+- [feature] The headless GPUI baseline uses a cfg(test)-only ignored
+  `TestAppWindow::draw()` benchmark: `RetainedTree::apply`, full render/layout/
+  prepaint/paint, and production HostView build samples are separate metrics;
+  the Bun wrapper requires exactly one schema-marked report.

@@ -1532,9 +1532,16 @@ status: done | updated: 2026-08-27
 - Independent review of commit `bb07858` returned `CLEAN/MERGEABLE`.
 
 ### 2026-08-27 - Measurement foundation: headless GPUI render baseline
-status: active
+status: done | updated: 2026-08-27
 
-- [ ] Define a deterministic retained-tree → `TestAppWindow::draw()` benchmark boundary using the pinned GPUI APIs.
-- [ ] Measure headless apply/layout/prepaint/paint work and frame statistics without changing renderer semantics or adding CI thresholds.
-- [ ] Document the benchmark command, scope, and display-server limitation in the roadmap.
-- [ ] Run focused Rust tests/benchmarks and obtain an independent review before closing the slice.
+- [x] Define a deterministic retained-tree → `TestAppWindow::draw()` benchmark boundary using the pinned GPUI APIs.
+- [x] Measure headless apply/layout/prepaint/paint work and frame statistics without changing renderer semantics or adding CI thresholds.
+- [x] Document the benchmark command, scope, and display-server limitation in the roadmap.
+- [x] Run focused Rust tests/benchmarks and obtain an independent review before closing the slice.
+
+#### Verification
+
+- `bun run benchmark:gpui` passed with two scenarios, 50 measured frames per scenario, and p50/p95/p99 metrics for retained apply, full draw, and HostView build samples.
+- `cargo clippy --all-targets -- -D warnings`, `cargo fmt --all -- --check`, dedicated strict typecheck for both benchmark wrappers, and the existing headless render regression passed.
+- GUI-skipped protocol/helper tests passed: 87 unit, 2 smoke, 2 stdio, 25 stdio_window, 39 retained, and 45 round-trip tests; only intended ignored tests remained.
+- Independent review of commit `cf28b81` returned `CLEAN/MERGEABLE`.
