@@ -1,0 +1,11 @@
+{
+  "name": "solid-gpui-solid1-compat-spike",
+  "private": true,
+  "license": "Apache-2.0",
+  "type": "module",
+  "dependencies": {
+    "@babel/core": "7.28.3",
+    "babel-preset-solid": "1.9.15",
+    "solid-js": "1.9.15"
+  }
+}

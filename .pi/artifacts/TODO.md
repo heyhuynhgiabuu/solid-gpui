@@ -1587,3 +1587,12 @@ status: done | updated: 2026-08-27
 - The comparison reports compiled-versus-`h()` mutation shapes and p50/p95/p99 timings without treating the observed parity difference as a renderer change request.
 - Dedicated strict typecheck for all benchmark wrappers passed after adding typed local declarations for Babel/plugin imports; the full Bun suite and package typecheck passed.
 - Independent final review of commit `78c22a3` returned `CLEAN/MERGEABLE`; the type-only follow-up introduced no behavioral changes.
+
+### 2026-08-27 - Solid 1 compatibility spike
+status: active | updated: 2026-08-27
+
+- [ ] Establish the pinned Solid 1.9.15 runtime/universal/compiler boundary and an isolated, repeatable probe command.
+- [ ] Verify effect, batching, ownership, disposal, keyed-reorder, input, and event behavior against the existing renderer contract without changing the Solid 2 entry point.
+- [ ] Run lifecycle, keyed reorder, input, event, and real helper-pipe checks through the isolated adapter boundary.
+- [ ] Produce a support matrix, compatibility/non-equivalence notes, and a recommendation for a separate package/entry point or explicit unsupported status.
+- [ ] Run focused verification and obtain an independent review before closing the spike.

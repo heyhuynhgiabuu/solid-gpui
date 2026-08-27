@@ -31,9 +31,11 @@ bun --conditions=browser run examples/counter.ts
 
 `@solid-gpui/solid` currently targets Solid `2.0.0-rc.3` and the matching
 `@solidjs/universal`, `@solidjs/web`, and compiler packages. Solid 1.x is not
-supported by this package yet; its scheduling, ownership, and universal
-renderer boundaries differ. See [ROADMAP.md](./ROADMAP.md) before attempting a
-separate compatibility adapter.
+supported by this package; its scheduling, ownership, and universal renderer
+boundaries differ. The isolated, non-published compatibility probe in
+[`compat/solid1`](./compat/solid1) passes its limited contract checks but does
+not change that support status. See [ROADMAP.md](./ROADMAP.md) before attempting
+a separate compatibility adapter.
 
 ## Install (npm, no Rust toolchain)
 

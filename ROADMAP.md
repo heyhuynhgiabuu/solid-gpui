@@ -185,6 +185,30 @@ The spike is successful only if it produces a support matrix and a repeatable
 cross-runtime test command. API compatibility without lifecycle and wire
 parity is not sufficient.
 
+#### Solid 1 spike result (2026-08-27)
+
+The isolated probe in [`compat/solid1`](./compat/solid1) passes with exact
+`solid-js@1.9.15`, `babel-preset-solid@1.9.15`, and `@babel/core@7.28.3`:
+
+```sh
+npm ci --prefix compat/solid1 --ignore-scripts --no-audit --no-fund
+bun run compat:solid1
+```
+
+It exercises three mount/update/destroy cycles, cleanup, keyed reorder without
+row recreation, Solid 1 effect/batch behavior, compiled input/event handling,
+and the real `@solid-gpui/client` → helper `--stdio` boundary. The run produced
+15 correlated acknowledgements and schema
+`solid-gpui-solid1-compat/v1`.
+
+The result is technically feasible but remains **unsupported** by
+`@solid-gpui/solid`. Solid 1 exposes `solid-js/universal` from the runtime and
+its compiler emits a one-callback effect with a previous-value initializer;
+the supported Solid 2 path uses the separate `@solidjs/universal` package and
+split compute/commit effect contract. Keep these behind a separately named
+package if support is revisited. Do not add runtime feature detection or Solid
+1 imports to the Solid 2 entry point.
+
 ### 4. Semantics-preserving renderer/host work
 
 After the baselines and compatibility decision:

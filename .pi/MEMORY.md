@@ -790,3 +790,8 @@
   `0.152/0.260/3.418ms` compiled vs `0.047/0.055/0.057ms` with `h()`.
   Treat this as a fixture-specific interoperability/optimization signal, not
   evidence to change the renderer or add a threshold.
+- [decision] Solid 1.9.15 remains unsupported by the root package. The isolated
+  `compat/solid1` probe passed lifecycle, cleanup, keyed reorder, effect/batch,
+  compiled input/event, and real client→helper stdio checks (15 acks), but its
+  `solid-js/universal` plus one-callback compiler effect contract requires a
+  separately named adapter/package rather than runtime feature detection.
