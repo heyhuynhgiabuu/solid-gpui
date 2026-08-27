@@ -827,3 +827,8 @@
   helper; Bun single-file output is an experiment, not a promise. Any Tailwind
   support must be a defined compiler subset or an explicitly different utility
   system, never silent `className` dropping.
+- [learning] Gate 0 uses the currently supported `h()`/`.ts` fixture surface;
+  external `.tsx` typechecking belongs to Gate 1. Roadmap order is risk/dependency
+  order rather than a strict P0/P1 priority sort, and the out-of-process helper is
+  the current default while ADR 002 permits a future protocol-compatible N-API
+  backend if upstream runloop support lands.

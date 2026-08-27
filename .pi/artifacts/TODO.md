@@ -1636,3 +1636,11 @@ status: done | updated: 2026-08-27
 - `git diff --check` and structural roadmap/README assertions passed.
 - `bun run test` passed 195 tests; `bun run typecheck`, `bun run check:release`, GUI-skipped cargo tests, `cargo clippy --all-targets -- -D warnings`, and `cargo fmt --all -- --check` passed. Cargo emitted only the known non-blocking `block v0.1.6` future-incompatibility warning.
 - Independent review of commit `9c90ab6` returned `CLEAN/MERGEABLE`; the roadmap is gate-based and its Node/Bun, JSX, Tailwind, popup, helper, and platform claims match the source and ADRs.
+
+### 2026-08-27 - Roadmap review consistency follow-up
+status: active | updated: 2026-08-27
+
+- [x] Align Gate 0's TypeScript criterion with the fact that consumer JSX types are Gate 1 work.
+- [x] Scope the process-model wording to preserve the conditional ADR 002 future in-process backend option.
+- [x] Clarify that gate sequence expresses risk order, not strict P0/P1 priority.
+- [ ] Verify and independently review the documentation-only correction, then close this block.

@@ -42,7 +42,7 @@ sidecar helper and custom style maps can run an early vertical spike now.
 | Area | Current truth | Release stance |
 | --- | --- | --- |
 | Rendering | Real GPUI native rendering, no webview; Rust owns the native event loop | Credible prototype; prerelease |
-| Process model | One JavaScript client process talks to one Rust helper process over NDJSON | Keep; do not turn it into an in-process addon |
+| Process model | One JavaScript client process talks to one Rust helper process over NDJSON | Keep as the current default; do not replace it merely to simplify packaging. ADR 002 leaves room for a future in-process N-API backend behind the same protocol seam if the upstream runloop support lands |
 | JavaScript host | Client uses Node-compatible `node:` APIs; real Bun and Node smoke paths exist | Formalize both Node and Bun support with consumer fixtures |
 | Solid | `solid-js`, `@solidjs/universal`, `@solidjs/web`, and compiler pinned to `2.0.0-rc.3` | Solid 2 only; every entry point needs `--conditions=browser` |
 | JSX | Universal Babel plugin and `mountJsx()` work; `h()` remains the lower-level API | Make JSX and consumer TypeScript first-class before calling it polished |
@@ -59,14 +59,18 @@ workflow, the benchmark scripts, and the completed audit in
 
 ## Product-fit gates
 
-These gates are ordered by the cost of discovering failure late. Do not spend
-time on renderer polish while a gate marked **no-go** is still open.
+These gates are ordered by the cost of discovering failure late. The sequence
+is risk/dependency order, not a strict priority sort: a later P0 gate may
+preempt an earlier P1 gate when release needs require it. Do not spend time on
+renderer polish while a gate marked **no-go** is still open.
 
 ### Gate 0 — Consumer acceptance fixture (next)
 
 Create one small representative SaaS screen outside the renderer unit tests:
 form input, signal-driven text, an interactive action, a select/combobox, and a
-styled layout. Run it through both JavaScript hosts and the real helper.
+styled layout. For this gate, author it with the currently supported `h()`/`.ts`
+surface; reserve the external `.tsx` and public JSX typecheck for Gate 1. Run it
+through both JavaScript hosts and the real helper.
 
 Record these decisions before implementation expands:
 
@@ -79,8 +83,8 @@ Record these decisions before implementation expands:
 
 **Exit criteria**
 
-- The fixture is checked by TypeScript and executes from Bun and Node with the
-  browser condition.
+- The fixture is runnable through the currently supported `h()`/`.ts` surface
+  and executes from Bun and Node with the browser condition.
 - The same user action produces the expected event and mutation at the real
   helper boundary.
 - Every unsupported requirement is written down rather than silently degraded.
