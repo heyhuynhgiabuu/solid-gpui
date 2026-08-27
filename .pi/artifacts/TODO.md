@@ -1586,4 +1586,4 @@ status: done | updated: 2026-08-27
 - `bun run benchmark:compiler` passed with pinned Solid/universal/compiler rc.3 packages, `browser` condition, 200-row paths, 50 measured updates, and parsed schema output.
 - The comparison reports compiled-versus-`h()` mutation shapes and p50/p95/p99 timings without treating the observed parity difference as a renderer change request.
 - Dedicated strict typecheck for all benchmark wrappers passed after adding typed local declarations for Babel/plugin imports; the full Bun suite and package typecheck passed.
-- Independent review of commit `d30c5a2` returned `CLEAN/MERGEABLE`; the type-only follow-up introduced no behavioral changes.
+- Independent final review of commit `78c22a3` returned `CLEAN/MERGEABLE`; the type-only follow-up introduced no behavioral changes.
