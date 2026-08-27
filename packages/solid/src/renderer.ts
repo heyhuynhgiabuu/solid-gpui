@@ -26,6 +26,7 @@ import {
 } from "@solid-gpui/protocol"
 import type { Ack } from "@solid-gpui/client"
 import { expandShorthands } from "./style-normalize"
+import { parseUtilities } from "./utilities"
 
 /** Sends one batch; resolves on its ack, rejects on its error reply. */
 export type Send = (batch: MutationBatch) => Promise<Ack>
@@ -40,6 +41,15 @@ export interface HostNode {
   transitionEasing?: EasingName
   /** Last style bag sent over the wire (diff base for animations). */
   lastStyle?: StyleMap
+  lastHoverStyle?: StyleMap
+  lastActiveStyle?: StyleMap
+  lastDragOverStyle?: StyleMap
+  /** Raw per-source inputs; the class prop compiles UNDER explicit styles. */
+  rawBase?: StyleMap
+  rawHover?: StyleMap
+  rawActive?: StyleMap
+  rawDragOver?: StyleMap
+  classValue?: string | null
 }
 
 const EVENT_NAMES: Record<string, EventType> = {
@@ -253,6 +263,121 @@ export function createSolidRenderer(send: Send): SolidGpuiRenderer {
     queue.push(m)
   }
 
+  /**
+   * Recompute every style layer from the node's raw inputs (class + style +
+   * state props) and emit ONLY layers whose merged map changed.
+   *
+   * Why one merger: a helper-side setStyle REPLACES its entire map, so class
+   * and style each pushing their own base op would race by batch ordering
+   * (the review-B1 poison lesson). Class yields UNDER explicit style; this
+   * merge is the single source of every base emission. State layers (P1-c)
+   * follow the same replacement rule, fed from compiled variants AND the
+   * hoverStyle/activeStyle/dragOverStyle props (explicit wins).
+   */
+  const sameJson = (a: unknown, b: unknown): boolean => JSON.stringify(a ?? null) === JSON.stringify(b ?? null)
+  const syncStyles = (node: HostNode): void => {
+    const id = elementId(node.id)
+    const owned = isHelperOwned(node.tag)
+    let compiled = parseUtilities(typeof node.classValue === "string" ? node.classValue : "")
+    if (compiled.unknown.length > 0 && typeof console !== "undefined") {
+      console.warn(
+        `[solid-gpui] class "${[...new Set(compiled.unknown)].join(" ")}" is not part of the supported utility ` +
+          "subset and will not style anything; see docs/tailwind-subset.md",
+      )
+    }
+    // Helper-owned subtrees reject state layers on the wire; their variant
+    // contributions must vanish before any op is considered.
+    if (
+      owned &&
+      ((node.rawHover ?? node.rawActive ?? node.rawDragOver) !== undefined ||
+        Object.keys(compiled.hoverStyles).length > 0 ||
+        Object.keys(compiled.activeStyles).length > 0)
+    ) {
+      if (typeof console !== "undefined") {
+        console.warn(`[solid-gpui] <${node.tag}> ignores hover:/active: variants — it renders a helper-owned subtree.`)
+      }
+      compiled = { ...compiled, hoverStyles: {}, activeStyles: {} }
+    }
+    const layerOf = (c: Record<string, string | number>, raw?: StyleMap): StyleMap =>
+      expandShorthands({ ...c, ...(raw ?? {}) } as StyleMap)
+    const nextBase = layerOf(compiled.styles, node.rawBase)
+    const nextHover = layerOf(compiled.hoverStyles, node.rawHover)
+    const nextActive = layerOf(compiled.activeStyles, node.rawActive)
+    const nextDragOver = layerOf({}, node.rawDragOver)
+
+    if (!sameJson(nextBase, node.lastStyle)) {
+      const prev = node.lastStyle
+      node.lastStyle = nextBase
+      if (node.transitionMs && prev && owned) {
+        // Helper rejects setAnimation on helper-owned elements (static styles
+        // only); emitting it would poison the session. Static setStyle below.
+        if (typeof console !== "undefined") {
+          console.warn(`[solid-gpui] <${node.tag}> ignores transitionMs — it renders a helper-owned subtree.`)
+        }
+        push({ op: "setStyle", id, style: nextBase })
+      } else if (node.transitionMs && prev) {
+        // A key animates only when BOTH ends are numeric and it changed —
+        // mirroring the wire's numeric-start rule (animating an absent or
+        // non-numeric start is an applyFailed on the helper and poisons the
+        // renderer; review B2). Everything else flows statically.
+        const targets: Record<string, number> = {}
+        for (const k of Object.keys(nextBase) as StyleKey[]) {
+          const v = nextBase[k]
+          const p = prev[k]
+          if (
+            typeof v === "number" &&
+            typeof p === "number" &&
+            v !== p &&
+            (ANIMATABLE_STYLE_KEYS as readonly string[]).includes(k)
+          ) {
+            targets[k] = v
+          }
+        }
+        // The companion setStyle REPLACES the helper-side style map, so it
+        // must carry the animated keys' PREVIOUS numeric values — omitting
+        // them deletes the numeric start before setAnimation applies in the
+        // same batch (applyFailed -> poison; review B1).
+        const targetKeys = new Set(Object.keys(targets))
+        const companion = Object.fromEntries(
+          (Object.keys(nextBase) as StyleKey[]).map((k) => [
+            k,
+            targetKeys.has(k) ? (prev[k] as number) : nextBase[k],
+          ]),
+        ) as StyleMap
+        push({ op: "setStyle", id, style: companion })
+        if (Object.keys(targets).length > 0) {
+          push({
+            op: "setAnimation",
+            id,
+            target: targets as { [k in (typeof ANIMATABLE_STYLE_KEYS)[number]]?: number },
+            transitionMs: node.transitionMs,
+            ...(node.transitionEasing !== undefined ? { easing: node.transitionEasing } : {}),
+          })
+        }
+      } else {
+        push({ op: "setStyle", id, style: nextBase })
+      }
+    }
+    const layerEntries = [
+      [nextHover, "lastHoverStyle", "hover"],
+      [nextActive, "lastActiveStyle", "active"],
+      [nextDragOver, "lastDragOverStyle", "dragOver"],
+    ] as const
+    for (const entry of layerEntries) {
+      const next = entry[0] as StyleMap
+      const cacheKey = entry[1]
+      const state = entry[2]
+      // Empty-vs-undefined is NOT a change: untouched layers must never
+      // stream as {} ops (three phantom setStyles per style touch).
+      const hadContent = node[cacheKey] !== undefined
+      const hasContent = Object.keys(next).length > 0
+      if (!hadContent && !hasContent) continue
+      if (sameJson(next, node[cacheKey])) continue
+      ;(node as Record<typeof cacheKey, StyleMap | undefined>)[cacheKey] = next
+      push({ op: "setStyle", id, style: next, state })
+    }
+  }
+
   const removeNodeImpl = (parent: HostNode, node: HostNode): void => {
     if (parent.kind === "element" && isHelperOwned(parent.tag)) {
       // Children refused by insertNode live ONLY in the shadow bookkeeping
@@ -344,6 +469,27 @@ export function createSolidRenderer(send: Send): SolidGpuiRenderer {
             : undefined
         return
       }
+      if (name === "className") {
+        // Gate 2 canonical prop is `class` (Solid convention). Never silent:
+        // a browser habit must not lose styling without a pointer to why.
+        if (typeof console !== "undefined") {
+          console.warn(
+            '[solid-gpui] className is not supported; use the "class" prop (docs/tailwind-subset.md)',
+          )
+        }
+        return
+      }
+      if (name === "class") {
+        if (value !== null && value !== undefined && typeof value !== "string") {
+          if (typeof console !== "undefined") {
+            console.warn("[solid-gpui] class must be a string, null, or undefined")
+          }
+          return
+        }
+        node.classValue = ((value as string | null | undefined) ?? null)
+        syncStyles(node)
+        return
+      }
       if (name === "hoverStyle" || name === "activeStyle" || name === "dragOverStyle") {
         // State layer (P1-c): value is a style map applied on top of the
         // base when gpui reports hover/active. Helper-owned elements reject
@@ -355,71 +501,15 @@ export function createSolidRenderer(send: Send): SolidGpuiRenderer {
           }
           return
         }
-        const state =
-          name === "hoverStyle" ? "hover" : name === "activeStyle" ? "active" : "dragOver"
-        const layer = expandShorthands((value ?? {}) as StyleMap)
-        push({ op: "setStyle", id, style: layer, state })
+        if (name === "hoverStyle") node.rawHover = (value ?? {}) as StyleMap
+        else if (name === "activeStyle") node.rawActive = (value ?? {}) as StyleMap
+        else node.rawDragOver = (value ?? {}) as StyleMap
+        syncStyles(node)
         return
       }
       if (name === "style") {
-        const next = expandShorthands((value ?? {}) as StyleMap)
-        const prev = node.lastStyle
-        node.lastStyle = next
-        if (node.transitionMs && prev && isHelperOwned(node.tag)) {
-          // Helper rejects setAnimation on helper-owned elements (static
-          // styles only); emitting it would poison the session. Static
-          // setStyle below.
-          if (typeof console !== "undefined") {
-            console.warn(
-              `[solid-gpui] <${node.tag}> ignores transitionMs — it renders a helper-owned subtree.`,
-            )
-          }
-        } else if (node.transitionMs && prev) {
-          // A key animates only when BOTH ends are numeric and it changed —
-          // mirroring the wire's numeric-start rule (animating an absent or
-          // non-numeric start is an applyFailed on the helper and poisons
-          // the renderer; review B2). Everything else flows statically.
-          const targets: Record<string, number> = {}
-          for (const k of Object.keys(next) as StyleKey[]) {
-            const v = next[k]
-            const p = prev[k]
-            if (
-              typeof v === "number" &&
-              typeof p === "number" &&
-              v !== p &&
-              (ANIMATABLE_STYLE_KEYS as readonly string[]).includes(k)
-            ) {
-              targets[k] = v
-            }
-          }
-          // The companion setStyle REPLACES the helper-side style map, so it
-          // must carry the animated keys' PREVIOUS numeric values — omitting
-          // them deletes the numeric start before setAnimation applies in
-          // the same batch (applyFailed -> poison; review B1). Restating the
-          // starts cannot snap: the setAnimation merge in the same batch
-          // lands the targets before any render observes the style.
-          const targetKeys = new Set(Object.keys(targets))
-          const companion = Object.fromEntries(
-            (Object.keys(next) as StyleKey[]).map((k) => [
-              k,
-              targetKeys.has(k) ? (prev[k] as number) : next[k],
-            ]),
-          ) as StyleMap
-          push({ op: "setStyle", id, style: companion })
-          if (Object.keys(targets).length > 0) {
-            push({
-              op: "setAnimation",
-              id,
-              target: targets as { [k in (typeof ANIMATABLE_STYLE_KEYS)[number]]?: number },
-              transitionMs: node.transitionMs,
-              ...(node.transitionEasing !== undefined
-                ? { easing: node.transitionEasing }
-                : {}),
-            })
-          }
-          return
-        }
-        push({ op: "setStyle", id, style: next })
+        node.rawBase = (value ?? {}) as StyleMap
+        syncStyles(node)
         return
       }
       if (name === "accessibility") {
