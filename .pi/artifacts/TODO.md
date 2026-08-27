@@ -1339,7 +1339,7 @@ Non-goals:
   dismissal and IME-composition arrow suppression remain explicitly deferred.
 
 ### 2026-08-26 - Assess upstream solid-gpui problems and parity plan
-status: active | updated: 2026-08-26
+status: done | updated: 2026-08-27
 
 Goal: identify which real problems, gaps, and useful lessons around the upstream
 `lxsmnsyc/solid-gpui` repository should be solved in this Apache-2.0 clean-room
@@ -1373,22 +1373,42 @@ Non-goals:
       out-of-process architecture, protocol v1 compatibility, and evidence-based
       platform claims. Upstream API parity is not promised; existing public APIs
       remain backward-compatible unless a separately reviewed change says otherwise.
-- [ ] Implement and review approved slices, then close this block with evidence.
+- [x] Implement and review approved slices, then close this block with evidence.
+      Commits 319d8b5, 5053ac8, 2ed8a7c, 9590ad2, and be4c9c4 were independently
+      reviewed; final Bun/Rust/typecheck/fmt/clippy gates are recorded below.
 
 #### Approved technical slices
 
-- [ ] Prove the existing failure/poison/version/sequence guarantees through the
+- [x] Prove the existing failure/poison/version/sequence guarantees through the
       real client→helper wire; prove retained cycle/depth rejection and subtree
-      drop behavior without stack overflow.
-- [ ] Reproduce or retire the cross-flush detach/reattach `Drop` hazard with a
+      drop behavior without stack overflow. Tests landed in 319d8b5: real stdio
+      malformed/version/unknown-input liveness, client sequence/error probes,
+      real window partial-apply/cycle/self-ancestor/MAX_DEPTH checks, and
+      helper-death/apply-failure poison/no-requeue coverage. An empty poisoned
+      flush also exposed and fixed a renderer invariant (RED→GREEN).
+- [x] Reproduce or retire the cross-flush detach/reattach `Drop` hazard with a
       failing regression test first; change lifecycle semantics only if the probe
-      demonstrates a bug.
-- [ ] Add a deterministic mock/headless host seam for render-path coverage and
-      wire it into CI without weakening real-window tests.
-- [ ] Add cross-platform CI/build validation (Linux first, Windows next) and only
+      demonstrates a bug. Cross-flush same-node, cross-parent, keyed-reorder,
+      and listener-identity regressions pass; no Drop/lifecycle change was needed.
+- [x] Add a deterministic mock/headless host seam for render-path coverage and
+      wire it into CI without weakening real-window tests. Commit 5053ac8 adds
+      the pinned GPUI `TestApp`/`TestAppWindow::draw` seam; the frame counter
+      proves `HostView::render` runs through the real layout/prepaint/paint path
+      without a window server. The helper suite ran 116/116 with and without
+      the GUI skip environment.
+- [x] Add cross-platform CI/build validation (Linux first, Windows next) and only
       add platform npm packages after the corresponding runtime gates exist.
-- [ ] Add regression coverage for explicitly deferred S14b edges and document the
+      Commit 2ed8a7c adds locked Ubuntu and Windows headless jobs, Linux native
+      dependencies, and real stdio execution under the GUI skip environment;
+      real-window and smoke gates remain intact. Release/npm platform packages
+      remain intentionally unchanged until hosted jobs produce runtime evidence.
+- [x] Add regression coverage for explicitly deferred S14b edges and document the
       trusted-JS path policy; do not add speculative image/network behavior.
+      Commits 9590ad2 and be4c9c4 pin pointer-based outside-click and IME
+      composition deferrals, anchored/deferred listbox output, and the
+      trusted-code boundary. The README makes clear that the helper never
+      evaluates JavaScript and that path/command authorization remains the
+      application's responsibility.
 
 #### Research report
 
@@ -1407,21 +1427,32 @@ Local classification:
   ancestor/depth protection, shared TS/Rust fixtures, accessibility bridge, and
   host-owned input/IME state (`DECISIONS.md` ADR 002/007; protocol/retained/client/
   renderer tests).
-- Applicable probes: verify those failure guarantees through the real client→
-  helper pipe; exercise `MAX_DEPTH`/cycle rejection and subtree drop semantics;
-  probe detach in one flush followed by reattach in a later flush. The latter is
-  unverified and is the only upstream design risk not already covered by a local
-  invariant.
-- Platform/release gap: CI currently runs TypeScript on Ubuntu but Rust/helper
-  validation on macOS with GUI skipped; Linux/Windows helper packaging and runtime
-  evidence remain pending (`.github/workflows/ci.yml`, `release.yml`,
-  `crates/helper/Cargo.toml`).
+- Applicable probes: all approved wire, cycle/depth, subtree, and cross-flush
+  probes are verified through real helper pipes or the renderer seam. The
+  cross-flush probe found no Drop hazard; the only behavior fix was making an
+  already-poisoned empty flush reject, matching the documented poison invariant.
+- Platform/release gap: `.github/workflows/ci.yml` now validates locked headless
+  helper/protocol builds and real stdio on Linux and Windows, with source-mapped
+  Linux native dependencies. Hosted execution is still the evidence gate for
+  platform support; `release.yml` intentionally publishes no Linux/Windows
+  packages until those jobs are green.
 - Explicit non-gaps/out of scope: upstream's unpublished release state, its
   multi-window absence, P12 compaction, and HTTP image policy before this project
   adds image elements. Do not claim Linux/Windows support from a build alone.
 
-Recommended implementation order, pending user confirmation:
-1. Cross-flush detach/reattach probe plus wire-level failure/cycle probes.
-2. Mock/headless host or equivalent deterministic render seam, then CI GUI coverage.
-3. Linux CI build/run and Windows build/stdio; native Windows GUI requires an
-   interactive runner or VM. Add platform npm packages only after runtime gates.
+Implementation order completed 2026-08-27:
+1. Cross-flush detach/reattach and real wire failure/cycle probes — 319d8b5.
+2. Deterministic TestApp render seam — 5053ac8; CI integration follows in 2ed8a7c.
+3. Linux/Windows CI configuration and deferred-edge/trust-boundary coverage —
+   2ed8a7c, 9590ad2, and be4c9c4. Hosted jobs remain the required runtime gate;
+   platform npm packages were not added prematurely.
+
+#### Final verification (2026-08-27)
+
+- [x] `bun run test` — 195 passed, 0 failed across 19 files.
+- [x] `bun run typecheck` — protocol, client, and solid `tsc --noEmit` passed.
+- [x] `SOLID_GPUI_SKIP_GUI_TESTS=1 cargo test -p solid-gpui-protocol -p solid-gpui-helper --locked` — all unit, transport, and headless gates passed.
+- [x] `cargo test -p solid-gpui-protocol -p solid-gpui-helper --locked` — full macOS suite passed, including 25 real window tests and smoke.
+- [x] `cargo fmt --all -- --check` and `cargo clippy --all-targets --locked -- -D warnings` — passed.
+- [x] CI YAML structural validation and locked Linux/Windows dependency-graph resolution — passed locally; hosted runtime execution remains external.
+- [x] Independent reviews: wire/lifecycle `MERGEABLE`, headless `MERGEABLE`, CI `MERGEABLE`, deferred S14b `MERGEABLE`; only optional wording nits were resolved.

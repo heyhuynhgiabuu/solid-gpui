@@ -725,6 +725,23 @@
   issue/PR/release or runtime platform evidence; its missing acks, protocol
   versioning, cycle guard, tests, and accessibility are already addressed here
   by ADR 002/007 and the shared fixture/test gates.
-- [warning] The only upstream design risk not yet proven locally is a possible
-  cross-flush detach/reattach `Drop` hazard; probe it through the real client→
-  helper pipe before changing lifecycle semantics or adding re-create logic.
+- [discovery] The cross-flush detach/reattach `Drop` hazard was probed through
+  same-node, cross-parent, keyed-reorder, and listener-identity tests; no Drop
+  bug was reproduced, so lifecycle semantics remain unchanged.
+
+## Technical assessment closeout (2026-08-27)
+
+- [feature] GPUI's pinned `TestApp`/`TestAppWindow::draw` uses an in-memory
+  `TestPlatform` and `NoopTextSystem`; it drives the real HostView render,
+  layout, prepaint, and paint path without a display server. Keep this seam
+  separate from GUI-window tests.
+- [bugfix] A poisoned Solid renderer must reject even an empty later `flush()`;
+  check the poison state before the empty-queue return. Failed batches remain
+  spliced and are never requeued.
+- [decision] Linux and Windows CI use locked headless helper/protocol tests;
+  only transport tests run under `SOLID_GPUI_SKIP_GUI_TESTS`, while real-window
+  and smoke tests stay gated. Do not publish platform npm helpers until hosted
+  runtime jobs are green.
+- [security] The TypeScript renderer is a trusted-code boundary, not a sandbox;
+  protocol decoding validates shape and known names but does not authorize raw
+  filesystem or shell paths, and the Rust helper never evaluates JavaScript.
