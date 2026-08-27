@@ -324,7 +324,9 @@ function SelectTrigger(props: SelectTriggerProps): HostNode {
   applyStyle(node, { tabIndex: 0, cursor: "pointer", ...props.style })
   setProp(node, "onClick", () => state.toggle())
   setProp(node, "onKeyDown", (event: SolidGpuiEvent) => state.handleKey(event))
-  setProp(node, "onBlur", () => state.closeMenu())
+  // No blur-close here: focus TRANSFERS into the content on open (Gate 3-b),
+  // so a trigger blur fires the moment the menu opens — the content's own
+  // blur now owns dismissal (Tab out of the listbox closes it).
   reactiveProp(node, "accessibility", () =>
     accessibility("combobox", state.value(), state.open(), undefined),
   )
@@ -347,11 +349,17 @@ function ComboboxTrigger(props: ComboboxTriggerProps): HostNode {
     if (event.type === "event" && event.value !== undefined) state.inputValue(event.value)
   })
   setProp(node, "onKeyDown", (event: SolidGpuiEvent) => state.handleKey(event))
+  // The combobox input KEEPS focus while the menu is open (typing filters
+  // through it), so unlike the select it owns the blur-close itself.
   setProp(node, "onBlur", () => state.closeMenu())
   return node
 }
 
-function SelectContent(props: SelectContentProps): HostNode {
+/** Shared overlay shell. Select TRANSFERS focus into the listbox on open
+ * (tabIndex + helper-side autoFocus + keydown routing + blur-close); the
+ * combobox keeps focus in its input, so its content stays inert — the
+ * input's own blur and keydown drive dismissal and navigation. */
+function ContentShell(props: SelectContentProps, ownsFocus: boolean): HostNode {
   const state = context()
   return createComponent(Show, {
     get when() {
@@ -359,16 +367,40 @@ function SelectContent(props: SelectContentProps): HostNode {
     },
     children: () => {
       const node = createElement("div")
-      applyStyle(node, { display: "flex", flexDirection: "column", ...props.style })
+      applyStyle(
+        node,
+        ownsFocus
+          ? {
+              display: "flex",
+              flexDirection: "column",
+              // Gate 3-b: focus transfer + restoration. tabIndex makes the
+              // listbox focusable; autoFocus moves focus here one frame
+              // after mount (helper-side). When this node is later removed
+              // while focused, the helper restores focus to the element
+              // focused before the overlay opened (usually the trigger).
+              tabIndex: 0,
+              autoFocus: "true",
+              ...props.style,
+            }
+          : { display: "flex", flexDirection: "column", ...props.style },
+      )
       // Keep the content in layout for anchor placement but paint it above the
       // trigger and ancestors; the retained tree still owns its lifecycle.
       setProp(node, "deferred", true)
       setProp(node, "anchor", "topLeft")
+      if (ownsFocus) {
+        setProp(node, "onKeyDown", (event: SolidGpuiEvent) => state.handleKey(event))
+        setProp(node, "onBlur", () => state.closeMenu())
+      }
       reactiveProp(node, "accessibility", () => accessibility("listbox", undefined, undefined, undefined))
       if (props.children !== undefined) insert(node, props.children, null, null)
       return node
     },
   }) as HostNode
+}
+
+function SelectContent(props: SelectContentProps): HostNode {
+  return ContentShell(props, true)
 }
 
 function SelectItem(props: SelectItemProps): HostNode {
@@ -397,7 +429,7 @@ export const select = {
 export const combobox = {
   Root: ComboboxRoot,
   Trigger: ComboboxTrigger,
-  Content: SelectContent,
+  Content: (props: SelectContentProps): HostNode => ContentShell(props, false),
   Item: SelectItem,
 } as const
 

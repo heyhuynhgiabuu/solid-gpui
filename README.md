@@ -161,9 +161,13 @@ selected state:
 `combobox.Trigger`. Values are controlled; item `value`/`disabled` are static definitions (remount
 an item when they change), filtering remains caller-owned. Presses outside the
 root subtree dismiss the open menu (`onOutsideClick`, helper-side detection,
-Gate 3-a). Multi-select, uncontrolled state, native popup windows, and
-IME-composition arrow suppression are not part of S14b. Try the real window
-demo with `bun run example/select`.
+Gate 3-a). Focus semantics (Gate 3-b): opening a `select` transfers focus
+into the listbox (`tabIndex` + helper-side `autoFocus`), keyboard navigation
+runs there, blurring it or dismissing the menu by any path restores focus to
+the element focused before the overlay opened; the combobox keeps focus in
+its input while the menu is open. Multi-select, uncontrolled state, native
+popup windows, and IME-composition arrow suppression are not part of S14b.
+Try the real window demo with `bun run example/select`.
 
 ## Trust boundary for JavaScript
 

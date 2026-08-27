@@ -248,6 +248,93 @@ test("keeps deferred S14b edges explicit", async () => {
   }
 })
 
+test("content takes focus on open (Gate 3-b transfer) and closes on blur", async () => {
+  const rec = recording()
+  const suite = initJsxRuntime(rec.send)
+  const container = createElement("#root")
+
+  try {
+    const dispose = suite.render(
+      () =>
+        createComponent(
+          select.Root,
+          {
+            value: "red",
+            onValueChange: () => {},
+            children: () => [
+              createComponent(select.Trigger, { children: () => createTextNode("Color") }),
+              createComponent(select.Content, {
+                children: () => createComponent(select.Item, {
+                  value: "red",
+                  children: () => createTextNode("Red"),
+                }),
+              }),
+            ],
+          },
+        ) as HostNode,
+      container,
+    )
+    await suite.flush()
+
+    const mutations = (): Mutation[] => rec.batches.flatMap((batch) => batch.mutations)
+    const triggerId = mutations().find(
+      (mutation): mutation is Extract<Mutation, { op: "setEventListener" }> =>
+        mutation.op === "setEventListener" && mutation.eventType === "click",
+    )?.id
+    if (triggerId === undefined) throw new Error("select trigger listener was not mounted")
+
+    suite.handler(triggerId, "click")?.(event(triggerId, "click"))
+    await suite.flush()
+
+    const opened = mutations()
+    const contentId = opened.find(
+      (mutation): mutation is Extract<Mutation, { op: "setDeferred" }> =>
+        mutation.op === "setDeferred" && mutation.deferred,
+    )?.id
+    if (contentId === undefined) throw new Error("select content was not deferred")
+
+    // Transfer: the opened content is focusable (tabIndex), autofocuses
+    // (helper focuses it one frame after mount), keeps driving keyboard
+    // navigation, and closes when focus leaves it.
+    const contentStyle = opened.find(
+      (mutation): mutation is Extract<Mutation, { op: "setStyle" }> =>
+        mutation.op === "setStyle" && mutation.id === contentId,
+    )?.style
+    expect(contentStyle).toMatchObject({
+      display: "flex",
+      flexDirection: "column",
+      tabIndex: 0,
+      autoFocus: "true",
+    })
+    for (const eventType of ["keyDown", "blur"] as const) {
+      expect(opened).toContainEqual(
+        expect.objectContaining({
+          op: "setEventListener",
+          id: contentId,
+          eventType,
+        }),
+      )
+    }
+
+    // Focus now MOVES into the content on open, so the trigger must not
+    // carry its own blur-close anymore (it would fire immediately when
+    // focus transfers and close the menu it just opened).
+    expect(
+      opened.filter(
+        (mutation) =>
+          mutation.op === "setEventListener" &&
+          mutation.eventType === "blur" &&
+          mutation.id !== contentId,
+      ),
+    ).toEqual([])
+
+    dispose()
+    await suite.flush()
+  } finally {
+    resetJsxRuntime()
+  }
+})
+
 describe("combobox primitives", () => {
   test("uses an editable controlled input and opens on input", async () => {
     const rec = recording()
@@ -267,7 +354,15 @@ describe("combobox primitives", () => {
               changes.push(next)
               setValue(next)
             },
-            children: () => createComponent(combobox.Trigger, { placeholder: "Search" }),
+            children: () => [
+              createComponent(combobox.Trigger, { placeholder: "Search" }),
+              createComponent(combobox.Content, {
+                children: () => createComponent(combobox.Item, {
+                  value: "blue",
+                  children: () => createTextNode("Blue"),
+                }),
+              }),
+            ],
           }) as HostNode,
         container,
       )
@@ -301,6 +396,22 @@ describe("combobox primitives", () => {
             mutation.accessibility.value === "blu",
         ),
       ).toBe(true)
+
+      // Gate 3-b: combobox focus stays in the INPUT (typing must keep
+      // working while the menu is open) — the content never autofocuses,
+      // and the input keeps its own blur-close.
+      const opened = rec.batches.flatMap((batch) => batch.mutations)
+      const contentStyle = opened.find(
+        (mutation): mutation is Extract<Mutation, { op: "setStyle" }> =>
+          mutation.op === "setStyle" &&
+          mutation.style.flexDirection === "column",
+      )?.style
+      expect(contentStyle).toBeDefined()
+      expect(contentStyle?.autoFocus).toBeUndefined()
+      expect(contentStyle?.tabIndex).toBeUndefined()
+      expect(opened).toContainEqual(
+        expect.objectContaining({ op: "setEventListener", id: inputId, eventType: "blur" }),
+      )
 
       dispose()
       await suite.flush()

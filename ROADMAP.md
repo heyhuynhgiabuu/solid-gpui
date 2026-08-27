@@ -155,7 +155,10 @@ finish the semantics a SaaS client normally needs:
 - pointer outside-click dismissal (headless-landed in Gate 3-a: protocol
   `outsideClick` event, helper detector, select wiring, TestApp proof; real
   GUI evidence still owed for full Gate 3 closure);
-- focus transfer and restoration;
+- focus transfer and restoration (headless-landed in Gate 3-b: select
+  content autofocuses on open and the helper restores the pre-overlay
+  focus target on dismissal — removal hook guards both ids at fire time;
+  combobox deliberately keeps input focus);
 - keyboard navigation and selection behavior;
 - IME-composition-safe arrow handling;
 - positioning, clipping, and window-edge behavior for generic popovers;

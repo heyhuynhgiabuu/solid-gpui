@@ -536,6 +536,12 @@ pub struct HostView {
     /// the focus subscription (activated one frame later by gpui) is live
     /// when the focus happens — otherwise the focus event is silently missed.
     autofocus_pending: Option<ElementId>,
+    /// Gate 3-b: (overlay, previous) — the autoFocus overlay that took focus
+    /// and the element focused right before it. Drives removal restoration.
+    autofocus_origin: Option<(ElementId, ElementId)>,
+    /// Gate 3-b: (previous, overlay) awaiting the next render's restoration
+    /// defer; fire-time guards re-check both ids (either may die in flight).
+    focus_restore_pending: Option<(ElementId, ElementId)>,
     /// Live editable state per input/textarea element. Shared with the per-
     /// frame platform InputHandler so edits persist across frames (the
     /// handler itself is rebuilt every frame by the IME anchor).
@@ -580,6 +586,8 @@ impl HostView {
             focus_subscriptions: Vec::new(),
             focus_subscribed: HashSet::new(),
             autofocus_pending: None,
+            autofocus_origin: None,
+            focus_restore_pending: None,
             input_states: Rc::new(RefCell::new(HashMap::new())),
             scrollbar_drag: RefCell::new(None),
             key_pending: Rc::new(RefCell::new(HashMap::new())),
@@ -688,6 +696,30 @@ impl HostView {
     /// callback so the focus event is not missed (see autofocus_pending).
     pub fn mark_autofocus(&mut self, id: ElementId) {
         self.autofocus_pending.get_or_insert(id);
+    }
+
+    /// Gate 3-b: main.rs reports every removeChild/destroyElement so a
+    /// dismissed autoFocus overlay can return focus to what had it before.
+    /// Scheduling only — the restoration itself defers from the next render,
+    /// where focus timing already lives (autofocus uses the same defer).
+    pub fn note_element_removed(&mut self, removed: ElementId) {
+        if let Some((overlay, previous)) = self.autofocus_origin {
+            if removed == previous {
+                // The restoration target died first: nothing to restore to.
+                self.autofocus_origin = None;
+            } else if removed == overlay {
+                self.focus_restore_pending = Some((previous, overlay));
+            }
+        }
+    }
+
+    /// Gate 3-b: a SetRoot swap destroys the entire previous root without
+    /// per-node removal reports. Ids restart from 1 after a remount, so a
+    /// surviving origin could match an UNRELATED live element later — drop
+    /// all focus-restoration state with the old tree.
+    pub fn reset_focus_restore(&mut self) {
+        self.autofocus_origin = None;
+        self.focus_restore_pending = None;
     }
 
     /// Set an input's value from the wire (setValue — the JS→helper direction
@@ -1543,12 +1575,64 @@ impl Render for HostView {
             window.request_animation_frame();
         }
 
+        // Gate 3-b RESTORATION runs BEFORE the autofocus defer below:
+        // deferred callbacks fire in registration order, and a cascading
+        // select lands dismissal + a fresh autoFocus mount in ONE frame —
+        // restore-then-autofocus leaves the new overlay focused (correct),
+        // while the reverse order lets the restore clobber the fresh focus.
+        //
+        // An autoFocus overlay was removed (dismissed by selection, Escape,
+        // outside click). Return focus to the element that had it before the
+        // overlay opened — guarded at fire time because both ids can die
+        // between scheduling and this frame (stale focus handles are never
+        // pruned; the tree is the liveness truth). A re-parented (still
+        // alive) overlay KEEPS its origin: its later real destroy still
+        // restores. No recorded origin means nothing was focused before the
+        // overlay: focus falls to the window, matching web behavior when no
+        // focusable precedes the popup.
+        if let Some((previous, overlay)) = self.focus_restore_pending.take() {
+            cx.defer_in(window, move |view, window, cx| {
+                if view.autofocus_origin != Some((overlay, previous)) {
+                    return; // superseded by a newer overlay's origin
+                }
+                if view.tree.get(previous).is_none() {
+                    view.autofocus_origin = None;
+                    return;
+                }
+                if view.tree.get(overlay).is_some() {
+                    return; // re-parented, not dismissed: keep the origin armed
+                }
+                view.autofocus_origin = None;
+                if let Some(handle) = view.focus_handles.borrow().get(&previous).cloned() {
+                    handle.focus(window, cx);
+                }
+            });
+        }
+
         // Focus the autoFocus target after this frame's deferred callbacks:
         // the on_focus_in subscription (registered during build_element,
         // activated via defer) must be live before handle.focus so the focus
-        // event reaches JS.
+        // event reaches JS. While taking focus, remember who had it — that
+        // origin powers the removal restoration above (Gate 3-b). A stacked
+        // LIVE overlay keeps the first (outermost) origin; a stale origin
+        // whose overlay already died is replaced by the fresh one.
         if let Some(id) = self.autofocus_pending.take() {
             cx.defer_in(window, move |view, window, cx| {
+                let origin_live = view
+                    .autofocus_origin
+                    .is_some_and(|(overlay, _)| view.tree.get(overlay).is_some());
+                if !origin_live {
+                    let previous = view
+                        .focus_handles
+                        .borrow()
+                        .iter()
+                        .find(|(_, handle)| handle.is_focused(window))
+                        .map(|(focused, _)| *focused)
+                        .filter(|previous| *previous != id);
+                    if let Some(previous) = previous {
+                        view.autofocus_origin = Some((id, previous));
+                    }
+                }
                 if let Some(handle) = view.focus_handles.borrow().get(&id).cloned() {
                     handle.focus(window, cx);
                 }
@@ -4566,6 +4650,345 @@ mod headless_render_tests {
                 "second outside press must emit exactly once more (no accumulation): {borrowed:?}"
             );
         }
+
+        drop(window);
+        app.update(|cx| cx.shutdown());
+    }
+
+    /// Reverse lookup: the element id whose focus handle is focused now.
+    fn focused_element(window: &mut gpui::TestAppWindow<HostView>) -> Option<ElementId> {
+        window.update(|view, w, cx| {
+            let current = w.focused(cx)?;
+            let handles = view.focus_handles.borrow();
+            handles
+                .iter()
+                .find(|(_, h)| **h == current)
+                .map(|(id, _)| *id)
+        })
+    }
+
+    #[test]
+    fn overlay_autofocus_removal_restores_previous_focus() {
+        let mut app = gpui::TestApp::new();
+        let mut window = app.open_window(|_, _cx| HostView::new());
+
+        // Trigger (tabIndex) mounted first and focused BEFORE the overlay
+        // exists, so the helper has a restoration origin to remember.
+        window.update(|view, _, cx| {
+            for mutation in [
+                Mutation::CreateElement {
+                    id: ElementId(1),
+                    element_type: ElementType::Div,
+                },
+                Mutation::SetRoot { id: ElementId(1) },
+                Mutation::CreateElement {
+                    id: ElementId(2),
+                    element_type: ElementType::Div,
+                },
+                Mutation::AppendChild {
+                    parent_id: ElementId(1),
+                    child_id: ElementId(2),
+                },
+                Mutation::SetStyle {
+                    id: ElementId(2),
+                    style: [(
+                        "tabIndex".to_string(),
+                        StyleValue::Number(serde_json::Number::from(0)),
+                    )]
+                    .into_iter()
+                    .collect(),
+                    state: None,
+                },
+            ] {
+                view.tree.apply(&mutation).expect("trigger mount applies");
+            }
+            view.ensure_focus_handle(ElementId(2), cx);
+        });
+        window.draw();
+        window.update(|view, w, cx| {
+            view.focus_element(ElementId(2), w, cx)
+                .expect("trigger is focusable");
+        });
+        assert_eq!(focused_element(&mut window), Some(ElementId(2)));
+
+        // Overlay content mounts with autoFocus (the production wire shape:
+        // SetStyle carries autoFocus, then mark_autofocus from the batch
+        // hook). Its focus must transfer AND record the trigger as origin.
+        window.update(|view, _, cx| {
+            for mutation in [
+                Mutation::CreateElement {
+                    id: ElementId(3),
+                    element_type: ElementType::Div,
+                },
+                Mutation::AppendChild {
+                    parent_id: ElementId(1),
+                    child_id: ElementId(3),
+                },
+                Mutation::SetStyle {
+                    id: ElementId(3),
+                    style: [
+                        (
+                            "width".to_string(),
+                            StyleValue::Number(serde_json::Number::from(100)),
+                        ),
+                        (
+                            "height".to_string(),
+                            StyleValue::Number(serde_json::Number::from(40)),
+                        ),
+                        ("autoFocus".to_string(), StyleValue::Text("true".into())),
+                    ]
+                    .into_iter()
+                    .collect(),
+                    state: None,
+                },
+            ] {
+                view.tree.apply(&mutation).expect("overlay mount applies");
+            }
+            view.ensure_focus_handle(ElementId(3), cx);
+            view.mark_autofocus(ElementId(3));
+        });
+        window.draw(); // autofocus defer fires: content focused, origin saved
+        assert_eq!(focused_element(&mut window), Some(ElementId(3)));
+        assert_eq!(
+            window.read(|view, _| view.autofocus_origin),
+            Some((ElementId(3), ElementId(2))),
+            "autofocus must remember the previously focused element"
+        );
+
+        // Dismissal wire shape: removeChild + destroyElement, each reported
+        // through the same note_element_removed hook main.rs calls.
+        window.update(|view, _, _| {
+            view.tree
+                .apply(&Mutation::RemoveChild {
+                    parent_id: ElementId(1),
+                    child_id: ElementId(3),
+                })
+                .expect("removeChild applies");
+            view.note_element_removed(ElementId(3));
+            view.tree
+                .apply(&Mutation::DestroyElement { id: ElementId(3) })
+                .expect("destroyElement applies");
+            view.note_element_removed(ElementId(3));
+        });
+        window.draw(); // restoration defer: trigger focused again
+        assert_eq!(
+            focused_element(&mut window),
+            Some(ElementId(2)),
+            "removing the focused overlay must restore focus to the trigger"
+        );
+        assert_eq!(
+            window.read(|view, _| view.autofocus_origin),
+            None,
+            "origin must be consumed by the restoration"
+        );
+
+        drop(window);
+        app.update(|cx| cx.shutdown());
+    }
+
+    #[test]
+    fn overlay_focus_restore_skips_when_previous_was_destroyed() {
+        let mut app = gpui::TestApp::new();
+        let mut window = app.open_window(|_, _cx| HostView::new());
+
+        window.update(|view, _, cx| {
+            for mutation in [
+                Mutation::CreateElement {
+                    id: ElementId(1),
+                    element_type: ElementType::Div,
+                },
+                Mutation::SetRoot { id: ElementId(1) },
+                Mutation::CreateElement {
+                    id: ElementId(2),
+                    element_type: ElementType::Div,
+                },
+                Mutation::AppendChild {
+                    parent_id: ElementId(1),
+                    child_id: ElementId(2),
+                },
+                Mutation::SetStyle {
+                    id: ElementId(2),
+                    style: [(
+                        "tabIndex".to_string(),
+                        StyleValue::Number(serde_json::Number::from(0)),
+                    )]
+                    .into_iter()
+                    .collect(),
+                    state: None,
+                },
+                Mutation::CreateElement {
+                    id: ElementId(3),
+                    element_type: ElementType::Div,
+                },
+                Mutation::AppendChild {
+                    parent_id: ElementId(1),
+                    child_id: ElementId(3),
+                },
+                Mutation::SetStyle {
+                    id: ElementId(3),
+                    style: [("autoFocus".to_string(), StyleValue::Text("true".into()))]
+                        .into_iter()
+                        .collect(),
+                    state: None,
+                },
+            ] {
+                view.tree.apply(&mutation).expect("mount applies");
+            }
+            view.ensure_focus_handle(ElementId(2), cx);
+            view.ensure_focus_handle(ElementId(3), cx);
+        });
+        window.draw();
+        window.update(|view, w, cx| {
+            view.focus_element(ElementId(2), w, cx)
+                .expect("trigger is focusable");
+        });
+        window.update(|view, _, _| view.mark_autofocus(ElementId(3)));
+        window.draw();
+        assert_eq!(
+            window.read(|view, _| view.autofocus_origin),
+            Some((ElementId(3), ElementId(2)))
+        );
+
+        // Same batch destroys the overlay AND the previous target: the
+        // restoration must be dropped, not fire at a dead id.
+        window.update(|view, _, _| {
+            view.tree
+                .apply(&Mutation::RemoveChild {
+                    parent_id: ElementId(1),
+                    child_id: ElementId(3),
+                })
+                .expect("removeChild applies");
+            view.note_element_removed(ElementId(3));
+            view.tree
+                .apply(&Mutation::DestroyElement { id: ElementId(3) })
+                .expect("destroy overlay applies");
+            view.note_element_removed(ElementId(3));
+            view.tree
+                .apply(&Mutation::DestroyElement { id: ElementId(2) })
+                .expect("destroy previous applies");
+            view.note_element_removed(ElementId(2));
+        });
+        window.draw();
+        assert_eq!(
+            window.read(|view, _| view.autofocus_origin),
+            None,
+            "a destroyed previous target must clear the origin, never restore"
+        );
+
+        drop(window);
+        app.update(|cx| cx.shutdown());
+    }
+
+    #[test]
+    fn same_frame_dismiss_and_fresh_autofocus_focuses_the_new_overlay() {
+        let mut app = gpui::TestApp::new();
+        let mut window = app.open_window(|_, _cx| HostView::new());
+
+        // Trigger focused, then overlay A takes focus with a recorded origin —
+        // the same setup as the restoration test above.
+        window.update(|view, _, cx| {
+            for mutation in [
+                Mutation::CreateElement {
+                    id: ElementId(1),
+                    element_type: ElementType::Div,
+                },
+                Mutation::SetRoot { id: ElementId(1) },
+                Mutation::CreateElement {
+                    id: ElementId(2),
+                    element_type: ElementType::Div,
+                },
+                Mutation::AppendChild {
+                    parent_id: ElementId(1),
+                    child_id: ElementId(2),
+                },
+                Mutation::SetStyle {
+                    id: ElementId(2),
+                    style: [(
+                        "tabIndex".to_string(),
+                        StyleValue::Number(serde_json::Number::from(0)),
+                    )]
+                    .into_iter()
+                    .collect(),
+                    state: None,
+                },
+                Mutation::CreateElement {
+                    id: ElementId(3),
+                    element_type: ElementType::Div,
+                },
+                Mutation::AppendChild {
+                    parent_id: ElementId(1),
+                    child_id: ElementId(3),
+                },
+                Mutation::SetStyle {
+                    id: ElementId(3),
+                    style: [("autoFocus".to_string(), StyleValue::Text("true".into()))]
+                        .into_iter()
+                        .collect(),
+                    state: None,
+                },
+            ] {
+                view.tree.apply(&mutation).expect("mount applies");
+            }
+            view.ensure_focus_handle(ElementId(2), cx);
+            view.ensure_focus_handle(ElementId(3), cx);
+        });
+        window.draw();
+        window.update(|view, w, cx| {
+            view.focus_element(ElementId(2), w, cx)
+                .expect("trigger is focusable");
+        });
+        window.update(|view, _, _| view.mark_autofocus(ElementId(3)));
+        window.draw();
+        assert_eq!(focused_element(&mut window), Some(ElementId(3)));
+
+        // Cascading selects in ONE flush: dismissing A restores the trigger
+        // AND the newly rendered panel mounts autoFocus overlay B. The final
+        // focus must be B (its autofocus ran last), with a fresh origin.
+        window.update(|view, _, cx| {
+            view.tree
+                .apply(&Mutation::RemoveChild {
+                    parent_id: ElementId(1),
+                    child_id: ElementId(3),
+                })
+                .expect("removeChild applies");
+            view.note_element_removed(ElementId(3));
+            view.tree
+                .apply(&Mutation::DestroyElement { id: ElementId(3) })
+                .expect("destroyElement applies");
+            view.note_element_removed(ElementId(3));
+            for mutation in [
+                Mutation::CreateElement {
+                    id: ElementId(4),
+                    element_type: ElementType::Div,
+                },
+                Mutation::AppendChild {
+                    parent_id: ElementId(1),
+                    child_id: ElementId(4),
+                },
+                Mutation::SetStyle {
+                    id: ElementId(4),
+                    style: [("autoFocus".to_string(), StyleValue::Text("true".into()))]
+                        .into_iter()
+                        .collect(),
+                    state: None,
+                },
+            ] {
+                view.tree.apply(&mutation).expect("overlay B mounts");
+            }
+            view.ensure_focus_handle(ElementId(4), cx);
+            view.mark_autofocus(ElementId(4));
+        });
+        window.draw();
+        assert_eq!(
+            focused_element(&mut window),
+            Some(ElementId(4)),
+            "the fresh overlay's autofocus must win the frame, not the restore"
+        );
+        assert_eq!(
+            window.read(|view, _| view.autofocus_origin),
+            Some((ElementId(4), ElementId(2))),
+            "overlay B must own a fresh origin (its dismissal restores the trigger)"
+        );
 
         drop(window);
         app.update(|cx| cx.shutdown());

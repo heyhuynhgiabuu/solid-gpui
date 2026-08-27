@@ -696,6 +696,25 @@ fn run_stdio_window() {
                                         {
                                             view.set_input_value(*id, value);
                                         }
+                                        // Gate 3-b: a SetRoot swap destroys
+                                        // the old tree wholesale — drop focus
+                                        // restoration state before ids restart.
+                                        if let solid_gpui_protocol::Mutation::SetRoot { .. } = m {
+                                            view.reset_focus_restore();
+                                        }
+                                        // Gate 3-b: report removals so a
+                                        // dismissed autoFocus overlay can
+                                        // return focus to its origin element.
+                                        if let solid_gpui_protocol::Mutation::RemoveChild {
+                                            child_id,
+                                            ..
+                                        }
+                                        | solid_gpui_protocol::Mutation::DestroyElement {
+                                            id: child_id,
+                                        } = m
+                                        {
+                                            view.note_element_removed(*child_id);
+                                        }
                                         // Content changes inside a virtual
                                         // list item invalidate its cached
                                         // height: remeasure that item.

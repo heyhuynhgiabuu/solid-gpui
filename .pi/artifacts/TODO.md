@@ -543,21 +543,6 @@ r2 NOT MERGEABLE: tint fallback alpha-0; fixes c3b25a8+225d09a; r3 CLEAN)
       f32) vẫn invisible; fix = One Dark text OPAQUE hsla(221,.11,.86,1)
       khớp default hiệu lực của gpui (cite fallback_themes.rs). r3 CLEAN.
 
-### 2026-08-27 - Measurement foundation: compiled JSX versus runtime h()
-status: done | updated: 2026-08-27
-
-- [x] Define a version-pinned compiler comparison that measures compiled JSX and runtime `h()` output at the same trusted renderer boundary.
-- [x] Report transform output, mount/update mutation parity, and timing/size observations without changing compiler or renderer semantics.
-- [x] Document the compiler comparison command, Solid 2 browser condition, and interpretation limits.
-- [x] Restore the dedicated strict typecheck for the compiler wrapper, then rerun full verification and review.
-
-#### Verification
-
-- `bun run benchmark:compiler` passed with pinned Solid/universal/compiler rc.3 packages, `browser` condition, 200-row paths, 50 measured updates, and parsed schema output.
-- The comparison reports compiled-versus-`h()` mutation shapes and p50/p95/p99 timings without treating the observed parity difference as a renderer change request.
-- Dedicated strict typecheck for all benchmark wrappers passed after adding typed local declarations for Babel/plugin imports; the full Bun suite and package typecheck passed.
-- Independent final review of commit `78c22a3` returned `CLEAN/MERGEABLE`; the type-only follow-up introduced no behavioral changes.
-
 ### 2026-08-27 - Solid 1 compatibility spike
 status: done | updated: 2026-08-27
 
@@ -934,3 +919,71 @@ carries optional coords generically.
 - Matrix doc `docs/tailwind-subset.md` documents every supported family, the
   exact deviation policy, and the refusal list; README's limitation bullet now
   points to it instead of claiming Tailwind is wholly unsupported.
+
+### 2026-08-27 - Gate 3-b overlay focus transfer and restoration
+status: done | updated: 2026-08-27
+
+ROADMAP Gate 3 bullet "focus transfer and restoration": today the select
+menu is driven entirely by trigger keydown (content is not focusable), and
+nothing returns focus when an overlay unmounts — dismissal by selection,
+Escape, or outsideClick strands focus on the window.
+
+Design (helper-first, zero protocol surface change):
+
+- Transfer: SelectContent becomes focusable (tabIndex: 0) with the
+  EXISTING helper-side autoFocus style (focused one frame after mount via
+  autofocus_pending) and routes keydown through the shared handleKey; its
+  blur closes the menu. SelectTrigger drops its own blur-close (focus now
+  moves into the content on open). Combobox keeps input-owned focus
+  (content stays non-focusable; input blur still closes).
+- Restoration: when the helper focuses an autoFocus node it records the
+  previously focused element (reverse lookup over focus_handles by
+  is_focused). When that overlay node is removed (removeChild/
+  destroyElement) and the previous element is STILL MOUNTED (stale handles
+  are never pruned — tree.get must gate), focus is restored to it via the
+  same one-frame defer as autofocus. No previous / dead previous → focus
+  falls to the window (documented web-like behavior).
+
+Slices:
+
+1. [x] RED: Rust TestApp test — mount trigger(tabIndex) → focus_element →
+   attach content(autoFocus) → draw → content focused; removeChild+
+   destroyElement content → draw → trigger focused again. Negative: previous
+   removed in same batch → no restore, no panic. (Both observed RED — compile
+   errors on the missing API — then GREEN through the real render path.)
+2. [x] RED: JS emission tests — select.Content carries tabIndex+autoFocus+
+   onKeyDown+onBlur, trigger registers NO onBlur; combobox.Content lacks
+   autoFocus and input keeps onBlur. (toMatchObject failed on the missing
+   style keys before the select.ts change; combobox fixture extended with
+   Content+Item so the negative assertion has a real content node.)
+3. [x] GREEN helper: autofocus_origin pair recorded at the autofocus defer
+   (reverse lookup over focus_handles by is_focused; first origin wins for
+   stacked overlays); removal hook in main.rs Job::Batch after tree.apply →
+   note_element_removed; restoration defers from the next render with
+   fire-time guards on BOTH ids (overlay gone AND previous alive — stale
+   focus handles are never pruned, the tree is the liveness truth).
+4. [x] GREEN select.ts: ContentShell(ownsFocus) split — select transfers
+   (tabIndex/autoFocus/keyDown/blur-close on content, trigger blur-close
+   removed); combobox content stays inert (input owns focus + blur-close).
+   README S14b paragraph + ROADMAP Gate 3 bullet annotated.
+5. [x] Full gates + independent review; fixes applied.
+
+#### Review outcome
+
+- Independent reviewer envelope: **MERGEABLE**, confidence high — all 8
+  invariants verified (trigger nav closed+open, combobox regression-free,
+  restore ordering, origin-before-focus, stale-handle guards, zero protocol
+  surface change, hook placement, assertion semantics).
+- Should-fix applied (RED→GREEN): deferred callbacks fire in registration
+  order, so restore-after-autofocus let a cascading select's dismissal
+  restore CLOBBER a fresh overlay mounted in the same frame. The restoration
+  defer now registers FIRST; new TestApp test
+  `same_frame_dismiss_and_fresh_autofocus_focuses_the_new_overlay` proves
+  focus lands on the new overlay with a fresh origin.
+- Minors applied: a re-parented (alive) overlay keeps its origin so its
+  later real destroy still restores; the autofocus defer replaces only DEAD
+  origins (stacked live overlays keep the outermost); `SetRoot` swaps now
+  reset both focus-restoration fields (ids restart after remount — a stale
+  origin could otherwise focus an unrelated live element).
+- Final gates: helper bin 95 tests, protocol suites, clippy -D warnings,
+  fmt, bun 232/0, tsc ×3, consumer checks, git diff --check — all green.
