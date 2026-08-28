@@ -184,10 +184,13 @@ than treating multiple independent helper processes as one application.
   overlay without stale focus/listener state. (macOS local evidence landed
   in Gate 3-d: `smoke:gate3-gui` drives the full cycle with real dispatched
   input. Open: synthetic-keystroke dispatch returns handled=false after the
-  first autoFocus cycle — pointer dispatch unaffected; real-keyboard
-  behavior unverified — run the MANUAL probe `bun run probe:keyboard`
-  (human types with a real keyboard/IME; the on-window event log shows
-  what arrives). Hosted per-OS GUI evidence still owed.)
+  first autoFocus cycle — pointer dispatch unaffected. Real-keyboard
+  behavior VERIFIED by manual human-in-the-loop probe on macOS
+  (`bun run probe:keyboard`: real keys + Vietnamese Telex composition,
+  suppression and navigation behave as specified; it also exposed and
+  confirmed the fix for invisible default text — unstyled windows now
+  paint a dark surface with a light default text color). Hosted per-OS
+  GUI evidence still owed.)
 - macOS menu behavior remains separately tested.
 - GUI evidence is reported per OS; headless tests are not presented as visual
   proof.

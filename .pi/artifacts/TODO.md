@@ -1185,3 +1185,15 @@ Slices:
    `bun run probe:keyboard` (human-in-the-loop). Gates green (bun 238/0,
    typecheck, clippy, fmt, git diff --check); probe smoke: mounts, prints
    PROBE READY, window stays open for interaction.
+
+4. [x] REAL-KEYBOARD VERIFIED (human-in-the-loop): the user ran the probe
+   on macOS, followed the on-screen steps (select open/navigate/select/
+   escape; combobox typing with Vietnamese Telex while the menu was open),
+   and confirmed the behavior matched expectations. First run exposed a
+   REAL product default bug: gpui's default text color is black and
+   unstyled windows paint no background — every unstyled GUI rendered as
+   invisible black-on-black text (headless tests never look). Fixed in
+   HostView::render: the frame is wrapped in the placeholder's dark
+   surface (#1e1e2e) with a light default text color (#cdd6f4); consumer
+   styles override per element. Visually confirmed by the user on the
+   re-run.

@@ -1628,6 +1628,12 @@ impl Render for HostView {
             // No root yet: dark placeholder keeps the window alive pre-mount.
             None => div().size_full().bg(rgb(0x1e1e2e)).into_any_element(),
         };
+        // Gate 5-b: a visible DEFAULT THEME. gpui's default text color is
+        // black and unstyled windows paint no background, so every unstyled
+        // GUI rendered as invisible black-on-black text (first seen with the
+        // manual keyboard probe). Wrap the frame in the placeholder's dark
+        // surface with a light default text color; consumer styles (bg,
+        // color) override per element as usual.
 
         self.stats.push(started.elapsed());
 
@@ -1671,6 +1677,13 @@ impl Render for HostView {
                 }
             });
         }
+
+        content = div()
+            .size_full()
+            .bg(rgb(0x1e1e2e))
+            .text_color(rgb(0xcdd6f4))
+            .child(content)
+            .into_any_element();
 
         if !self.overlay {
             return content;

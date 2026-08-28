@@ -35,13 +35,19 @@
  *  5. Cmd/Ctrl+Q (or close the window) quits cleanly — the process must
  *     exit 0 with no stderr panic.
  */
+import { existsSync } from "node:fs"
+import { fileURLToPath } from "node:url"
 import { spawnHelper } from "@solid-gpui/client"
 import { createSignal, For } from "solid-js"
 import { mountJsx } from "@solid-gpui/solid/jsx"
 import { combobox } from "@solid-gpui/solid"
 
-const helperPath = process.env.SOLID_GPUI_HELPER ?? ""
-if (!helperPath) throw new Error("SOLID_GPUI_HELPER must name the built helper")
+const helperPath =
+  process.env.SOLID_GPUI_HELPER ??
+  fileURLToPath(new URL("../target/debug/solid-gpui-helper", import.meta.url))
+if (!existsSync(helperPath)) {
+  throw new Error(`helper binary missing at ${helperPath}; run cargo build -p solid-gpui-helper first`)
+}
 
 const connection = spawnHelper({ binary: helperPath, mode: "window" })
 const [log, setLog] = createSignal<string[]>([])
