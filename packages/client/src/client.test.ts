@@ -88,6 +88,22 @@ describe("spawn failure supervision", () => {
 })
 
 describe("window mode (real rendering)", () => {
+  test("getStats reports helper and protocol versions (Gate 5-a)", async () => {
+    if (skip() || process.env.SOLID_GPUI_SKIP_GUI_TESTS !== undefined) return
+    const helper = spawnHelper({ binary, mode: "window" })
+    try {
+      const value = (await helper.sendCommand({ type: "getStats", seq: 1 })) as Record<
+        string,
+        unknown
+      >
+      expect(typeof value.helperVersion).toBe("string")
+      expect(value.helperVersion as string).toMatch(/^\d+\.\d+\.\d+/)
+      expect(value.protocolVersion).toBe(1)
+    } finally {
+      await helper.close()
+    }
+  })
+
   test("fixture applies through the retained tree; apply errors are correlated", async () => {
     if (skip() || process.env.SOLID_GPUI_SKIP_GUI_TESTS !== undefined) return
     const helper = spawnHelper({ binary, mode: "window" })
@@ -151,6 +167,7 @@ describe("wire safety through the real helper (transport mode)", () => {
     expect(ack).toEqual({ seq: 42, applied: 12 })
     await helper.close()
   })
+
 
   test("transport-mode command rejects with a seq-correlated unsupported error", async () => {
     if (skip()) return

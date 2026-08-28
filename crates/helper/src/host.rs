@@ -607,6 +607,10 @@ impl HostView {
             None => serde_json::Value::Null,
         };
         serde_json::json!({
+            // Gate 5-a: launchers/diagnostics pin and verify versions without
+            // a dedicated handshake command (additive payload keys).
+            "helperVersion": env!("CARGO_PKG_VERSION"),
+            "protocolVersion": solid_gpui_protocol::PROTOCOL_VERSION,
             "frames": self.stats.frames(),
             "samples": self.stats.len(),
             "p50Ms": ms(self.stats.percentile(0.5)),
@@ -741,6 +745,31 @@ impl HostView {
     /// all focus-restoration state with the old tree.
     pub fn reset_focus_restore(&mut self) {
         self.autofocus_origin = None;
+    }
+
+    /// Gate 5-a poisoned-batch recovery: clear the retained tree and EVERY
+    /// per-element state map so a fresh renderer can remount with restarted
+    /// ids on the same connection. Stats survive (history, not session
+    /// state); the sink, overlay flag, and focus-restoration origin are
+    /// session-wide and reset with everything else.
+    pub fn reset_tree(&mut self) {
+        self.tree = RetainedTree::new();
+        self.scroll_handles.borrow_mut().clear();
+        self.focus_handles.borrow_mut().clear();
+        self.focus_subscriptions.clear();
+        self.focus_subscribed.clear();
+        self.autofocus_pending = None;
+        self.autofocus_origin = None;
+        self.input_states.borrow_mut().clear();
+        self.scrollbar_drag.borrow_mut().take();
+        self.key_pending.borrow_mut().clear();
+        self.list_states.clear();
+        self.list_render_counts.clear();
+        self.list_alignment.clear();
+        self.list_follow_armed.clear();
+        self.list_children.clear();
+        self.animations.clear();
+        self.markdown_cache = Rc::new(RefCell::new(HashMap::new()));
     }
 
     /// Set an input's value from the wire (setValue — the JS→helper direction

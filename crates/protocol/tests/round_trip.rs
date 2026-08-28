@@ -610,6 +610,17 @@ fn set_event_listener_rejects_unknown_event_type() {
 }
 
 #[test]
+fn reset_tree_command_fixture_parses_and_emits_exactly() {
+    let raw = fs::read_to_string(fixture_path("command-reset-tree.json"))
+        .expect("fixture readable")
+        .trim()
+        .to_string();
+    let cmd = command_from_json(&raw).expect("command parses");
+    assert_eq!(cmd, Command::ResetTree { seq: 47 });
+    assert_eq!(command_to_json(&cmd), raw);
+}
+
+#[test]
 fn simulate_key_command_fixture_parses_and_emits_exactly() {
     let raw = fs::read_to_string(fixture_path("command-simulate-key.json"))
         .expect("fixture readable")

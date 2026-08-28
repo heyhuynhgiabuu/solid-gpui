@@ -10,7 +10,7 @@
 import { describe, expect, test } from "bun:test"
 import { existsSync } from "node:fs"
 import { fileURLToPath } from "node:url"
-import { spawnHelper, HelperExitedError, ReplyError } from "@solid-gpui/client"
+import { spawnHelper, HelperExitedError, ReplyError, type Ack } from "@solid-gpui/client"
 import { createSolidRenderer, type Send } from "./renderer"
 
 const binary = fileURLToPath(
@@ -136,6 +136,30 @@ describe.skipIf(noBinary || noGui)("wire safety via real helper (window mode)", 
     R.createElement("div")
     await expect(flush()).rejects.toThrow(/poisoned/i)
     expect(sends).toBe(2)
+
+    // Gate 5-a: the documented policy is "poison and remount" — a FRESH
+    // renderer instance on the SAME connection mounts, flushes, and is
+    // acked; the helper's SetRoot destroys the stale root (container is
+    // virtual), so the recovery needs no new process.
+    // Recovery primitive: clear the retained tree so the fresh renderer's
+    // restarted ids cannot collide with retained orphans (Gate 5-a).
+    await helper.sendCommand({ type: "resetTree", seq: 9_100 })
+
+    let ack2: Ack | undefined
+    const send2: Send = async (batch) => {
+      ack2 = await helper.sendBatch(batch)
+      return ack2
+    }
+    const { renderer: R2, render: render2, flush: flush2 } = createSolidRenderer(send2)
+    const container2 = R2.createElement("#root")
+    render2(() => {
+      const div = R2.createElement("div")
+      const text = R2.createElement("div")
+      R2.insertNode(div, text)
+      return div
+    }, container2)
+    await flush2()
+    expect(ack2?.applied).toBeGreaterThan(0)
 
     // Dispose still runs; the helper window closes cleanly on EOF.
     dispose()

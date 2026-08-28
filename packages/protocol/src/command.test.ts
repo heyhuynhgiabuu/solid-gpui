@@ -7,6 +7,7 @@ import focusElementFixture from "../fixtures/command-focus-element.json"
 import simulateInputFixture from "../fixtures/command-simulate-input.json"
 import simulateKeyFixture from "../fixtures/command-simulate-key.json"
 import simulateMouseFixture from "../fixtures/command-simulate-mouse.json"
+import resetTreeFixture from "../fixtures/command-reset-tree.json"
 import listInfoFixture from "../fixtures/command-list-info.json"
 import { type SolidGpuiCommand, decodeCommand, encodeCommand } from "./command"
 
@@ -87,6 +88,16 @@ describe("decodeCommand", () => {
     })
     if (!parsed.ok) throw new Error("unreachable")
     expect(encodeCommand(parsed.value)).toBe(JSON.stringify(simulateKeyFixture))
+  })
+
+  test("resetTree fixture parses and re-encodes exactly (parity)", () => {
+    const parsed = decodeCommand(JSON.stringify(resetTreeFixture))
+    expect(parsed).toEqual({
+      ok: true,
+      value: { type: "resetTree", seq: 47 },
+    })
+    if (!parsed.ok) throw new Error("unreachable")
+    expect(encodeCommand(parsed.value)).toBe(JSON.stringify(resetTreeFixture))
   })
 
   test("simulateMouse fixture parses and re-encodes exactly (parity)", () => {

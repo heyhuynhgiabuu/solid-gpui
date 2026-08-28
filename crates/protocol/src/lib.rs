@@ -647,6 +647,14 @@ pub enum Command {
         y: f64,
     },
 
+    /// Gate 5-a poisoned-batch recovery: clear the retained tree and every
+    /// per-element state map so a fresh renderer can remount with restarted
+    /// ids on the SAME connection (the documented poison-and-remount policy;
+    /// without this, a fresh renderer's ids collide with retained orphans).
+    ResetTree {
+        seq: u32,
+    },
+
     /// Query a virtual list's live metrics: item count, how many items the
     /// last frame actually painted (virtualization proof), and whether it is
     /// scrolled to the end (followTail chat position).
@@ -765,12 +773,13 @@ pub fn command_from_json(s: &str) -> Result<Command, ProtocolError> {
             | Some("simulateInput")
             | Some("simulateKey")
             | Some("simulateMouse")
+            | Some("resetTree")
             | Some("listInfo")
     ) {
         return Err(ProtocolError::InvalidShape {
             path: "type".into(),
             message: format!(
-                "unknown command {:?}; expected getStats|captureFrame|scrollTo|getScrollOffset|focusElement|simulateInput|simulateKey|simulateMouse|listInfo|setMenus|setTitle|windowAction|dialogMessage|dialogOpenFile|dialogSaveFile|shellRevealPath|shellOpenPath|scrollToItem",
+                "unknown command {:?}; expected getStats|captureFrame|scrollTo|getScrollOffset|focusElement|simulateInput|simulateKey|simulateMouse|resetTree|listInfo|setMenus|setTitle|windowAction|dialogMessage|dialogOpenFile|dialogSaveFile|shellRevealPath|shellOpenPath|scrollToItem",
                 type_str.unwrap_or("<missing>")
             ),
         });

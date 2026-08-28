@@ -262,7 +262,10 @@ Before calling the project a native-client foundation:
 - run real-window tests on every advertised platform and architecture;
 - keep protocol/helper headless tests as the cross-platform baseline;
 - validate startup, window close, helper crash, poisoned-batch recovery, and
-  clean teardown;
+  clean teardown; (headless slice landed in Gate 5-a: kill-mid-flight,
+  exit-0 teardown, and spawn-failure contracts were already tested; getStats
+  now reports helperVersion/protocolVersion; poisoned-batch recovery is the
+  tested resetTree + remount contract on one connection);
 - define logging, crash diagnostics, version reporting, and update/rollback
   expectations for the application bundle;
 - document OS permissions, filesystem/shell command trust, signing, and

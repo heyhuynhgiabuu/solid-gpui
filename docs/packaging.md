@@ -70,6 +70,22 @@ hardened runtime is what matters. An unsigned or ad-hoc helper inside a
 signed app is the classic first-launch Gatekeeper kill — the helper is signed
 first precisely so the bundle seal covers it.
 
+## Diagnostics, logging, and versions
+
+- The wire protocol owns stdout: every stdout line is protocol (replies and
+  events). Diagnostics go to stderr only — a fatal helper error or panic
+  appears there; the launcher should capture it into the app log.
+- `getStats` carries `helperVersion` (the helper crate's semver) and
+  `protocolVersion` (the wire protocol major). Launchers and support tools
+  pin and verify against these instead of scraping process output.
+- Poisoned-batch recovery contract: a failed batch poisons the renderer
+  (later flushes reject without requeueing — re-sending could double-apply
+  a partially applied batch). The sanctioned recovery is `resetTree`
+  (clears the helper's retained tree and per-element state so a fresh
+  renderer can remount with restarted ids on the same connection),
+  followed by a FRESH renderer instance (a poisoned one stays poisoned); or replace the helper process
+  for a hard reset.
+
 ## Version compatibility and upgrades
 
 - `@solid-gpui/helper-*` packages are pinned **exactly** by

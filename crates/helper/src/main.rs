@@ -99,6 +99,7 @@ fn command_ident(command: &solid_gpui_protocol::Command) -> (u32, &'static str) 
         solid_gpui_protocol::Command::SimulateInput { seq, .. } => (*seq, "simulateInput"),
         solid_gpui_protocol::Command::SimulateKey { seq, .. } => (*seq, "simulateKey"),
         solid_gpui_protocol::Command::SimulateMouse { seq, .. } => (*seq, "simulateMouse"),
+        solid_gpui_protocol::Command::ResetTree { seq } => (*seq, "resetTree"),
         solid_gpui_protocol::Command::ListInfo { seq, .. } => (*seq, "listInfo"),
         solid_gpui_protocol::Command::SetMenus { seq, .. } => (*seq, "setMenus"),
         solid_gpui_protocol::Command::SetTitle { seq, .. } => (*seq, "setTitle"),
@@ -478,6 +479,20 @@ fn run_stdio_window() {
                                 },
                             }
                         }
+                        solid_gpui_protocol::Command::ResetTree { seq } => window
+                            .update(cx, |view, _window, cx| {
+                                view.reset_tree();
+                                cx.notify();
+                                Reply::Result {
+                                    seq,
+                                    value: serde_json::json!({ "applied": true }),
+                                }
+                            })
+                            .unwrap_or_else(|e| Reply::Error {
+                                seq: Some(seq),
+                                code: ReplyCode::Unsupported,
+                                message: format!("window closed: {e}"),
+                            }),
                         solid_gpui_protocol::Command::SimulateInput { seq, id, text } => window
                             .update(cx, |view, _window, cx| {
                                 match view.simulate_input(id, &text) {

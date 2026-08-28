@@ -50,6 +50,7 @@ export type SolidGpuiCommand =
   | { readonly type: "simulateInput"; readonly seq: number; readonly id: number; readonly text: string }
   | { readonly type: "simulateKey"; readonly seq: number; readonly key: string }
   | { readonly type: "simulateMouse"; readonly seq: number; readonly x: number; readonly y: number }
+  | { readonly type: "resetTree"; readonly seq: number }
   | { readonly type: "listInfo"; readonly seq: number; readonly id: number }
   | {
       readonly type: "setMenus"
@@ -130,6 +131,7 @@ export function decodeCommand(json: string): Result<SolidGpuiCommand, ProtocolEr
     "simulateInput",
     "simulateKey",
     "simulateMouse",
+    "resetTree",
     "listInfo",
     "setMenus",
     "setTitle",
@@ -174,6 +176,9 @@ export function decodeCommand(json: string): Result<SolidGpuiCommand, ProtocolEr
       return { ok: false, error: shape("y", "expected a finite number") }
     }
     return { ok: true, value: { type, seq: parsed.seq, x, y } }
+  }
+  if (type === "resetTree") {
+    return { ok: true, value: { type, seq: parsed.seq } }
   }
   if (type === "simulateInput") {
     const id = parsed.id
@@ -372,6 +377,12 @@ export function encodeCommand(command: SolidGpuiCommand): string {
       seq: command.seq,
       id: command.id,
       text: command.text,
+    })
+  }
+  if (command.type === "resetTree") {
+    return JSON.stringify({
+      type: "resetTree",
+      seq: command.seq,
     })
   }
   if (command.type === "simulateKey") {

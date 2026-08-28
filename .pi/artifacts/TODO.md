@@ -1134,3 +1134,46 @@ The harness truncated the file AGAIN during the re-review (three
 historical blocks deleted; the second pass held NOT MERGEABLE on
 artifact integrity alone). This commit restores Git HEAD + this block;
 integrity is protected by committing immediately.
+### 2026-08-28 - Gate 5-a version reporting and remount-after-poison
+status: done | updated: 2026-08-28
+
+Gate 5 headless-first slice. Much of the crash/exit contract was already
+tested (client.test.ts: reject after death, kill mid-await, close→exit 0,
+spawn failure; wire-safety.test.ts: death poisons, applyFailed poisons
+with honest counts, dispose still closes cleanly). The remaining gaps:
+
+1. [x] Version reporting: getStats now carries helperVersion
+   (CARGO_PKG_VERSION) and protocolVersion (PROTOCOL_VERSION=1) —
+   additive payload keys; client test asserts both through the real
+   helper (window mode, with the standard GUI skip guards).
+2. [x] Remount-after-poison on the SAME connection: the test exposed a
+   real contract hole (a fresh renderer's restarted ids collide with
+   retained orphans; the old poison-and-remount policy had no working
+   primitive). Recovery is now the tested resetTree command (clears the
+   retained tree + every per-element state map) followed by a fresh
+   renderer mount, asserted through a real ack.
+3. [x] Docs: packaging.md "Diagnostics, logging, and versions" section
+   (stdout = protocol only, stderr = diagnostics, getStats versions,
+   resetTree recovery contract needing a FRESH renderer instance);
+   ROADMAP Gate 5 bullet annotated (headless slice landed; per-OS GUI +
+   hosted evidence owed).
+4. [x] Full gates: cargo 214/0, clippy -D warnings, fmt, bun 237/0,
+   tsc ×3 + three consumer/GUI typechecks, git diff --check.
+
+#### Review outcome
+
+First pass: code/lockstep/gates clean; NOT MERGEABLE on artifact
+integrity only (the session harness truncated three historical blocks
+again) plus two should-fixes and two nits, all applied: window-mode
+getStats test now carries the standard skip guards and lives in the
+window-mode describe; the reset_tree doc comment no longer contradicts
+the code (sink/overlay survive, everything per-element resets);
+packaging.md wording now says a FRESH renderer instance (a poisoned one
+stays poisoned). This block was rebuilt from Git HEAD; Git now protects
+the record.
+
+Second pass (after fixes): all six gate commands green on the fixed
+tree; the integrity finding resolved (this diff is pure additions vs
+HEAD); should-fixes and nits applied as described. Verdict recorded by
+the author per the reviewer's stated re-run condition ("re-run bun test
++ typecheck; then CLEAN/MERGEABLE").
