@@ -176,10 +176,9 @@ Real-GUI overlay evidence (Gate 3-d): `SOLID_GPUI_GATE3_GUI=1 bun run
 smoke:gate3-gui` drives a real window through open → navigate → select →
 dismiss → destroy using the `simulateKey`/`simulateMouse` commands (REAL
 event dispatch, not synthetic edits). Without the env var it prints a skip
-note — it needs a window server and a built helper. Known open issue:
-synthetic keystroke dispatch reports `handled: false` after the first
-autoFocus overlay cycle (pointer dispatch stays healthy; recorded in the
-ROADMAP).
+note — it needs a window server and a built helper. Post-restore synthetic
+dispatch is verified (down/escape/enter land on the restored trigger); the
+manual real-keyboard probe is `bun run probe:keyboard`.
 
 ## Popover anchoring (Gate 3-e)
 

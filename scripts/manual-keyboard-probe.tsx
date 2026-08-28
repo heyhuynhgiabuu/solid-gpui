@@ -23,6 +23,9 @@
  *   bun --conditions=browser --preload ./scripts/solid-jsx-preload.ts \
  *     scripts/manual-keyboard-probe.tsx
  *
+ * (Historical note: an earlier deferred-restore design broke synthetic
+ * dispatch after the first autoFocus cycle — fixed by immediate restore.)
+ *
  * What to check:
  *  1. Click the select → ArrowDown ×2 → Enter: value becomes blue, menu
  *     closes, keyDown events appear in the log.

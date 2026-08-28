@@ -1197,3 +1197,13 @@ Slices:
    surface (#1e1e2e) with a light default text color (#cdd6f4); consumer
    styles override per element. Visually confirmed by the user on the
    re-run.
+
+5. [x] ANOMALY RESOLVED — it never existed in the shipped design. A
+   discriminating GUI probe (down/escape/enter after dismissal) proved
+   the immediate restore keeps synthetic dispatch fully healthy: every
+   key lands on the restored trigger, and later autoFocus cycles behave
+   (menu reopens, focus transfers). The handled=false readings belonged
+   to the removed deferred-restore design and were misattributed by the
+   earlier probes (all used escape, run before the redesign). ROADMAP/
+   README/probe records corrected; the harness reopen returned to a real
+   Enter keystroke; stale records scrubbed.

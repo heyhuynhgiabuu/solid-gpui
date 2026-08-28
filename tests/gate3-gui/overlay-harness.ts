@@ -168,16 +168,15 @@ try {
   if (value() === "red") throw new Error(`selection did not move the value: ${value()}`)
   console.log(JSON.stringify({ step: "select", value: value() }))
 
-  // 4. Reopen with a REAL pointer click on the trigger, then DISMISS with a
-  //    real outside press. (Synthetic KEYSTROKE dispatch develops a handled
-  //    anomaly after the first autoFocus cycle — recorded separately — but
-  //    pointer dispatch stays healthy, so the reopen rides the click path.)
+  // 4. Reopen with a real Enter on the restored trigger (Gate 5-b's
+  //    immediate restore keeps synthetic dispatch healthy), then DISMISS
+  //    with a real outside press.
   const atReopen = sent.length
-  await command({ type: "simulateMouse", x: 60, y: 60 })
+  await command({ type: "simulateKey", key: "enter" })
   await until(
     handle.renderer.flush,
     () => contentIdOf(atReopen) !== undefined,
-    "menu reopens (pointer click on the trigger)",
+    "menu reopens (Enter on the restored trigger)",
   )
   const reopened = contentIdOf(atReopen)
   const atDismiss = sent.length
