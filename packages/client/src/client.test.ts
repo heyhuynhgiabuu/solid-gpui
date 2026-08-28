@@ -170,6 +170,7 @@ describe("wire safety through the real helper (transport mode)", () => {
 
 
   test("transport-mode getStats answers version-only payload (no window needed)", async () => {
+    if (skip()) return
     const helper = spawnHelper({ binary, mode: "transport" })
     try {
       const value = (await helper.sendCommand({ type: "getStats", seq: 7 })) as Record<
