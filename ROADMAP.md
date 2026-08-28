@@ -185,7 +185,9 @@ than treating multiple independent helper processes as one application.
   in Gate 3-d: `smoke:gate3-gui` drives the full cycle with real dispatched
   input. Open: synthetic-keystroke dispatch returns handled=false after the
   first autoFocus cycle — pointer dispatch unaffected; real-keyboard
-  behavior unverified. Hosted per-OS GUI evidence still owed.)
+  behavior unverified — run the MANUAL probe `bun run probe:keyboard`
+  (human types with a real keyboard/IME; the on-window event log shows
+  what arrives). Hosted per-OS GUI evidence still owed.)
 - macOS menu behavior remains separately tested.
 - GUI evidence is reported per OS; headless tests are not presented as visual
   proof.

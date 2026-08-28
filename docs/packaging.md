@@ -97,6 +97,26 @@ first precisely so the bundle seal covers it.
   SIGTERM the sidecar on forced quit as belt-and-suspenders
   (`connection.kill()`).
 
+### Update and rollback policy
+
+- Upgrade and rollback are the SAME operation: replace the whole bundle
+  (app + runtime + sidecar) with the other version's bundle. Never swap the
+  sidecar alone across a minor boundary — the exact pin exists because the
+  wire contract and the JS surface move together.
+- Before first use after an upgrade OR rollback, the launcher MUST verify
+  the pairing: send `getStats` (works with or without a window) and compare
+  `protocolVersion` against the major the JS packages were built for and
+  `helperVersion` against the pin. On mismatch: abort with guidance
+  pointing at docs/packaging.md — a mismatched pair may appear to work and
+  then poison on the first unusual batch.
+- Rollback of an app update therefore always ships the previous FULL bundle
+  (never a new app with an old sidecar, or the reverse). The version pin in
+  `@solid-gpui/client`'s optionalDependencies is the single source of truth
+  for which sidecar belongs to which client release.
+- Crash diagnostics for support: capture the launcher's stderr log
+  (diagnostics channel) plus the app's own stdout correlation ids; report
+  the helper `helperVersion` from `getStats` with any ticket.
+
 ## Explicitly not yet
 
 - Windows/Linux app packaging: waits on hosted **GUI** runtime evidence per

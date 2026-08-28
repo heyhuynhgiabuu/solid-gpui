@@ -543,68 +543,6 @@ r2 NOT MERGEABLE: tint fallback alpha-0; fixes c3b25a8+225d09a; r3 CLEAN)
       f32) vẫn invisible; fix = One Dark text OPAQUE hsla(221,.11,.86,1)
       khớp default hiệu lực của gpui (cite fallback_themes.rs). r3 CLEAN.
 
-### 2026-08-27 - Solid 1 compatibility spike
-status: done | updated: 2026-08-27
-
-- [x] Establish the pinned Solid 1.9.15 runtime/universal/compiler boundary and an isolated, repeatable probe command.
-- [x] Verify effect, batching, ownership, disposal, keyed-reorder, input, and event behavior against the existing renderer contract without changing the Solid 2 entry point.
-- [x] Run lifecycle, keyed reorder, input, event, and real helper-pipe checks through the isolated adapter boundary.
-- [x] Produce a support matrix, compatibility/non-equivalence notes, and a recommendation for a separate package/entry point or explicit unsupported status.
-- [x] Run focused verification and obtain an independent review before closing the spike.
-
-#### Verification
-
-- `npm ci --prefix compat/solid1 --ignore-scripts --no-audit --no-fund` and `bun run compat:solid1` passed with exact Solid/preset `1.9.15` and `@babel/core` `7.28.3` lockfile pins under the `browser` condition.
-- The probe reported schema `solid-gpui-solid1-compat/v1`, three lifecycle cycles with one mount/update/destroy batch each, cleanup and ownership checks, keyed IDs reordered by `insertBefore` without recreation, compiled input/event updates, and 15 correlated client/helper acknowledgements.
-- `bun run test` passed 195 tests; `bun run typecheck`, `bun run check:release`, GUI-skipped cargo tests, `cargo clippy --all-targets -- -D warnings`, and `cargo fmt --all -- --check` passed. The only cargo output was the known non-blocking `block v0.1.6` future-incompatibility warning.
-- Independent review of commit `28b0b07` returned `CLEAN/MERGEABLE`. The root package remains Solid 2-only; no Solid 1 imports or dependencies entered the production workspace.
-
-### 2026-08-27 - Brutal SaaS fit audit
-status: done | updated: 2026-08-27
-
-- [x] Map the Reddit user's native-client, JSX, popup/menu, Tailwind/TypeScript DX, and packaging expectations to verified repository behavior.
-- [x] Check current packaging and helper-binary distribution against the `bun build --compile` assumption.
-- [x] Report hard blockers, partial fits, unknowns, and a recommendation without implying prerelease behavior is production-ready.
-- [x] Capture source/version evidence and independently sanity-check the audit.
-
-#### Findings and verification
-
-- Native UI is real but the architecture is two processes: `render()`/`mountJsx()` starts one Rust GPUI helper window. Multiple windows are not a first-class shared application model.
-- JSX is executable through the pinned Solid 2 rc.3 Babel universal plugin and custom runtime, but the public README still leads with `h()` and the package lacks the custom `jsx-runtime`/`jsx-dev-runtime` type entries required for standard TypeScript JSX configuration.
-- S14b provides an in-window anchored/deferred controlled single-select and combobox; native popup windows, pointer outside-click dismissal, IME arrow suppression, and richer menu behavior remain outside the contract. P9's application menu bar is a separate macOS surface.
-- Tailwind is not supported: there is no Tailwind/CSS integration, `StyleMap` is a limited camelCase key/value API, and an empirical `className` probe emitted only `createElement` because unknown props are ignored (`packages/solid/src/renderer.ts:651`).
-- The naive compiled-app assumption is false for this architecture. `bun build --compile --target=bun-darwin-arm64` produced a Bun executable, but running it without an external helper reported the compiled `/target/debug/solid-gpui-helper` path and no optional helper package. A sidecar/extraction/signing strategy is required.
-- The quoted compile form also omits `--conditions=browser`: an empirical Bun `1.4.0` compiled signal probe produced `runs: 0` under the default condition and `runs: 2` with `--conditions=browser`. The latter is required for live Solid reactivity.
-- `bunx tsc` against a representative consumer `.tsx` exited 2 with missing `JSX.IntrinsicElements` and `@solid-gpui/solid/jsx-runtime`; the installed `@solidjs/universal@2.0.0-rc.3` guidance requires those renderer-owned entries.
-- Exact local versions were Bun `1.4.0`, Solid/universal/compiler `2.0.0-rc.3`, and GPUI pinned to the repository's Zed commit. Official Bun executable guidance was checked at https://bun.sh/docs/bundler/executables. Independent fit review found the project claims honest but the prospective user's Tailwind, turnkey TypeScript JSX, and single-file packaging requirements are not met.
-
-### 2026-08-27 - Customer-fit roadmap rewrite
-status: done | updated: 2026-08-27
-
-- [x] Rewrite ROADMAP.md around release gates for Node/Bun, JSX/TypeScript, styling, overlays, platform evidence, and helper packaging.
-- [x] Sync the README's consumer-facing support claims with the audited gaps without changing renderer semantics.
-- [x] Verify the roadmap against the current manifests, source, tests, and official Bun executable guidance.
-- [x] Record the final roadmap and documentation verification, leaving speculative Tailwind and single-file work as explicit gates.
-
-#### Verification
-
-- `git diff --check` and structural roadmap/README assertions passed.
-- `bun run test` passed 195 tests; `bun run typecheck`, `bun run check:release`, GUI-skipped cargo tests, `cargo clippy --all-targets -- -D warnings`, and `cargo fmt --all -- --check` passed. Cargo emitted only the known non-blocking `block v0.1.6` future-incompatibility warning.
-- Independent review of commit `9c90ab6` returned `CLEAN/MERGEABLE`; the roadmap is gate-based and its Node/Bun, JSX, Tailwind, popup, helper, and platform claims match the source and ADRs.
-
-### 2026-08-27 - Roadmap review consistency follow-up
-status: done | updated: 2026-08-27
-
-- [x] Align Gate 0's TypeScript criterion with the fact that consumer JSX types are Gate 1 work.
-- [x] Scope the process-model wording to preserve the conditional ADR 002 future in-process backend option.
-- [x] Clarify that gate sequence expresses risk order, not strict P0/P1 priority.
-- [x] Verify and independently review the documentation-only correction, then close this block.
-
-#### Verification
-
-- `git diff --check` and review-correction assertions passed.
-- Independent review of commit `40f5826` returned `CLEAN/MERGEABLE`; all three prior questions were resolved with no ADR 002 contradiction.
-
 ### 2026-08-27 - Gate 1 first-class JSX and TypeScript DX
 status: done | updated: 2026-08-27
 
@@ -1219,3 +1157,31 @@ Slices:
    typecheck, three consumer/GUI typechecks, git diff --check).
    Second review pass condition: TODO pure additions + reproducible
    option-select distribution.
+
+### 2026-08-28 - Gate 5-b update/rollback policy + manual keyboard probe
+status: done | updated: 2026-08-28
+
+Two closing items for the recorded debts:
+
+1. Gate 5 docs bullet "update/rollback expectations": packaging.md gains
+   the explicit policy — upgrade and rollback are the same whole-bundle
+   operation; launchers MUST verify the pairing via transport getStats
+   (protocolVersion + helperVersion) before first use and abort with
+   guidance on mismatch; support diagnostics = stderr log + versions.
+2. Real-keyboard verification (Gate 3-d "unverified"): a MANUAL probe —
+   scripts/manual-keyboard-probe.tsx opens a real window with on-screen
+   instructions (select open/navigate/select/escape; combobox typing with
+   IME composition while the menu is open), a live on-window event log,
+   and JSON event lines on stdout. The human types with a real keyboard;
+   Gate 3-c suppression and dispatch behavior become observable. Not
+   automatable (that is the point — synthetic dispatch is the anomaly).
+
+Slices:
+
+1. [ ] packaging.md policy section (done above when this block was written).
+2. [ ] manual-keyboard-probe script + package script; verify it mounts and
+   renders instructions (auto-quit env for a smoke pass).
+3. [x] ROADMAP Gate 3 open item now points real-keyboard verification at
+   `bun run probe:keyboard` (human-in-the-loop). Gates green (bun 238/0,
+   typecheck, clippy, fmt, git diff --check); probe smoke: mounts, prints
+   PROBE READY, window stays open for interaction.
