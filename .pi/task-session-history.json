@@ -2953,5 +2953,30 @@
     "rawStatus": "success",
     "resultValid": true,
     "completedAt": 1787895220440
+  },
+  {
+    "id": "mtcj7k6g-05fe",
+    "agentType": "reviewer",
+    "description": "Review Gate 6-a slice",
+    "sessionName": "task-mtcj7k6g-05fe",
+    "startedAt": 1787896157482,
+    "paneId": "w3:pGY",
+    "handle": {
+      "backend": "herdr",
+      "resourceId": "w3:pGY",
+      "socketPath": "/Users/huynhgiabuu/.config/herdr/herdr.sock",
+      "terminalId": "term_65a15035cd4a339",
+      "agentName": "reviewer-mtcj7k6g",
+      "foregroundProcessGroupId": 61252
+    },
+    "piDir": "/Users/huynhgiabuu/dev/projects/solid-gpui/.pi",
+    "dir": "/Users/huynhgiabuu/dev/projects/solid-gpui/.pi/artifacts/tasks",
+    "cwd": "/Users/huynhgiabuu/dev/projects/solid-gpui",
+    "status": "done",
+    "background": false,
+    "reportedStatus": "failure",
+    "rawStatus": "failure",
+    "resultValid": true,
+    "completedAt": 1787896513352
   }
 ]

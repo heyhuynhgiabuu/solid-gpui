@@ -277,7 +277,11 @@ labeled as such.
 
 ### Gate 6 — Measurement-led performance (P1)
 
-The measurement foundation is already in place:
+The measurement foundation is already in place (Gate 6-a landed: the
+representative Gate 0 screen is measured end-to-end through a real helper —
+`benchmark:consumer` — and docs/performance.md consolidates the dated
+baseline across all seven boundaries; no optimization claims, no CI
+thresholds):
 
 ```sh
 bun run benchmark:solid

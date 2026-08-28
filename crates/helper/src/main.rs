@@ -174,9 +174,29 @@ fn run_stdio() -> i32 {
             },
             Err(batch_err) => match solid_gpui_protocol::command_from_json(&line) {
                 // Commands are GUI-mode features; transport mode has no
-                // window, so every command answers Unsupported.
+                // window, so every command answers Unsupported — except
+                // getStats: its VERSION fields are exactly what a headless
+                // launcher needs (Gate 5-a diagnostics), so it answers with
+                // versions and null metrics.
                 Ok(cmd) => {
                     let (seq, name) = command_ident(&cmd);
+                    if let solid_gpui_protocol::Command::GetStats { seq } = cmd {
+                        let reply = Reply::Result {
+                            seq,
+                            value: serde_json::json!({
+                                "helperVersion": env!("CARGO_PKG_VERSION"),
+                                "protocolVersion": solid_gpui_protocol::PROTOCOL_VERSION,
+                                "frames": serde_json::Value::Null,
+                            }),
+                        };
+                        if writeln!(out, "{}", reply_to_json(&reply)).is_err() {
+                            break;
+                        }
+                        if out.flush().is_err() {
+                            break;
+                        }
+                        continue;
+                    }
                     Reply::Error {
                         seq: Some(seq),
                         code: ReplyCode::Unsupported,

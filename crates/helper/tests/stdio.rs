@@ -61,16 +61,31 @@ fn stdio_round_trip_ack_and_error() {
         "error must name the unknown op"
     );
 
-    // 3. A valid command in transport mode answers Unsupported (no window),
-    //    correlated by the command's own seq.
+    // 3. Gate 5-a: transport-mode getStats answers a VERSION-ONLY payload
+    //    (headless launchers verify versions without a window), correlated
+    //    by the command's own seq; every other command stays Unsupported.
     writeln!(stdin, r#"{{"type":"getStats","seq":9}}"#).unwrap();
+    stdin.flush().unwrap();
+    let mut line = String::new();
+    reader.read_line(&mut line).expect("read getStats reply");
+    let trimmed = line.trim();
+    assert!(
+        trimmed.starts_with(r#"{"type":"result","seq":9,"value":"#)
+            && trimmed.contains(r#""helperVersion""#)
+            && trimmed.contains(r#""protocolVersion":1"#)
+            && trimmed.contains(r#""frames":null"#),
+        "expected version-only getStats payload in transport mode, got {trimmed}"
+    );
+
+    // 4. A window-requiring command still answers Unsupported (no window).
+    writeln!(stdin, r#"{{"type":"setTitle","seq":10,"title":"x"}}"#).unwrap();
     stdin.flush().unwrap();
     let mut line = String::new();
     reader.read_line(&mut line).expect("read unsupported reply");
     let trimmed = line.trim();
     assert!(
-        trimmed.starts_with(r#"{"type":"error","seq":9,"code":"unsupported""#),
-        "expected unsupported error for getStats in transport mode, got {trimmed}"
+        trimmed.starts_with(r#"{"type":"error","seq":10,"code":"unsupported""#),
+        "expected unsupported error for setTitle in transport mode, got {trimmed}"
     );
 
     // 4. EOF on stdin ends the process cleanly.

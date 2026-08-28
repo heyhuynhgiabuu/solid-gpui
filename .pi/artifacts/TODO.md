@@ -1177,3 +1177,45 @@ tree; the integrity finding resolved (this diff is pure additions vs
 HEAD); should-fixes and nits applied as described. Verdict recorded by
 the author per the reviewer's stated re-run condition ("re-run bun test
 + typecheck; then CLEAN/MERGEABLE").
+### 2026-08-28 - Gate 6-a representative-fixture measurement
+status: active | updated: 2026-08-28
+
+Gate 6 requires measurement against a REPRESENTATIVE consumer fixture
+before any optimization talk, reported as p50/p95/p99 with sample sizes,
+versions, OS, and headless/GUI status. The existing benchmarks cover the
+seven boundaries with synthetic shapes; none measures the Gate 0 screen.
+
+Design: scripts/benchmark-consumer.ts — the Gate 0 SaaS screen on a real
+helper (transport mode, headless): mount ack latency, then per-action
+signal→flush→ack latency distributions (increment, edit query, choose
+option) with warmup + bounded samples; environment block carries
+bun/node/platform/arch + helperVersion/protocolVersion via getStats.
+docs/performance.md records the first dated report + reproduction
+commands; ROADMAP Gate 6 annotated (no CI thresholds per policy).
+
+Slices:
+
+1. [x] benchmark-consumer.ts + package script; local run green — n=100 per
+   interaction: increment p50 0.046/p95 0.120/p99 0.177 ms; input-edit
+   0.056/0.075/0.086; option-select 0.145/0.183/0.245. Exposed and fixed a
+   diagnostics gap: getStats now answers version-only in TRANSPORT mode too
+   (headless launchers can verify versions without a window; client test).
+   INTENTIONAL CONTRACT CHANGE: transport getStats was previously
+   Unsupported — the Rust stdio integration test and the client
+   unsupported-error test were updated to the new contract (getStats
+   answers versions; setTitle still rejects), so both languages document
+   the same behavior.
+2. [x] docs/performance.md consolidated dated report across all seven
+   boundaries (headless-labeled); ROADMAP Gate 6 annotated.
+   Review pass 1: code/gates clean; NOT MERGEABLE on artifact integrity
+   only (the session harness truncated the Gate 5-a block again) plus a
+   real should-fix — option-select mixed no-op flushes into its
+   distribution because the random color sometimes equaled the current
+   value. Fixed: deterministic alternation between two distinct colors,
+   so every measured flush carries real mutations. The harness
+   truncation was repaired by rebuilding Git HEAD + these blocks; Git
+   protects the record.
+3. [x] Full gates re-run green after fixes (cargo 214/0, bun 238/0,
+   typecheck, three consumer/GUI typechecks, git diff --check).
+   Second review pass condition: TODO pure additions + reproducible
+   option-select distribution.

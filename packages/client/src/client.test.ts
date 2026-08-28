@@ -169,18 +169,35 @@ describe("wire safety through the real helper (transport mode)", () => {
   })
 
 
+  test("transport-mode getStats answers version-only payload (no window needed)", async () => {
+    const helper = spawnHelper({ binary, mode: "transport" })
+    try {
+      const value = (await helper.sendCommand({ type: "getStats", seq: 7 })) as Record<
+        string,
+        unknown
+      >
+      expect(typeof value.helperVersion).toBe("string")
+      expect(value.protocolVersion).toBe(1)
+      expect(value.frames).toBeNull()
+    } finally {
+      await helper.close()
+    }
+  })
+
   test("transport-mode command rejects with a seq-correlated unsupported error", async () => {
     if (skip()) return
     const helper = spawnHelper({ binary })
+    // getStats is answered in transport mode since Gate 5-a (versions);
+    // setTitle still requires the window and must reject, correlated.
     const err = await helper
-      .sendCommand({ type: "getStats", seq: 9 })
+      .sendCommand({ type: "setTitle", seq: 9, title: "x" })
       .then(
         () => null,
         (e) => e,
       )
     expect(err).toBeInstanceOf(ReplyError)
     expect((err as ReplyError).code).toBe("unsupported")
-    expect((err as ReplyError).message).toMatch(/getStats/)
+    expect((err as ReplyError).message).toMatch(/setTitle/)
     await helper.close()
     expect((await helper.exited).code).toBe(0)
   })
