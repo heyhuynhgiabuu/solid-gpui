@@ -164,9 +164,15 @@ finish the semantics a SaaS client normally needs:
   input's marked range is active the helper suppresses keyDown/keyUp and
   Enter-submit semantics — no protocol surface, the marked state is
   helper-owned; TestApp-proven including the typed-text commit path);
-- positioning, clipping, and window-edge behavior for generic popovers;
+- positioning, clipping, and window-edge behavior for generic popovers
+  (landed in Gate 3-e: anchorOffsetX/Y + anchorFit with flip as the new
+  default over the old clamp; deferred already escapes clipping; the
+  style→anchored mapping is unit-tested — visual GUI verification owed);
 - clear separation between in-window popovers, native dialogs, and the macOS
-  application menu bar.
+  application menu bar (verified satisfied: P4 dialogs and P9 menu-bar
+  commands ride the imperative command channel with their own tests —
+  `window_mode_set_menus_applies_and_replaces` and the dialog suites —
+  and never share the popover/deferred path);
 
 Multi-window support is deliberately after the one-window path. If the
 acceptance fixture requires it, add a first-class window/session manager rather

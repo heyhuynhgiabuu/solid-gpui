@@ -2878,5 +2878,55 @@
     "rawStatus": "failure",
     "resultValid": true,
     "completedAt": 1787855225282
+  },
+  {
+    "id": "mtcdz5l5-6346",
+    "agentType": "reviewer",
+    "description": "Review Gate 3-e anchoring slice",
+    "sessionName": "task-mtcdz5l5-6346",
+    "startedAt": 1787887367249,
+    "paneId": "w3:pGT",
+    "handle": {
+      "backend": "herdr",
+      "resourceId": "w3:pGT",
+      "socketPath": "/Users/huynhgiabuu/.config/herdr/herdr.sock",
+      "terminalId": "term_65a12f76c85cf35",
+      "agentName": "reviewer-mtcdz5l5",
+      "foregroundProcessGroupId": 28540
+    },
+    "piDir": "/Users/huynhgiabuu/dev/projects/solid-gpui/.pi",
+    "dir": "/Users/huynhgiabuu/dev/projects/solid-gpui/.pi/artifacts/tasks",
+    "cwd": "/Users/huynhgiabuu/dev/projects/solid-gpui",
+    "status": "done",
+    "background": false,
+    "reportedStatus": "failure",
+    "rawStatus": "failure",
+    "resultValid": true,
+    "completedAt": 1787887655595
+  },
+  {
+    "id": "mtce6pml-e23e",
+    "agentType": "reviewer",
+    "description": "Re-review Gate 3-e artifact fix",
+    "sessionName": "task-mtce6pml-e23e",
+    "startedAt": 1787887719779,
+    "paneId": "w3:pGW",
+    "handle": {
+      "backend": "herdr",
+      "resourceId": "w3:pGW",
+      "socketPath": "/Users/huynhgiabuu/.config/herdr/herdr.sock",
+      "terminalId": "term_65a130c6fb25637",
+      "agentName": "reviewer-mtce6pml",
+      "foregroundProcessGroupId": 43286
+    },
+    "piDir": "/Users/huynhgiabuu/dev/projects/solid-gpui/.pi",
+    "dir": "/Users/huynhgiabuu/dev/projects/solid-gpui/.pi/artifacts/tasks",
+    "cwd": "/Users/huynhgiabuu/dev/projects/solid-gpui",
+    "status": "done",
+    "background": false,
+    "reportedStatus": "success",
+    "rawStatus": "success",
+    "resultValid": true,
+    "completedAt": 1787887998209
   }
 ]

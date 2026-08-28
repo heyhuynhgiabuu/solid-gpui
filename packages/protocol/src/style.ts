@@ -71,5 +71,8 @@ export type StyleKey =
   | "followTail"
   | "listAlign"
   | "overdraw"
+  | "anchorOffsetX"
+  | "anchorOffsetY"
+  | "anchorFit"
 
 export type StyleMap = { readonly [K in StyleKey]?: StyleValue }

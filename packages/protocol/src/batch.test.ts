@@ -587,4 +587,25 @@ describe("media fixture parity (P10)", () => {
     )
     expect(clear.ok).toBe(true)
   })
+
+test("setStyle carries the Gate 3-e popover anchoring keys (open key set)", () => {
+  const line = JSON.stringify({
+    v: 1,
+    seq: 9,
+    mutations: [
+      { op: "setStyle", id: 3, style: { anchorOffsetX: 6, anchorOffsetY: 4, anchorFit: "flip" } },
+    ],
+  })
+  const decoded = decodeBatch(line)
+  expect(decoded).toEqual({
+    ok: true,
+    value: {
+      v: 1,
+      seq: 9,
+      mutations: [
+        { op: "setStyle", id: elementId(3), style: { anchorOffsetX: 6, anchorOffsetY: 4, anchorFit: "flip" } },
+      ],
+    },
+  })
+})
 })

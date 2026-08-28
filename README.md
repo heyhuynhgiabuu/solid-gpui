@@ -181,6 +181,24 @@ synthetic keystroke dispatch reports `handled: false` after the first
 autoFocus overlay cycle (pointer dispatch stays healthy; recorded in the
 ROADMAP).
 
+## Popover anchoring (Gate 3-e)
+
+Any element with the `anchor` prop plus `deferred` renders as an anchored
+overlay: it escapes ancestor clipping, pins by the chosen corner/edge
+center (`topLeft` … `rightCenter`), and fits against the window edge.
+Window-edge fit defaults to **flip** (gpui's anchor-corner switch — the
+web popover expectation); `anchorFit: "snap"` preserves the older
+clamp-into-window behavior. `anchorOffsetX`/`anchorOffsetY` (px) add a
+gap, e.g. a menu six pixels below its trigger:
+
+```tsx
+<select.Content style={{ anchorOffsetY: 6, anchorFit: "flip", width: 160 }}>
+```
+
+Visual verification of edge behavior on real windows is still owed (the
+style-to-anchored mapping is unit-tested; hosted per-OS GUI evidence
+remains a Gate 3 exit item).
+
 ## Trust boundary for JavaScript
 
 The TypeScript renderer is a **trusted-code API**, not a sandbox. Component

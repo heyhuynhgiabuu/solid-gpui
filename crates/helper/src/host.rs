@@ -1873,6 +1873,46 @@ fn build_element(
 /// clipping and pins a corner to the render location, snapping to window
 /// edges on overflow. Both compose — deferred(anchored(child)) is the
 /// popover shape.
+/// Gate 3-e: how an anchored overlay fits at the window edge. "flip" uses
+/// gpui's AnchoredFitMode::SwitchAnchor (web popover parity — the corner
+/// switches when the child would overflow); "snap" clamps into the window.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+enum AnchorFit {
+    Flip,
+    Snap,
+}
+
+/// Gate 3-e: read anchorOffsetX/anchorOffsetY (px) off a node's style map.
+fn anchor_offset_from_style(node: &solid_gpui_protocol::Node) -> Option<gpui::Point<gpui::Pixels>> {
+    let num = |key: &str| {
+        node.style
+            .get(key)
+            .and_then(|v| match v {
+                solid_gpui_protocol::StyleValue::Number(n) => n.as_f64(),
+                solid_gpui_protocol::StyleValue::Text(s) => s.parse().ok(),
+            })
+            .map(|n| n as f32)
+    };
+    let x = num("anchorOffsetX");
+    let y = num("anchorOffsetY");
+    match (x, y) {
+        (None, None) => None,
+        (x, y) => Some(gpui::point(
+            gpui::px(x.unwrap_or(0.0)),
+            gpui::px(y.unwrap_or(0.0)),
+        )),
+    }
+}
+
+/// Gate 3-e: read anchorFit off a node's style map. Unset (or unknown)
+/// means Flip — the web expectation; Snap preserves the pre-3-e clamp.
+fn anchor_fit_from_style(node: &solid_gpui_protocol::Node) -> AnchorFit {
+    match node.style.get("anchorFit").and_then(|v| v.as_str()) {
+        Some("snap") => AnchorFit::Snap,
+        _ => AnchorFit::Flip,
+    }
+}
+
 fn apply_overlays(tree: &RetainedTree, id: ElementId, el: AnyElement) -> AnyElement {
     let node = tree.get(id).expect("checked by caller");
     let mut el = el;
@@ -1888,11 +1928,19 @@ fn apply_overlays(tree: &RetainedTree, id: ElementId, el: AnyElement) -> AnyElem
             K::LeftCenter => gpui::Anchor::LeftCenter,
             K::RightCenter => gpui::Anchor::RightCenter,
         };
-        el = anchored()
-            .anchor(anchor)
-            .snap_to_window()
-            .child(el)
-            .into_any_element();
+        let mut wrapped = anchored().anchor(anchor);
+        // Gate 3-e: fit + offset are style-driven. The default is Flip
+        // (gpui's SwitchAnchor — web popover parity: the corner switches
+        // when the child would overflow the window); Snap preserves the
+        // pre-3-e clamping for consumers that want it.
+        wrapped = match anchor_fit_from_style(node) {
+            AnchorFit::Snap => wrapped.snap_to_window(),
+            AnchorFit::Flip => wrapped,
+        };
+        if let Some(offset) = anchor_offset_from_style(node) {
+            wrapped = wrapped.offset(offset);
+        }
+        el = wrapped.child(el).into_any_element();
     }
     if node.deferred {
         el = deferred(el).into_any_element();
@@ -5132,4 +5180,57 @@ mod headless_render_tests {
         drop(window);
         app.update(|cx| cx.shutdown());
     }
+}
+
+#[test]
+fn anchor_offset_and_fit_read_from_style() {
+    use solid_gpui_protocol::StyleValue;
+    let node_with = |pairs: &[(&str, StyleValue)]| {
+        let mut tree = solid_gpui_protocol::RetainedTree::new();
+        tree.apply(&Mutation::CreateElement {
+            id: ElementId(1),
+            element_type: ElementType::Div,
+        })
+        .unwrap();
+        tree.apply(&Mutation::SetStyle {
+            id: ElementId(1),
+            style: pairs
+                .iter()
+                .map(|(k, v)| (k.to_string(), v.clone()))
+                .collect(),
+            state: None,
+        })
+        .unwrap();
+        tree.get(ElementId(1)).unwrap().clone()
+    };
+
+    // Offset: both axes independently, default absent.
+    let node = node_with(&[
+        (
+            "anchorOffsetX",
+            StyleValue::Number(serde_json::Number::from(6)),
+        ),
+        (
+            "anchorOffsetY",
+            StyleValue::Number(serde_json::Number::from(-2)),
+        ),
+    ]);
+    assert_eq!(
+        anchor_offset_from_style(&node),
+        Some(gpui::point(gpui::px(6.0), gpui::px(-2.0)))
+    );
+    let node = node_with(&[]);
+    assert_eq!(anchor_offset_from_style(&node), None);
+
+    // Fit: explicit values, and the DEFAULT (unset) is flip — web popover
+    // parity via gpui's SwitchAnchor; snap stays available.
+    let node = node_with(&[("anchorFit", StyleValue::Text("snap".into()))]);
+    assert_eq!(anchor_fit_from_style(&node), AnchorFit::Snap);
+    let node = node_with(&[("anchorFit", StyleValue::Text("flip".into()))]);
+    assert_eq!(anchor_fit_from_style(&node), AnchorFit::Flip);
+    let node = node_with(&[]);
+    assert_eq!(anchor_fit_from_style(&node), AnchorFit::Flip);
+    // Unknown fit values fall back to the default instead of guessing.
+    let node = node_with(&[("anchorFit", StyleValue::Text("diagonal".into()))]);
+    assert_eq!(anchor_fit_from_style(&node), AnchorFit::Flip);
 }
