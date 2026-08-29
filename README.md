@@ -13,6 +13,28 @@ compaction was benchmarked but not adopted, and this is still a prerelease.
 See [ROADMAP.md](./ROADMAP.md) for Solid 1 compatibility and optimization
 plans.
 
+## Why this exists
+
+Rust-native stacks (Floem, Iced, Slint) and in-process GPUI script hosts
+(`gpui-shell`) both let you render with modern GPU toolkits. This project bets
+on a different split: **the app lives in TypeScript/Node, the pixels live in
+Rust, and a versioned wire protocol keeps them honest.** That buys three things
+an embedded engine does not:
+
+- **Real process isolation.** App code and pixels live in separate processes
+  with a supervised stdio link: a helper crash poisons the renderer client-side
+  (detected via `getStats`, remount via `resetTree`), and a dead app closes its
+  helper via stdin EOF — no embedded engine where one side's fault wedges both.
+- **The Node/Bun ecosystem, unchanged.** Real toolchain (bundler, tsc, test
+  runners, npm), any runtime version — no embedded-engine ceiling.
+- **Solid's fine-grained reactivity drives updates.** The renderer ships
+  minimal mutation batches over stdio (retained tree helper-side), so UI state
+  stays declarative instead of imperative glue.
+
+The cost is equally real: one extra process to launch and pair (see
+[Version compatibility](./docs/packaging.md)), and a protocol boundary when you
+need something the primitives do not express yet.
+
 ## The one trap you must know
 
 `solid-js@2.0.0-rc.x` resolves to **SSR stubs without reactivity** under the

@@ -1249,3 +1249,20 @@ Slices:
    versions updated to rc.4. Review pass 1: MERGEABLE; both should-fix
    doc corrections applied; a mid-session TODO truncation (harness) was
    rebuilt from HEAD.
+
+### 2026-08-29 - Positioning + ecosystem research follow-ups
+status: active
+
+User asked for floem + gpui-component research and a self-review (analysis
+delivered in chat; per user request the research itself is NOT recorded here).
+
+1. [x] README "Why this exists": positioning vs all-Rust stacks (Floem/Iced/
+   Slint) and in-process GPUI script hosts (gpui-shell) — isolation, unchanged
+   Node/Bun toolchain, Solid reactivity; costs stated honestly.
+2. [ ] setTheme semantic tokens command (protocol additive, full lockstep) —
+   replaces the hardcoded default-theme band-aid; closes the invisible-text
+   class properly. Awaiting user go-ahead.
+3. [ ] dumpTree debug command + widget-gallery example. Awaiting go-ahead.
+4. [ ] ROADMAP infra notes when relevant: gpui is now on crates.io (0.2.2);
+   migration from the pinned zed git rev is a real future path; agent-skills/
+   llms.txt style consumer docs once there are consumers.
