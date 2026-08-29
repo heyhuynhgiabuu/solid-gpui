@@ -1057,10 +1057,10 @@ Design:
 
 Slices:
 
-1. [ ] RED→GREEN: Rust pure fns anchor_offset_from_style /
+1. [x] RED→GREEN: Rust pure fns anchor_offset_from_style /
    anchor_fit_from_style + unit tests; apply_overlays mapping (default
    flip); TS StyleKey union + a compile/decode assertion.
-2. [ ] README popover anchoring section + ROADMAP annotations
+2. [x] README popover anchoring section + ROADMAP annotations
    (positioning landed; visual GUI verification owed; menu-bar
    separation verified via P4/P9 tests).
 3. [x] Full gates + independent review: first pass held NOT MERGEABLE
@@ -1116,7 +1116,7 @@ HEAD); should-fixes and nits applied as described. Verdict recorded by
 the author per the reviewer's stated re-run condition ("re-run bun test
 + typecheck; then CLEAN/MERGEABLE").
 ### 2026-08-28 - Gate 6-a representative-fixture measurement
-status: active | updated: 2026-08-28
+status: done | updated: 2026-08-28
 
 Gate 6 requires measurement against a REPRESENTATIVE consumer fixture
 before any optimization talk, reported as p50/p95/p99 with sample sizes,
@@ -1178,8 +1178,8 @@ Two closing items for the recorded debts:
 
 Slices:
 
-1. [ ] packaging.md policy section (done above when this block was written).
-2. [ ] manual-keyboard-probe script + package script; verify it mounts and
+1. [x] packaging.md policy section (done above when this block was written).
+2. [x] manual-keyboard-probe script + package script; verify it mounts and
    renders instructions (auto-quit env for a smoke pass).
 3. [x] ROADMAP Gate 3 open item now points real-keyboard verification at
    `bun run probe:keyboard` (human-in-the-loop). Gates green (bun 238/0,
