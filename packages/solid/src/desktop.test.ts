@@ -4,7 +4,7 @@
 import { describe, expect, test } from "bun:test"
 import type { SolidGpuiCommand } from "@solid-gpui/protocol"
 import type { JsonValue } from "@solid-gpui/protocol"
-import { appWindow, dialog, shell } from "./desktop"
+import { appWindow, dialog, shell, theme } from "./desktop"
 import { decodeCommand } from "@solid-gpui/protocol"
 
 type Send = (command: SolidGpuiCommand) => Promise<JsonValue>
@@ -38,6 +38,16 @@ describe("desktop commands", () => {
     for (const c of sent) {
       expect(c.seq).toBeGreaterThanOrEqual(1_000_000)
     }
+  })
+
+  test("theme.set sends setTheme tokens in the desktop seq namespace", async () => {
+    const { conn, sent } = fakeConn([{ applied: true }])
+    await theme.set(conn, { surface: "#181825", foreground: "#cdd6f4" })
+    expect(sent[0]).toMatchObject({
+      type: "setTheme",
+      tokens: { surface: "#181825", foreground: "#cdd6f4" },
+    })
+    for (const c of sent) expect(c.seq).toBeGreaterThanOrEqual(1_000_000)
   })
 
   test("dialog.message resolves with the answer index", async () => {

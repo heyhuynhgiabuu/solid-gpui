@@ -655,6 +655,20 @@ pub enum Command {
         seq: u32,
     },
 
+    /// Window-scoped semantic theme tokens. Token names are an open set:
+    /// known tokens (surface, foreground) take effect, unknown ones are
+    /// accepted and ignored so newer clients stay compatible with older
+    /// helpers. Values are CSS colors (#rrggbb/#rrggbbaa hex, rgb()/rgba()/
+    /// hsl()/named) parsed like style colors; an unparseable value is an
+    /// applyFailed error, not a silent ignore. The theme survives SetRoot/remounts (it is window
+    /// state, not tree state) and lasts until the next setTheme or restart.
+    #[serde(rename_all = "camelCase")]
+    SetTheme {
+        seq: u32,
+        /// Partial token map; only present tokens change.
+        tokens: BTreeMap<String, String>,
+    },
+
     /// Query a virtual list's live metrics: item count, how many items the
     /// last frame actually painted (virtualization proof), and whether it is
     /// scrolled to the end (followTail chat position).
@@ -774,12 +788,13 @@ pub fn command_from_json(s: &str) -> Result<Command, ProtocolError> {
             | Some("simulateKey")
             | Some("simulateMouse")
             | Some("resetTree")
+            | Some("setTheme")
             | Some("listInfo")
     ) {
         return Err(ProtocolError::InvalidShape {
             path: "type".into(),
             message: format!(
-                "unknown command {:?}; expected getStats|captureFrame|scrollTo|getScrollOffset|focusElement|simulateInput|simulateKey|simulateMouse|resetTree|listInfo|setMenus|setTitle|windowAction|dialogMessage|dialogOpenFile|dialogSaveFile|shellRevealPath|shellOpenPath|scrollToItem",
+                "unknown command {:?}; expected getStats|captureFrame|scrollTo|getScrollOffset|focusElement|simulateInput|simulateKey|simulateMouse|resetTree|setTheme|listInfo|setMenus|setTitle|windowAction|dialogMessage|dialogOpenFile|dialogSaveFile|shellRevealPath|shellOpenPath|scrollToItem",
                 type_str.unwrap_or("<missing>")
             ),
         });

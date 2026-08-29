@@ -59,6 +59,27 @@ boundaries differ. The isolated, non-published compatibility probe in
 not change that support status. See [ROADMAP.md](./ROADMAP.md) before attempting
 a separate compatibility adapter.
 
+## Theming
+
+The helper paints a default dark surface with a light default text color, so
+unstyled windows are readable out of the box. `setTheme` overrides semantic
+tokens window-wide; partial maps merge, and the theme is window state — it
+survives `resetTree` remounts:
+
+```ts
+import { theme } from "@solid-gpui/solid"
+
+await theme.set(connection, { surface: "#181825", foreground: "#cdd6f4" })
+```
+
+Token names are an open set: unknown tokens are accepted and ignored so newer
+clients stay compatible with older helpers (the reply lists them under
+`ignored`). Values parse like style colors (`#rrggbb`/`#rrggbbaa` hex,
+`rgb()`, `rgba()`, `hsl()`, CSS color names); an unparseable value fails the
+whole command (`applyFailed`) and leaves the previous theme untouched. Known
+tokens today: `surface` (window background) and `foreground` (default text
+color).
+
 ## Install (npm, no Rust toolchain)
 
 The helper binary ships in per-platform npm packages selected automatically

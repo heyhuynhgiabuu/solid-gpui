@@ -202,4 +202,20 @@ describe("wire safety through the real helper (transport mode)", () => {
     await helper.close()
     expect((await helper.exited).code).toBe(0)
   })
+
+  test("setTheme is window-scoped: transport mode rejects unsupported", async () => {
+    if (skip()) return
+    const helper = spawnHelper({ binary })
+    const err = await helper
+      .sendCommand({ type: "setTheme", seq: 10, tokens: { surface: "#181825" } })
+      .then(
+        () => null,
+        (e) => e,
+      )
+    expect(err).toBeInstanceOf(ReplyError)
+    expect((err as ReplyError).code).toBe("unsupported")
+    expect((err as ReplyError).message).toMatch(/setTheme/)
+    await helper.close()
+    expect((await helper.exited).code).toBe(0)
+  })
 })

@@ -19,6 +19,7 @@ use solid_gpui_protocol::{
     AccessibilityRole, DrawItem, ElementId, ElementType, Event, RetainedTree, StyleValue,
 };
 use std::cell::RefCell;
+use std::collections::BTreeMap;
 use std::collections::{HashMap, HashSet};
 use std::io::Write;
 use std::ops::Range;
@@ -539,6 +540,10 @@ pub struct HostView {
     /// Gate 3-b: (overlay, previous) — the autoFocus overlay that took focus
     /// and the element focused right before it. Drives removal restoration.
     autofocus_origin: Option<(ElementId, ElementId)>,
+    /// Window-scoped semantic theme (setTheme). Survives reset_tree/SetRoot
+    /// by design: it is window state, not tree state. None = built-in defaults.
+    theme_surface: Option<Rgba>,
+    theme_foreground: Option<Rgba>,
     /// Live editable state per input/textarea element. Shared with the per-
     /// frame platform InputHandler so edits persist across frames (the
     /// handler itself is rebuilt every frame by the IME anchor).
@@ -584,6 +589,8 @@ impl HostView {
             focus_subscribed: HashSet::new(),
             autofocus_pending: None,
             autofocus_origin: None,
+            theme_surface: None,
+            theme_foreground: None,
             input_states: Rc::new(RefCell::new(HashMap::new())),
             scrollbar_drag: RefCell::new(None),
             key_pending: Rc::new(RefCell::new(HashMap::new())),
@@ -747,11 +754,45 @@ impl HostView {
         self.autofocus_origin = None;
     }
 
+    /// Apply a setTheme token map. Known tokens (surface, foreground) parse
+    /// like style colors (#rrggbb/#rrggbbaa hex, rgb()/rgba()/hsl()/named)
+    /// and replace their slot; unknown tokens are returned as ignored
+    /// (forward-compat, same philosophy as open style keys); an unparseable
+    /// color aborts with Err so the command answers applyFailed without
+    /// touching the previous theme.
+    pub fn set_theme(&mut self, tokens: &BTreeMap<String, String>) -> Result<Vec<String>, String> {
+        // All-or-nothing: parse every known token BEFORE mutating, so a bad
+        // color anywhere leaves the previous theme untouched.
+        let mut surface = self.theme_surface;
+        let mut foreground = self.theme_foreground;
+        let mut ignored = Vec::new();
+        for (name, value) in tokens {
+            match name.as_str() {
+                "surface" => {
+                    surface =
+                        Some(parse_color_str(value).ok_or_else(|| {
+                            format!("invalid color for token \"surface\": {value:?}")
+                        })?)
+                }
+                "foreground" => {
+                    foreground = Some(parse_color_str(value).ok_or_else(|| {
+                        format!("invalid color for token \"foreground\": {value:?}")
+                    })?)
+                }
+                _ => ignored.push(name.clone()),
+            }
+        }
+        self.theme_surface = surface;
+        self.theme_foreground = foreground;
+        Ok(ignored)
+    }
+
     /// Gate 5-a poisoned-batch recovery: clear the retained tree and EVERY
     /// per-element state map so a fresh renderer can remount with restarted
     /// ids on the same connection. Stats survive (history, not session
     /// state); the sink, overlay flag, and focus-restoration origin are
-    /// session-wide and reset with everything else.
+    /// session-wide and reset with everything else. Theme tokens survive
+    /// too — window-scoped by contract, so a remount keeps its theme.
     pub fn reset_tree(&mut self) {
         self.tree = RetainedTree::new();
         self.scroll_handles.borrow_mut().clear();
@@ -1626,14 +1667,14 @@ impl Render for HostView {
         let mut content = match self.tree.root() {
             Some(root) => build_element(&self.tree, root, window, cx, &mut ctx),
             // No root yet: dark placeholder keeps the window alive pre-mount.
-            None => div().size_full().bg(rgb(0x1e1e2e)).into_any_element(),
+            None => div().size_full().into_any_element(),
         };
-        // Gate 5-b: a visible DEFAULT THEME. gpui's default text color is
-        // black and unstyled windows paint no background, so every unstyled
-        // GUI rendered as invisible black-on-black text (first seen with the
-        // manual keyboard probe). Wrap the frame in the placeholder's dark
-        // surface with a light default text color; consumer styles (bg,
-        // color) override per element as usual.
+        // Gate 5-b + setTheme: a visible, THEMEABLE default. gpui's default
+        // text color is black and unstyled windows paint no background, so
+        // every unstyled GUI rendered as invisible black-on-black text
+        // (first seen with the manual keyboard probe). The frame wrapper
+        // owns the surface/foreground tokens (setTheme overrides, built-in
+        // dark defaults otherwise); consumer styles override per element.
 
         self.stats.push(started.elapsed());
 
@@ -1680,8 +1721,8 @@ impl Render for HostView {
 
         content = div()
             .size_full()
-            .bg(rgb(0x1e1e2e))
-            .text_color(rgb(0xcdd6f4))
+            .bg(self.theme_surface.unwrap_or(rgb(0x1e1e2e)))
+            .text_color(self.theme_foreground.unwrap_or(rgb(0xcdd6f4)))
             .child(content)
             .into_any_element();
 
@@ -3392,7 +3433,11 @@ fn parse_px(s: &str) -> Option<f64> {
 }
 
 fn parse_color(value: &StyleValue) -> Option<Rgba> {
-    let s = value.as_str()?.trim();
+    parse_color_str(value.as_str()?.trim())
+}
+
+/// Parse a CSS color string (#rgb/#rrggbbaa hex, rgb(), rgba()).
+fn parse_color_str(s: &str) -> Option<Rgba> {
     if let Some(h) = s.strip_prefix('#') {
         return match h.len() {
             6 => u32::from_str_radix(h, 16).ok().map(rgb),
@@ -4762,6 +4807,43 @@ mod headless_render_tests {
                 .find(|(_, h)| **h == current)
                 .map(|(id, _)| *id)
         })
+    }
+
+    #[test]
+    fn set_theme_stores_tokens_ignores_unknown_and_survives_reset_tree() {
+        let mut app = gpui::TestApp::new();
+        let mut window = app.open_window(|_, _cx| HostView::new());
+
+        let mut tokens = BTreeMap::new();
+        tokens.insert("surface".to_string(), "#181825".to_string());
+        tokens.insert("foreground".to_string(), "#cdd6f4".to_string());
+        tokens.insert("futureToken".to_string(), "#ff0000".to_string());
+
+        let ignored = window.update(|view, _, _| view.set_theme(&tokens));
+        assert_eq!(
+            ignored.unwrap(),
+            vec!["futureToken".to_string()],
+            "unknown tokens are accepted-and-ignored (forward compat)"
+        );
+        window.update(|view, _, _| {
+            assert_eq!(view.theme_surface, Some(rgba(0x181825ff)));
+            assert_eq!(view.theme_foreground, Some(rgba(0xcdd6f4ff)));
+
+            // Window-scoped by contract: a remount keeps the theme.
+            view.reset_tree();
+            assert_eq!(view.theme_surface, Some(rgba(0x181825ff)));
+        });
+
+        // An unparseable color aborts (command answers applyFailed) and
+        // leaves the previous theme untouched: all-or-nothing per call.
+        let mut bad = BTreeMap::new();
+        bad.insert("foreground".to_string(), "nope".to_string());
+        bad.insert("surface".to_string(), "#ff0000".to_string());
+        assert!(window.update(|view, _, _| view.set_theme(&bad)).is_err());
+        window.update(|view, _, _| {
+            assert_eq!(view.theme_surface, Some(rgba(0x181825ff)));
+            assert_eq!(view.theme_foreground, Some(rgba(0xcdd6f4ff)));
+        });
     }
 
     #[test]

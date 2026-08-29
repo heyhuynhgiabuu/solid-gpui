@@ -610,6 +610,20 @@ fn set_event_listener_rejects_unknown_event_type() {
 }
 
 #[test]
+fn set_theme_command_fixture_parses_and_emits_exactly() {
+    let raw = fs::read_to_string(fixture_path("command-set-theme.json"))
+        .expect("fixture readable")
+        .trim()
+        .to_string();
+    let cmd = command_from_json(&raw).expect("command parses");
+    let mut tokens = std::collections::BTreeMap::new();
+    tokens.insert("foreground".to_string(), "#cdd6f4cc".to_string());
+    tokens.insert("surface".to_string(), "#181825".to_string());
+    assert_eq!(cmd, Command::SetTheme { seq: 48, tokens });
+    assert_eq!(command_to_json(&cmd), raw);
+}
+
+#[test]
 fn reset_tree_command_fixture_parses_and_emits_exactly() {
     let raw = fs::read_to_string(fixture_path("command-reset-tree.json"))
         .expect("fixture readable")

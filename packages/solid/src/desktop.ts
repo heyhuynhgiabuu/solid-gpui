@@ -47,6 +47,14 @@ export const appWindow = {
   },
 }
 
+/** Window-scoped semantic theme tokens (README "Theming"). Partial maps
+ * merge; unknown token names are ignored helper-side (forward compat). */
+export const theme = {
+  async set(connection: CommandChannel, tokens: Record<string, string>): Promise<void> {
+    await connection.sendCommand({ type: "setTheme", seq: seq(), tokens })
+  },
+}
+
 /** Modal dialogs; each resolves when the user answers. */
 export const dialog = {
   /** Show a message with buttons; resolves with the clicked button's index. */

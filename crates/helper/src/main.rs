@@ -100,6 +100,7 @@ fn command_ident(command: &solid_gpui_protocol::Command) -> (u32, &'static str) 
         solid_gpui_protocol::Command::SimulateKey { seq, .. } => (*seq, "simulateKey"),
         solid_gpui_protocol::Command::SimulateMouse { seq, .. } => (*seq, "simulateMouse"),
         solid_gpui_protocol::Command::ResetTree { seq } => (*seq, "resetTree"),
+        solid_gpui_protocol::Command::SetTheme { seq, .. } => (*seq, "setTheme"),
         solid_gpui_protocol::Command::ListInfo { seq, .. } => (*seq, "listInfo"),
         solid_gpui_protocol::Command::SetMenus { seq, .. } => (*seq, "setMenus"),
         solid_gpui_protocol::Command::SetTitle { seq, .. } => (*seq, "setTitle"),
@@ -507,6 +508,30 @@ fn run_stdio_window() {
                                     seq,
                                     value: serde_json::json!({ "applied": true }),
                                 }
+                            })
+                            .unwrap_or_else(|e| Reply::Error {
+                                seq: Some(seq),
+                                code: ReplyCode::Unsupported,
+                                message: format!("window closed: {e}"),
+                            }),
+
+                        solid_gpui_protocol::Command::SetTheme { seq, tokens } => window
+                            .update(cx, |view, _window, cx| match view.set_theme(&tokens) {
+                                Ok(ignored) => {
+                                    // Re-render so the new tokens paint without
+                                    // waiting for an unrelated frame trigger.
+                                    cx.notify();
+                                    let mut value = serde_json::json!({ "applied": true });
+                                    if !ignored.is_empty() {
+                                        value["ignored"] = serde_json::json!(ignored);
+                                    }
+                                    Reply::Result { seq, value }
+                                }
+                                Err(message) => Reply::Error {
+                                    seq: Some(seq),
+                                    code: ReplyCode::ApplyFailed,
+                                    message,
+                                },
                             })
                             .unwrap_or_else(|e| Reply::Error {
                                 seq: Some(seq),

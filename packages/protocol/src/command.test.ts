@@ -8,6 +8,7 @@ import simulateInputFixture from "../fixtures/command-simulate-input.json"
 import simulateKeyFixture from "../fixtures/command-simulate-key.json"
 import simulateMouseFixture from "../fixtures/command-simulate-mouse.json"
 import resetTreeFixture from "../fixtures/command-reset-tree.json"
+import setThemeFixture from "../fixtures/command-set-theme.json"
 import listInfoFixture from "../fixtures/command-list-info.json"
 import { type SolidGpuiCommand, decodeCommand, encodeCommand } from "./command"
 
@@ -98,6 +99,25 @@ describe("decodeCommand", () => {
     })
     if (!parsed.ok) throw new Error("unreachable")
     expect(encodeCommand(parsed.value)).toBe(JSON.stringify(resetTreeFixture))
+  })
+
+  test("setTheme fixture parses and re-encodes exactly (parity)", () => {
+    const parsed = decodeCommand(JSON.stringify(setThemeFixture))
+    expect(parsed).toEqual({
+      ok: true,
+      value: {
+        type: "setTheme",
+        seq: 48,
+        tokens: { foreground: "#cdd6f4cc", surface: "#181825" },
+      },
+    })
+    if (!parsed.ok) throw new Error("unreachable")
+    expect(encodeCommand(parsed.value)).toBe(JSON.stringify(setThemeFixture))
+  })
+
+  test("setTheme rejects a non-object tokens map and empty color values", () => {
+    expect(decodeCommand(JSON.stringify({ type: "setTheme", seq: 1, tokens: "dark" })).ok).toBe(false)
+    expect(decodeCommand(JSON.stringify({ type: "setTheme", seq: 1, tokens: { surface: "" } })).ok).toBe(false)
   })
 
   test("simulateMouse fixture parses and re-encodes exactly (parity)", () => {

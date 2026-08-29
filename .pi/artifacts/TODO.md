@@ -543,162 +543,6 @@ r2 NOT MERGEABLE: tint fallback alpha-0; fixes c3b25a8+225d09a; r3 CLEAN)
       f32) vẫn invisible; fix = One Dark text OPAQUE hsla(221,.11,.86,1)
       khớp default hiệu lực của gpui (cite fallback_themes.rs). r3 CLEAN.
 
-### 2026-08-27 - Gate 1 first-class JSX and TypeScript DX
-status: done | updated: 2026-08-27
-
-Goal: make the renderer-owned JSX runtime and consumer TypeScript surface usable
-without changing the Solid/GPUI protocol or the out-of-process architecture.
-
-- [x] Inspect current JSX exports, Solid rc.3 universal contract, package build outputs, and the smallest public type surface.
-- [x] Add a failing external `.tsx` consumer fixture proving the missing JSX runtime/type declarations. RED recorded missing `@solid-gpui/solid/jsx-runtime`, `JSX.IntrinsicElements`, and the two-argument `mountJsx` API.
-- [x] Implement renderer-owned `jsx-runtime`/`jsx-dev-runtime` exports and intrinsic element types with strict public props. Also export `DrawItem` from the protocol surface and let `mountJsx` reuse a supplied `RenderOptions.connection`.
-- [x] Add a real compile/run smoke path for the fixture under Bun and Node with `--conditions=browser`.
-- [x] Run focused and full verification, obtain independent review, and close this block only with evidence.
-
-#### Verification
-
-- `bun run check:consumer-jsx` passed; both external `.tsx` fixtures typecheck, and unsupported `className`, `tabIndex`, and `autoFocus` remain enforced as type errors.
-- `bun --conditions=browser test tests/consumer-jsx.test.ts` passed 1 test; `bun run test` passed 196 tests across 20 files with 0 failures.
-- `bun run typecheck`, `bun run check:release`, and `cargo fmt --all -- --check` exited 0.
-- `cargo clippy --all-targets --locked -- -D warnings` exited 0; locked GUI-skipped Cargo tests passed (helper, protocol, and stdio suites). Cargo emitted only the known non-blocking `block v0.1.6` future-incompatibility warning.
-- `bun run smoke:consumer-jsx` passed both Bun and Node legs through the real helper; `bun run smoke:node` passed.
-- `bun run build` and staged `node scripts/pack-package.mjs packages/solid --out .pi/review-tmp/gate1-pack-final` passed. The packed `@solid-gpui/solid` manifest exposed both runtime entries, and a packed-consumer `tsc --noEmit` check passed.
-- The final independent reviewer reported `CLEAN/MERGEABLE` with no blocker or should-fix findings. The transport smoke's operation/ack coverage versus native user-event round trips, and a dedicated Vite recipe, remain explicitly non-blocking follow-up questions for later gate work.
-
-### 2026-08-27 - Gate 0 consumer acceptance fixture
-status: done | updated: 2026-08-27
-
-Goal: exercise the supported `h()`/`.ts` consumer path as one small SaaS-like
-screen through both JavaScript hosts and the real helper, before further
-styling, packaging, or optimization work.
-
-#### Scope and inherited decisions
-
-- The fixture uses `render((h) => ...)`, not JSX; external `.tsx` typechecking is
-  covered by Gate 1.
-- The supported host baseline is Bun 1.4.0 and Node 24 with
-  `--conditions=browser`; macOS arm64/x64 is the current GUI target, while
-  headless transport evidence may run on other hosted OSes.
-- A separately shipped Rust helper sidecar is acceptable and remains the
-  default distribution model.
-- Tailwind exact semantics are not claimed; the fixture uses the typed GPUI
-  style-map surface and records unsupported utility-class behavior explicitly.
-- One GPUI window is sufficient for this first acceptance slice; multi-window
-  application management stays out of scope.
-
-#### Acceptance criteria
-
-- [x] Add one external-looking `.ts` fixture containing a styled layout, a
-      form input, signal-driven text, an interactive action, and a controlled
-      select/combobox-like interaction using only the supported `h()` surface.
-- [x] Run the fixture under Bun and Node against the real helper, with the
-      browser condition, and assert the initial and post-action mutations.
-- [x] Prove the same action's event-to-mutation path at the real helper
-      boundary, or record the exact GUI/environment limitation if a native
-      event cannot be injected headlessly. The optional GUI leg uses the
-      helper's `simulateInput` seam and passed locally; default transport mode
-      records that native event injection is GUI-gated.
-- [x] Record every unsupported requirement without silently accepting or
-      advertising it.
-- [x] Run focused/full verification and obtain an independent review before
-      marking this block done.
-
-#### Verification
-
-- RED was observed before wiring: `check:consumer-h` failed on the missing
-  script before any fixture existed; the smoke wrapper test failed before the
-  harness landed; fixture strictness caught the eager `setCount` return-type
-  mismatch in `h()` action props during GREEN.
-- `bun run check:consumer-h` passed; `bun --conditions=browser test
-  tests/consumer-h.test.ts` passed 2/2; `bun run test` passed 198 tests across
-  21 files with 0 failures; `bun run typecheck`, `bun run check:release`, and
-  `git diff --check` exited 0.
-- `bun run smoke:consumer-h` passed Bun and Node legs through the real
-  `--stdio` helper; `SOLID_GPUI_GATE0_GUI=1 bun run smoke:consumer-h` passed
-  both legs through the real `--stdio-window` helper including the
-  `simulateInput` → handler → mutation roundtrip.
-- Review round r1 exposed a CI blocker in this block's own wrapper: the
-  repo-root bun-test suite runs on the helper-less ts job, so wrapping
-  `smoke:consumer-h` unconditionally would fail `bun run test` there. Fixed by
-  skipping that one test with the smoke script's exact binary predicate
-  (verified: `1 pass, 1 skip, exit 0` under a missing-helper env); also added
-  a bounded poll for GUI event arrival (helper window-tests precedent) and
-  removed an unused `mountAcceptanceScreen` export.
-- Independent review attempts mtbjaq05-185d and mtbjgtll-8965 were terminated
-  mid-run before any verdict; their partial analysis produced the fixes above.
-  A fourth attempt completed the full audit and delivered its verdict but was
-  terminated while writing the closing envelope; the complete findings and
-  executed checks are preserved in the persisted transcript at
-  `.pi/artifacts/tasks/sessions/mtbk0utc-569d/2026-08-27T13-24-20-577Z_01a04364-95e1-7a4e-a38d-ed4968152b5e.jsonl`:
-  verdict **CLEAN/MERGEABLE** — all four proposed changes present, CI-skip fix
-  independently re-verified (`1 pass, 1 skip, 0 fail` under a missing-helper
-  env), smoke/typecheck/wrapper re-runs green, no Gate 0 Rust or protocol
-  changes confirmed, single non-blocking [nit] recorded below.
-- Reviewer nit (accepted, non-blocking): the fixture passes `value: query()`
-  eagerly; `h()` reactively wraps only style/source/runs/accessibility, so the
-  input's displayed value is set once and only `accessibility.value` tracks
-  signals. No harness assertion depends on it.
-
-### 2026-08-27 - Gate 2 styling decision: Tailwind-compatible subset
-status: done | updated: 2026-08-27
-
-Goal: adopt ROADMAP Gate 2 option 1 in the smallest honest form — a documented
-Tailwind-compatible utility SUBSET compiled client-side into the existing typed
-`StyleMap` and state layers, with actionable diagnostics for everything else.
-No protocol, helper, or new-dependency changes; everything compiles away before
-the wire.
-
-#### Decisions recorded (safe assumptions under AFK; revisit triggers documented)
-
-- Canonical prop is `class` (Solid convention); a NEW loud warning points
-  `className` users to it instead of today's silent drop.
-- Compilation happens inside the renderer style/class merge: `class` yields
-  UNDER an explicit `style` prop, both merged into ONE setStyle (helper-side
-  setStyle REPLACES the whole map — two base ops would race by ordering).
-- Matrix v0.1 mirrors what the helper actually applies (verified host.rs):
-  spacing 4px scale + negatives + `[..]` brackets (px/rem/%), full default
-  Tailwind palette for bg-/text-, white/black, text size scale, font weight
-  scale, opacity-N, rounded scale, flex/flex-col/items-center/justify-center/
-  flex-1/grow/shrink/gap, cursor-pointer, hover:/active: variants.
-- Unsupported stays unsupported with a named diagnostic: responsive prefixes,
-  group-/focus-/dark:, other alignment values (start/end/between/…), hidden,
-  overflow-hidden, line-height, shadow classes (use boxShadow style),
-  grid/table, pseudo-elements. Unknown tokens warn per compile call.
-- Variants map onto P1-c state layers; state-layer helper refusals (markdown
-  etc.) keep firing unchanged.
-- Reactive `class` functions are NOT added in this slice: h() eager-prop rule
-  stands; compiled-JSX dynamic attrs re-call setProp and recompile correctly.
-
-#### Slices
-
-1. Pure parser module + unit tests (RED first) — verify: bun test utilities
-2. Renderer `class` branch: merge semantics, one-setStyle invariant, className
-   warning, unknown-token diagnostics — verify: focused suite + transport ack
-   through the real helper (standard ops only)
-3. JSX types (`class` on interactive/div props), consumer fixture coverage —
-   verify: check:consumer-jsx
-4. Utility-matrix doc + README honesty pass, full gates, independent review,
-   close block
-
-#### Review outcome
-
-- Reviewer run mtblc7hk-d2d0 (terminated mid-run, deep partial preserved in
-  the session JSONL) validated the palette/scale tables against Tailwind v3
-  defaults, the layout mapping against host.rs, clean crates/, and untouched
-  dependencies — and identified three real defects, all fixed with RED→GREEN
-  tests: bare `rounded` was 6 instead of Tailwind's 4; the minus prefix
-  applied to every length family instead of margins-only (`-p-4`/`-w-8`/
-  `-gap-2` now refuse to unknown); 4-digit `#rgba` bracket hex dropped its
-  alpha digit (now refused; 8-digit passes through — host parse_color maps it
-  via rgba(), host.rs:3102-3109).
-- Reviewer mtblk7d2-3cbe terminated before verdict. Fix verification was then
-  completed by an independent general agent (mtbln5uj-7b2c, full envelope:
-  status success, confidence high): 19/19 utilities tests, exit 0, all three
-  claims VERIFIED with path:line evidence.
-- With no remaining blocker/major/should-fix, Gate 2 closes as done; the
-  six-termination backend flake is recorded in MEMORY with the working
-  general-agent fallback.
-
 ### 2026-08-27 - Gate 4 runtime contract + sidecar packaging baseline
 status: done | updated: 2026-08-27
 
@@ -1259,9 +1103,15 @@ delivered in chat; per user request the research itself is NOT recorded here).
 1. [x] README "Why this exists": positioning vs all-Rust stacks (Floem/Iced/
    Slint) and in-process GPUI script hosts (gpui-shell) — isolation, unchanged
    Node/Bun toolchain, Solid reactivity; costs stated honestly.
-2. [ ] setTheme semantic tokens command (protocol additive, full lockstep) —
-   replaces the hardcoded default-theme band-aid; closes the invisible-text
-   class properly. Awaiting user go-ahead.
+2. [x] setTheme semantic tokens command shipped (protocol additive, full
+   lockstep): open token set (unknown → `ignored` in reply), color values
+   parsed apply-side, all-or-nothing on bad color, window-scoped (survives
+   reset_tree), transport mode Unsupported, cx.notify() repaint per review
+   major, theme.set(connection, tokens) helper, README Theming section.
+   Review pass 1 NOT MERGEABLE (missing notify; reset_tree doc hijacked;
+   false #rgb docs claim) — all fixed; a captureFrame-based repaint proof
+   was deleted honestly (xcap screenshots made it a cannot-fail test) in
+   favor of a deterministic end-to-end reply test.
 3. [ ] dumpTree debug command + widget-gallery example. Awaiting go-ahead.
 4. [ ] ROADMAP infra notes when relevant: gpui is now on crates.io (0.2.2);
    migration from the pinned zed git rev is a real future path; agent-skills/

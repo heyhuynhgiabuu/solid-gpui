@@ -166,6 +166,63 @@ fn window_mode_answers_getstats_and_captureframe() {
 }
 
 #[test]
+fn set_theme_acks_and_reports_ignored_tokens_end_to_end() {
+    if skip() {
+        return;
+    }
+    let _lock = window_lock();
+    let bin = env!("CARGO_BIN_EXE_solid-gpui-helper");
+    let mut child = Command::new(bin)
+        .arg("--stdio-window")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .spawn()
+        .expect("helper spawns");
+    let mut stdin = child.stdin.take().expect("stdin piped");
+    let reader = BufReader::new(child.stdout.take().expect("stdout piped"));
+    let mut lines = reader.lines();
+
+    writeln!(stdin, "{}", fixture_line()).unwrap();
+    stdin.flush().unwrap();
+    let ack = lines.next().unwrap().expect("ack line");
+    assert!(ack.starts_with(r#"{"type":"ack""#), "{ack}");
+
+    // Known tokens apply; unknown ones ride the reply's `ignored` array so
+    // clients can tell forward-compat ignores from silent drops.
+    writeln!(
+        stdin,
+        r##"{{"type":"setTheme","seq":21,"tokens":{{"surface":"#ffffff","futureToken":"#ff0000"}}}}"##
+    )
+    .unwrap();
+    stdin.flush().unwrap();
+    let reply = lines.next().unwrap().expect("setTheme reply");
+    assert!(
+        reply.contains(r#""type":"result""#)
+            && reply.contains(r#""seq":21"#)
+            && reply.contains(r#""applied":true"#)
+            && reply.contains(r#""ignored":["futureToken"]"#),
+        "setTheme must ack with the ignored list: {reply}"
+    );
+
+    // An unparseable color is an applyFailed error, seq-correlated.
+    writeln!(
+        stdin,
+        r#"{{"type":"setTheme","seq":22,"tokens":{{"surface":"nope"}}}}"#
+    )
+    .unwrap();
+    stdin.flush().unwrap();
+    let err = lines.next().unwrap().expect("setTheme error reply");
+    assert!(
+        err.contains(r#""type":"error""#) && err.contains(r#""code":"applyFailed""#),
+        "bad color must applyFailed: {err}"
+    );
+
+    drop(stdin);
+    let status = child.wait().expect("wait");
+    assert_eq!(status.code(), Some(0), "EOF must exit 0");
+}
+
+#[test]
 fn window_mode_mounts_scroll_container() {
     if skip() {
         return;

@@ -51,6 +51,14 @@ export type SolidGpuiCommand =
   | { readonly type: "simulateKey"; readonly seq: number; readonly key: string }
   | { readonly type: "simulateMouse"; readonly seq: number; readonly x: number; readonly y: number }
   | { readonly type: "resetTree"; readonly seq: number }
+  | {
+      readonly type: "setTheme"
+      readonly seq: number
+      /** Partial semantic-token map; only present tokens change. Token names
+       * are an open set: unknown tokens are accepted and ignored helper-side
+       * so newer clients stay compatible with older helpers. */
+      readonly tokens: Readonly<Record<string, string>>
+    }
   | { readonly type: "listInfo"; readonly seq: number; readonly id: number }
   | {
       readonly type: "setMenus"
@@ -132,6 +140,7 @@ export function decodeCommand(json: string): Result<SolidGpuiCommand, ProtocolEr
     "simulateKey",
     "simulateMouse",
     "resetTree",
+    "setTheme",
     "listInfo",
     "setMenus",
     "setTitle",
@@ -176,6 +185,23 @@ export function decodeCommand(json: string): Result<SolidGpuiCommand, ProtocolEr
       return { ok: false, error: shape("y", "expected a finite number") }
     }
     return { ok: true, value: { type, seq: parsed.seq, x, y } }
+  }
+  if (type === "setTheme") {
+    if (!isDict(parsed.tokens)) {
+      return { ok: false, error: shape("tokens", "expected an object of token name → color string") }
+    }
+    for (const [name, value] of Object.entries(parsed.tokens)) {
+      // Value SHAPE is checked here; color VALIDITY is the helper's apply-time
+      // job (applyFailed) — TS decodeCommand is the parity/test mirror, the
+      // live pipeline only encodes, so the two stages never disagree.
+      if (typeof value !== "string" || value.length === 0) {
+        return { ok: false, error: shape(`tokens.${name}`, "expected a non-empty color string") }
+      }
+    }
+    return {
+      ok: true,
+      value: { type: "setTheme", seq: parsed.seq, tokens: parsed.tokens as Record<string, string> },
+    }
   }
   if (type === "resetTree") {
     return { ok: true, value: { type, seq: parsed.seq } }
@@ -383,6 +409,13 @@ export function encodeCommand(command: SolidGpuiCommand): string {
     return JSON.stringify({
       type: "resetTree",
       seq: command.seq,
+    })
+  }
+  if (command.type === "setTheme") {
+    return JSON.stringify({
+      type: "setTheme",
+      seq: command.seq,
+      tokens: command.tokens,
     })
   }
   if (command.type === "simulateKey") {
