@@ -610,6 +610,17 @@ fn set_event_listener_rejects_unknown_event_type() {
 }
 
 #[test]
+fn dump_tree_command_fixture_parses_and_emits_exactly() {
+    let raw = fs::read_to_string(fixture_path("command-dump-tree.json"))
+        .expect("fixture readable")
+        .trim()
+        .to_string();
+    let cmd = command_from_json(&raw).expect("command parses");
+    assert_eq!(cmd, Command::DumpTree { seq: 49 });
+    assert_eq!(command_to_json(&cmd), raw);
+}
+
+#[test]
 fn set_theme_command_fixture_parses_and_emits_exactly() {
     let raw = fs::read_to_string(fixture_path("command-set-theme.json"))
         .expect("fixture readable")

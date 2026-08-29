@@ -223,6 +223,54 @@ fn set_theme_acks_and_reports_ignored_tokens_end_to_end() {
 }
 
 #[test]
+fn window_mode_dump_tree_reports_shape_and_count() {
+    if skip() {
+        return;
+    }
+    let _lock = window_lock();
+    let bin = env!("CARGO_BIN_EXE_solid-gpui-helper");
+    let mut child = Command::new(bin)
+        .arg("--stdio-window")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .spawn()
+        .expect("helper spawns");
+    let mut stdin = child.stdin.take().expect("stdin piped");
+    let reader = BufReader::new(child.stdout.take().expect("stdout piped"));
+    let mut lines = reader.lines();
+
+    // batch-01 ends with div 1 (root) holding ONE child: text 2 (the div 3
+    // side is removeChild'd + destroyed by the fixture itself).
+    writeln!(stdin, "{}", fixture_line()).unwrap();
+    stdin.flush().unwrap();
+    let ack = lines.next().unwrap().expect("ack line");
+    assert!(ack.starts_with(r#"{"type":"ack""#), "{ack}");
+
+    writeln!(stdin, r#"{{"type":"dumpTree","seq":30}}"#).unwrap();
+    stdin.flush().unwrap();
+    let reply = lines.next().unwrap().expect("dump reply");
+    assert!(
+        reply.contains(r#""type":"result""#) && reply.contains(r#""seq":30"#),
+        "expected result reply: {reply}"
+    );
+    assert!(
+        reply.contains(r#""count":2"#)
+            && reply.contains(r#""id":1,"type":"div","parent":null"#)
+            && reply.contains(r#""id":2,"type":"text","parent":1"#)
+            && reply.contains("Xin chào solid-gpui"),
+        "dump must carry the settled tree shape: {reply}"
+    );
+    assert!(
+        !reply.contains(r#""id":3"#),
+        "destroyed node 3 must be gone: {reply}"
+    );
+
+    drop(stdin);
+    let status = child.wait().expect("wait");
+    assert_eq!(status.code(), Some(0), "EOF must exit 0");
+}
+
+#[test]
 fn window_mode_mounts_scroll_container() {
     if skip() {
         return;

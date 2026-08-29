@@ -754,6 +754,11 @@ impl HostView {
         self.autofocus_origin = None;
     }
 
+    /// dumpTree payload: the retained tree's shape plus its node count.
+    pub fn dump_tree(&self) -> serde_json::Value {
+        self.tree.to_debug_value()
+    }
+
     /// Apply a setTheme token map. Known tokens (surface, foreground) parse
     /// like style colors (#rrggbb/#rrggbbaa hex, rgb()/rgba()/hsl()/named)
     /// and replace their slot; unknown tokens are returned as ignored

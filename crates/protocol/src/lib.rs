@@ -662,6 +662,13 @@ pub enum Command {
     /// hsl()/named) parsed like style colors; an unparseable value is an
     /// applyFailed error, not a silent ignore. The theme survives SetRoot/remounts (it is window
     /// state, not tree state) and lasts until the next setTheme or restart.
+    /// Debug aid: serialize the retained tree — id/type/parent/children/text
+    /// per node, depth-first. Styles and helper-only state are omitted on
+    /// purpose; this is a tree-shape view for attach/remove bugs.
+    DumpTree {
+        seq: u32,
+    },
+
     #[serde(rename_all = "camelCase")]
     SetTheme {
         seq: u32,
@@ -789,12 +796,13 @@ pub fn command_from_json(s: &str) -> Result<Command, ProtocolError> {
             | Some("simulateMouse")
             | Some("resetTree")
             | Some("setTheme")
+            | Some("dumpTree")
             | Some("listInfo")
     ) {
         return Err(ProtocolError::InvalidShape {
             path: "type".into(),
             message: format!(
-                "unknown command {:?}; expected getStats|captureFrame|scrollTo|getScrollOffset|focusElement|simulateInput|simulateKey|simulateMouse|resetTree|setTheme|listInfo|setMenus|setTitle|windowAction|dialogMessage|dialogOpenFile|dialogSaveFile|shellRevealPath|shellOpenPath|scrollToItem",
+                "unknown command {:?}; expected getStats|captureFrame|scrollTo|getScrollOffset|focusElement|simulateInput|simulateKey|simulateMouse|resetTree|setTheme|dumpTree|listInfo|setMenus|setTitle|windowAction|dialogMessage|dialogOpenFile|dialogSaveFile|shellRevealPath|shellOpenPath|scrollToItem",
                 type_str.unwrap_or("<missing>")
             ),
         });

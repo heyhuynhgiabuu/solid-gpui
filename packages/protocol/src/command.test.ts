@@ -9,6 +9,7 @@ import simulateKeyFixture from "../fixtures/command-simulate-key.json"
 import simulateMouseFixture from "../fixtures/command-simulate-mouse.json"
 import resetTreeFixture from "../fixtures/command-reset-tree.json"
 import setThemeFixture from "../fixtures/command-set-theme.json"
+import dumpTreeFixture from "../fixtures/command-dump-tree.json"
 import listInfoFixture from "../fixtures/command-list-info.json"
 import { type SolidGpuiCommand, decodeCommand, encodeCommand } from "./command"
 
@@ -113,6 +114,13 @@ describe("decodeCommand", () => {
     })
     if (!parsed.ok) throw new Error("unreachable")
     expect(encodeCommand(parsed.value)).toBe(JSON.stringify(setThemeFixture))
+  })
+
+  test("dumpTree fixture parses and re-encodes exactly (parity)", () => {
+    const parsed = decodeCommand(JSON.stringify(dumpTreeFixture))
+    expect(parsed).toEqual({ ok: true, value: { type: "dumpTree", seq: 49 } })
+    if (!parsed.ok) throw new Error("unreachable")
+    expect(encodeCommand(parsed.value)).toBe(JSON.stringify(dumpTreeFixture))
   })
 
   test("setTheme rejects a non-object tokens map and empty color values", () => {

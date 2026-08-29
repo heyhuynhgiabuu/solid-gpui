@@ -101,6 +101,7 @@ fn command_ident(command: &solid_gpui_protocol::Command) -> (u32, &'static str) 
         solid_gpui_protocol::Command::SimulateMouse { seq, .. } => (*seq, "simulateMouse"),
         solid_gpui_protocol::Command::ResetTree { seq } => (*seq, "resetTree"),
         solid_gpui_protocol::Command::SetTheme { seq, .. } => (*seq, "setTheme"),
+        solid_gpui_protocol::Command::DumpTree { seq } => (*seq, "dumpTree"),
         solid_gpui_protocol::Command::ListInfo { seq, .. } => (*seq, "listInfo"),
         solid_gpui_protocol::Command::SetMenus { seq, .. } => (*seq, "setMenus"),
         solid_gpui_protocol::Command::SetTitle { seq, .. } => (*seq, "setTitle"),
@@ -508,6 +509,17 @@ fn run_stdio_window() {
                                     seq,
                                     value: serde_json::json!({ "applied": true }),
                                 }
+                            })
+                            .unwrap_or_else(|e| Reply::Error {
+                                seq: Some(seq),
+                                code: ReplyCode::Unsupported,
+                                message: format!("window closed: {e}"),
+                            }),
+
+                        solid_gpui_protocol::Command::DumpTree { seq } => window
+                            .update(cx, |view, _window, _cx| Reply::Result {
+                                seq,
+                                value: view.dump_tree(),
                             })
                             .unwrap_or_else(|e| Reply::Error {
                                 seq: Some(seq),

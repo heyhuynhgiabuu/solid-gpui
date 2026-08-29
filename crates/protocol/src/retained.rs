@@ -519,6 +519,44 @@ impl RetainedTree {
     /// Permanently remove `id` and its whole subtree; detaches from its
     /// parent (or clears the root) first. Returns destroyed ids in
     /// parent-before-child order.
+    /// Debug dump (dumpTree): one JSON node per retained element — id, type,
+    /// parent, children (depth-first from the root), and text when present.
+    /// Styles, runs, draw lists, and helper-only state are deliberately
+    /// omitted: this is a tree-SHAPE view for debugging attach/remove bugs,
+    /// not a full inspector. `count` counts every visited node.
+    pub fn to_debug_value(&self) -> serde_json::Value {
+        fn visit(tree: &RetainedTree, id: ElementId, count: &mut usize) -> serde_json::Value {
+            *count += 1;
+            let Some(node) = tree.get(id) else {
+                // apply() keeps children referencing live nodes; a miss would
+                // be an internal invariant break — report it, never panic.
+                return serde_json::json!({ "id": id, "missing": true });
+            };
+            let children: Vec<serde_json::Value> = node
+                .children
+                .iter()
+                .map(|child| visit(tree, *child, count))
+                .collect();
+            let mut value = serde_json::json!({
+                "id": id,
+                "type": node.element_type,
+                "parent": node.parent,
+                "children": children,
+            });
+            if let Some(text) = &node.text {
+                value["text"] = serde_json::json!(text);
+            }
+            value
+        }
+
+        let mut count = 0usize;
+        let root = match self.root() {
+            Some(id) => visit(self, id, &mut count),
+            None => serde_json::Value::Null,
+        };
+        serde_json::json!({ "root": root, "count": count })
+    }
+
     pub fn destroy_subtree(&mut self, id: ElementId) -> Result<Vec<ElementId>, ApplyError> {
         if !self.elements.contains_key(&id) {
             return Err(ApplyError::InvalidMutation {

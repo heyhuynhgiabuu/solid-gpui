@@ -78,6 +78,10 @@ first precisely so the bundle seal covers it.
 - `getStats` carries `helperVersion` (the helper crate's semver) and
   `protocolVersion` (the wire protocol major). Launchers and support tools
   pin and verify against these instead of scraping process output.
+- `dumpTree` (window mode) returns the retained tree's shape — id, type,
+  parent, children, text per node, depth-first, plus a node count. Styles
+  and helper-only state are deliberately omitted: it answers "what does the
+  helper THINK is mounted", the first question when a UI looks wrong.
 - Poisoned-batch recovery contract: a failed batch poisons the renderer
   (later flushes reject without requeueing — re-sending could double-apply
   a partially applied batch). The sanctioned recovery is `resetTree`
