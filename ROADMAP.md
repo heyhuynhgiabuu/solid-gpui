@@ -25,7 +25,7 @@ Solid JSX + signals → NDJSON mutation batches → Rust helper → GPUI window
 The project should make the following distinction explicit:
 
 - **Supported today:** a macOS-first, prerelease native UI with Solid
-  `2.0.0-rc.3`, a separate helper process, renderer-owned JSX/TypeScript
+  `2.0.0-rc.4`, a separate helper process, renderer-owned JSX/TypeScript
   declarations, typed GPUI style maps, and basic in-window select/combobox
   overlays.
 - **Supported direction:** the same client transport from Node.js or Bun.js,
@@ -44,7 +44,7 @@ sidecar helper and custom style maps can run an early vertical spike now.
 | Rendering | Real GPUI native rendering, no webview; Rust owns the native event loop | Credible prototype; prerelease |
 | Process model | One JavaScript client process talks to one Rust helper process over NDJSON | Keep as the current default; do not replace it merely to simplify packaging. ADR 002 leaves room for a future in-process N-API backend behind the same protocol seam if the upstream runloop support lands |
 | JavaScript host | Client uses Node-compatible `node:` APIs; real Bun and Node smoke paths exist | Formalize both Node and Bun support with consumer fixtures |
-| Solid | `solid-js`, `@solidjs/universal`, `@solidjs/web`, and compiler pinned to `2.0.0-rc.3` | Solid 2 only; every entry point needs `--conditions=browser` |
+| Solid | `solid-js`, `@solidjs/universal`, `@solidjs/web`, and compiler pinned to `2.0.0-rc.4` | Solid 2 only; every entry point needs `--conditions=browser` |
 | JSX | Universal Babel plugin and `mountJsx()` work; renderer-owned types pass an external `.tsx` fixture and Bun/Node real-helper smoke; `h()` remains the lower-level API | Keep the Solid compiler/runtime versions aligned and retain the universal Babel transform |
 | Styling | Typed camelCase `StyleMap` with a GPUI subset; unknown props are ignored | Do not claim Tailwind support |
 | Overlays | Controlled single-select/combobox uses in-window `anchored` + `deferred` content | Basic dropdown fit; generic popover semantics incomplete |
@@ -340,7 +340,7 @@ the object format.
 
 | Runtime | Status | Rule |
 | --- | --- | --- |
-| Solid 2.0.0-rc.3 | Supported | Keep runtime, universal, web, compiler, JSX types, and browser-conditioned entry points aligned. |
+| Solid 2.0.0-rc.4 | Supported | Keep runtime, universal, web, compiler, JSX types, and browser-conditioned entry points aligned — in BOTH package.json files (root devDeps and `packages/solid` deps/peerDeps): a split resolution installs two solid-js copies and silently kills cross-copy reactivity (caught by the consumer-h fixture on the rc.4 bump). rc.3→rc.4 diff review: `createComponent` byte-identical; universal rc.4 ships the rc.3 code with only a peerDep bump; babel-plugin changes are hydration scope/patch-channel fixes off our `generate:"universal"` path; signals rc.4 hardens the patch/optimistic-store machinery we do not use; the one behavior touch (`For` lazy mapArray + `$ll` fast-path marker) is semantics-preserving and covered by the suite. |
 | Solid 1.9.x | Isolated experiment only | Use `compat/solid1`; never add runtime feature detection or Solid 1 imports to the Solid 2 package. A production adapter needs its own package and release track. |
 
 The Solid 1 spike proved technical feasibility for a small contract but did
@@ -390,7 +390,7 @@ and distribution gates are stable.
 - [Solid fine-grained reactivity](https://docs.solidjs.com/advanced-concepts/fine-grained-reactivity)
 - [Bun standalone executables](https://bun.sh/docs/bundler/executables)
 
-Versioned local evidence: Solid/universal/compiler `2.0.0-rc.3`, Solid 1
+Versioned local evidence: Solid/universal/compiler `2.0.0-rc.4` (rc.4 checked 2026-08-29), Solid 1
 `1.9.15`, and Bun `1.4.0` were checked on 2026-08-27. External GUI and
 production-distribution claims remain open until the relevant gates produce
 runtime artifacts and evidence.

@@ -1207,3 +1207,45 @@ Slices:
    earlier probes (all used escape, run before the redesign). ROADMAP/
    README/probe records corrected; the harness reopen returned to a real
    Enter keystroke; stale records scrubbed.
+
+### 2026-08-29 - SolidJS 2.0.0-rc.4 research + bump
+status: done
+
+User request: SolidJS shipped 2.0.0-rc.4 — research it and update the
+compatibility policy.
+
+Findings (tarball-level diff vs rc.3, all four crates released):
+- solid-js: `createComponent` byte-identical; types gain additive
+  patch-channel exports (registerPatch/registerRowOps/registerSlotPatch,
+  store predicates) we do not use; dist/dev.js adds a hydration
+  live-takeover latch, a semantics-preserving lazy `For` (mapArray under
+  the captured owner + `$ll` fast-path marker), and a DEV-only console
+  footer; dependency floor moves to @solidjs/signals rc.4.
+- @solidjs/universal: ONLY the peerDep bumps to ^2.0.0-rc.4 — code
+  identical to rc.3.
+- @solidjs/babel-plugin: hydration scope-wrap for function children
+  (solidjs/solid#3068 follow-up) + patch-channel hardening — both off
+  our `generate: "universal"` path (no SSR/hydration, no patchDriver).
+- @solidjs/signals: engine-wide patch/optimistic-store hardening; the
+  surface we use (flush/createRoot/createSignal/createEffect/createMemo/
+  context hooks) unchanged.
+- babel-preset-solid has NO rc.4 (stays 2.0.0-rc.2); we do not use it.
+
+Slices:
+
+1. [x] Bumped root + packages/solid deps to rc.4 (universal/web/babel-
+   plugin/signals). First run: 237/238 — consumer-h failed with ZERO
+   mutations after an action: packages/solid/package.json still pinned
+   rc.3, so bun installed TWO solid-js copies (root rc.4, workspace
+   nested rc.3) and cross-copy reactivity silently died. Lockstep fix in
+   packages/solid/package.json resolved one copy; rc.3/rc.1 entries
+   pruned from bun.lock.
+2. [x] Gates on rc.4: bun 238/238 (incl. reactivity-live proofs,
+   regressions, select, animation, wire-safety), tsc x3, smoke:node OK,
+   example/counter:tsx window opened and real clicks drifted the button
+   label/geometry (reactivity live end-to-end on the real helper).
+3. [x] ROADMAP compatibility policy now names rc.4 Supported with the
+   diff-review rationale + the BOTH-package.json lockstep rule; README
+   versions updated to rc.4. Review pass 1: MERGEABLE; both should-fix
+   doc corrections applied; a mid-session TODO truncation (harness) was
+   rebuilt from HEAD.

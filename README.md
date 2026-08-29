@@ -29,7 +29,7 @@ bun --conditions=browser run examples/counter.ts
 
 ## Solid version compatibility
 
-`@solid-gpui/solid` currently targets Solid `2.0.0-rc.3` and the matching
+`@solid-gpui/solid` currently targets Solid `2.0.0-rc.4` and the matching
 `@solidjs/universal`, `@solidjs/web`, and compiler packages. Solid 1.x is not
 supported by this package; its scheduling, ownership, and universal renderer
 boundaries differ. The isolated, non-published compatibility probe in
@@ -43,7 +43,7 @@ The helper binary ships in per-platform npm packages selected automatically
 by your platform (the esbuild model):
 
 ```sh
-bun add @solid-gpui/solid solid-js@2.0.0-rc.3   # or: npm i @solid-gpui/solid solid-js@2.0.0-rc.3
+bun add @solid-gpui/solid solid-js@2.0.0-rc.4   # or: npm i @solid-gpui/solid solid-js@2.0.0-rc.4
 ```
 
 ```tsx
@@ -71,7 +71,7 @@ resolves you get an error listing exactly what was tried and how to fix it.
 For JSX authoring, install the matching compiler plugin and Babel core:
 
 ```sh
-bun add -d @solidjs/babel-plugin@2.0.0-rc.3 @babel/core
+bun add -d @solidjs/babel-plugin@2.0.0-rc.4 @babel/core
 ```
 
 Configure your Babel pipeline with
@@ -250,7 +250,7 @@ loop on every OS, so no Zed fork and no ThreadsafeFunction usage. See
 
 ## Current limitations (v0.1)
 
-- Solid 2.0.0-rc.3 is still a prerelease; keep the runtime, universal renderer,
+- Solid 2.0.0-rc.4 is still a prerelease; keep the runtime, universal renderer,
   and JSX compiler versions aligned. Node.js and Bun.js can host the client,
   but every Solid entry point needs `--conditions=browser`.
 - JSX consumer types and `jsx-runtime`/`jsx-dev-runtime` entries now cover the
