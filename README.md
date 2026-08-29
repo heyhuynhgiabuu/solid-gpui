@@ -213,7 +213,7 @@ input, the helper suppresses keyDown/keyUp and Enter-submit semantics (the
 IME owns those keys; Gate 3-c) — Tab focus navigation and cmd-modified key
 bindings stay live by design (the IME does not consume them). Multi-select,
 uncontrolled state, and native popup windows are not part of S14b.
-Try the real window demo with `bun run example/select`.
+Try the real window demos: `bun run example/gallery` (one window exercising the whole supported surface, including a live `setTheme` light/dark toggle) and `bun run example/select`.
 
 Real-GUI overlay evidence (Gate 3-d): `SOLID_GPUI_GATE3_GUI=1 bun run
 smoke:gate3-gui` drives a real window through open → navigate → select →

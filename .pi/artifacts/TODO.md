@@ -1112,7 +1112,12 @@ delivered in chat; per user request the research itself is NOT recorded here).
    false #rgb docs claim) — all fixed; a captureFrame-based repaint proof
    was deleted honestly (xcap screenshots made it a cannot-fail test) in
    favor of a deterministic end-to-end reply test.
-3. [ ] dumpTree debug command + widget-gallery example. Awaiting go-ahead.
+3. [x] dumpTree shipped (protocol fixture + parity tests, e2e window test
+   against batch-01's settled shape, packaging.md diagnostics entry) and
+   examples/gallery.tsx shipped (`bun run example/gallery`): buttons with
+   hover/active layers, transitionMs animation, controlled input, select,
+   markdown, scroll area, and a REAL setTheme light/dark toggle as the
+   theme dogfood. Mount smoke green.
 4. [ ] ROADMAP infra notes when relevant: gpui is now on crates.io (0.2.2);
    migration from the pinned zed git rev is a real future path; agent-skills/
    llms.txt style consumer docs once there are consumers.
