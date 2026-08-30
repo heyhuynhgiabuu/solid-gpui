@@ -11,6 +11,11 @@ import { createRequire } from "node:module"
 const PLATFORM_PACKAGES: Record<string, string> = {
   "darwin arm64": "@solid-gpui/helper-darwin-arm64",
   "darwin x64": "@solid-gpui/helper-darwin-x64",
+  // Built by the gui-evidence/release pipelines; the optionalDependencies
+  // pins flip on at the first successful npm publish of each package (a pin
+  // to a non-existent package would break frozen installs everywhere).
+  "linux x64": "@solid-gpui/helper-linux-x64",
+  "win32 x64": "@solid-gpui/helper-windows-x64",
 }
 
 /** Injected seams so tests can fake env/fs/resolution/platform. */
@@ -55,7 +60,9 @@ export function resolveHelperBinary(deps: ResolveDeps): HelperResolution {
   if (pkg) {
     try {
       const pkgJson = deps.resolve(`${pkg}/package.json`, deps.moduleDir)
-      const bin = resolve(dirname(pkgJson), "solid-gpui-helper")
+      // Windows: cargo emits helper.exe, so the packaged bin name carries it.
+      const binName = deps.platform === "win32" ? "solid-gpui-helper.exe" : "solid-gpui-helper"
+      const bin = resolve(dirname(pkgJson), binName)
       if (deps.exists(bin)) return { path: bin, source: "platform-package" }
     } catch {
       // optionalDependencies may legitimately be absent (wrong-platform

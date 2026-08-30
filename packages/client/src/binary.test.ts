@@ -3,6 +3,7 @@
  * per-platform npm package, with actionable guidance when nothing resolves.
  */
 import { describe, expect, test } from "bun:test"
+import { resolve } from "node:path"
 import { resolveHelperBinary } from "./binary"
 
 const fakeDeps = (over: Partial<Parameters<typeof resolveHelperBinary>[0]> = {}) => ({
@@ -83,6 +84,37 @@ describe("resolveHelperBinary", () => {
     expect(r).toEqual({ path: "/repo/target/debug/solid-gpui-helper.exe", source: "dev-target" })
   })
 
+  test("Linux x64 maps to the helper-linux-x64 platform package", () => {
+    const r = resolveHelperBinary(
+      fakeDeps({
+        platform: "linux",
+        arch: "x64",
+        resolve: (spec: string) => spec,
+        exists: (p) => p.includes("@solid-gpui/helper-linux-x64") && p.endsWith("/solid-gpui-helper"),
+      }),
+    )
+    expect(r.source).toBe("platform-package")
+    if (r.source === "platform-package") {
+      expect(r.path).toContain("@solid-gpui/helper-linux-x64")
+    }
+  })
+
+  test("win32 x64 maps to the helper-windows-x64 package and its .exe bin", () => {
+    const r = resolveHelperBinary(
+      fakeDeps({
+        platform: "win32",
+        arch: "x64",
+        resolve: (spec: string, from: string) => resolve(from, spec),
+        exists: (p) => p.includes("@solid-gpui/helper-windows-x64") && p.endsWith("solid-gpui-helper.exe"),
+      }),
+    )
+    expect(r.source).toBe("platform-package")
+    if (r.source === "platform-package") {
+      expect(r.path).toContain("@solid-gpui/helper-windows-x64")
+      expect(r.path.endsWith("solid-gpui-helper.exe")).toBe(true)
+    }
+  })
+
   test("platform package is used when dev target is absent (end-user flow)", () => {
     const r = resolveHelperBinary(
       fakeDeps({
@@ -123,15 +155,17 @@ describe("resolveHelperBinary", () => {
     )
     expect(r).toEqual({ path: "/built/from/source", source: "env" })
 
+    // linux x64 is a supported platform now; use a genuinely unsupported one
+    // for the no-prebuilt-package guidance.
     const err = (() => {
       try {
-        resolveHelperBinary(fakeDeps({ platform: "linux", arch: "x64" }))
+        resolveHelperBinary(fakeDeps({ platform: "sunos", arch: "x64" }))
         return null
       } catch (e) {
         return e as Error
       }
     })()
-    expect(err?.message).toContain("linux-x64")
+    expect(err?.message).toContain("sunos-x64")
     expect(err?.message).toContain("no prebuilt helper")
   })
 })

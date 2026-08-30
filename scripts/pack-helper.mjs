@@ -28,17 +28,23 @@ if (!values.target || !values.binary) {
 }
 
 const target = values.target
-const os = target.startsWith("darwin") ? "darwin" : target.split("-")[0]
+const os = target.startsWith("darwin")
+  ? "darwin"
+  : target.startsWith("windows")
+    ? "win32"
+    : target.split("-")[0]
 const cpu = target.endsWith("arm64") ? "arm64" : "x64"
 // Whitelist: an unknown target must fail loudly, not silently publish a
 // wrong-cpu package (a typo'd or future matrix row).
-if (!/^(darwin)-(arm64|x64)$/.test(target)) {
+if (!/^(darwin|linux|windows)-(arm64|x64)$/.test(target)) {
   console.error(
-    `pack-helper: unsupported target "${target}". Known: darwin-arm64, darwin-x64. ` +
+    `pack-helper: unsupported target "${target}". Known: darwin-arm64, darwin-x64, linux-x64, windows-x64. ` +
       `Add the target to PLATFORM_PACKAGES-style whitelists deliberately (helper os/cpu here, client optionalDependencies, check-release).`,
   )
   process.exit(2)
 }
+// Windows: cargo emits helper.exe; the packaged bin name carries it.
+const binName = target.startsWith("windows") ? "solid-gpui-helper.exe" : "solid-gpui-helper"
 // Single-file Mach-O: the binary IS the payload; gzip saved <40% on a
 // release build and cost us a runtime decompress step.
 const version = values.version ?? "0.1.0"
@@ -46,11 +52,11 @@ const outDir = resolve(values.out ?? "dist/pack", `helper-${target}`)
 
 const rootPkg = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8"))
 mkdirSync(outDir, { recursive: true })
-copyFileSync(resolve(values.binary), resolve(outDir, "solid-gpui-helper"))
+copyFileSync(resolve(values.binary), resolve(outDir, binName))
 // Gate 4: the packaged sidecar MUST be executable regardless of the source
 // file's mode — a non-exec helper would only fail at first launch on a user
 // machine (release.yml smokes the packaged binary to keep this honest).
-chmodSync(resolve(outDir, "solid-gpui-helper"), 0o755)
+chmodSync(resolve(outDir, binName), 0o755)
 
 const pkg = {
   name: `@solid-gpui/helper-${target}`,
@@ -59,7 +65,7 @@ const pkg = {
   license: rootPkg.license,
   os: [os],
   cpu: [cpu],
-  files: ["solid-gpui-helper"],
+  files: [binName],
 }
 writeFileSync(resolve(outDir, "package.json"), JSON.stringify(pkg, null, 2) + "\n")
 

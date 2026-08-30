@@ -121,6 +121,24 @@ first precisely so the bundle seal covers it.
   (diagnostics channel) plus the app's own stdout correlation ids; report
   the helper `helperVersion` from `getStats` with any ticket.
 
+## Linux and Windows platform packages
+
+The helper builds for `linux-x64` and `windows-x64` and the release pipeline
+packs them like the macOS ones (`@solid-gpui/helper-linux-x64`,
+`@solid-gpui/helper-windows-x64`). Two honest caveats:
+
+- **Linux needs system libraries at runtime.** The npm package ships the
+  binary only; the helper links fontconfig, xkbcommon (+x11), EGL/GBM,
+  and (for the wayland backend) the wayland/scanner libraries. On Debian/Ubuntu:
+  `apt-get install libfontconfig1 libxkbcommon0 libxkbcommon-x11-0 libegl1
+  libgbm1 libwayland-client0` (plus the `-dev` set when building from source).
+  Gate the app's Linux claim on those being present (see ROADMAP, hosted
+  GUI evidence).
+- **Windows binaries are unsigned.** SmartScreen will warn on first launch
+  until the project holds a code-signing certificate (the macOS signing
+  section above is the same story). The client resolves the packaged
+  `solid-gpui-helper.exe` automatically on `win32`.
+
 ## Explicitly not yet
 
 - Windows/Linux app packaging: waits on hosted **GUI** runtime evidence per

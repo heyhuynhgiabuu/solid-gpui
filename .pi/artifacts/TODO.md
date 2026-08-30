@@ -1128,3 +1128,26 @@ window smokes on hosted runners, continue-on-error while evidence collects.
    tooling or deeper gpui_linux reading). Recorded in ROADMAP item 1.
 3. [x] Windows dev-target .exe resolution bug fixed in the client
    (binary.ts, regression-tested) — found by this job.
+
+### 2026-08-30 - ROADMAP item 2: Linux/Windows helper packaging readiness
+status: partial (code ready; pins flip at first publish)
+
+1. [x] pack-helper whitelist + os/cpu mapping for linux-x64 and windows-x64
+   (Windows package ships solid-gpui-helper.exe); verified by running the
+   packer for both targets.
+2. [x] release.yml helper matrix += linux-x64 (ubuntu-24.04 + the same apt
+   set the ci/gui jobs proved) and windows-x64 (windows-latest).
+3. [x] client binary.ts: PLATFORM_PACKAGES += linux x64 / win32 x64, and the
+   platform-package bin name carries .exe on win32 (regression-tested, plus
+   the "unsupported platform" guidance test moved to a genuinely unsupported
+   platform).
+4. [ ] DELIBERATE: client optionalDependencies pins and check-release
+   helperTargets stay darwin-only until the first npm publish of the
+   linux/windows helper packages — a pin to a non-existent package breaks
+   every frozen install. Flip both at first publish (release.yml publishes
+   platform packages FIRST by design).
+5. [ ] Release matrix rows are untested until the first v* tag (publish is
+   validation-only without NPM_TOKEN); the gui-evidence job proves the
+   builds on all three OSes in debug today.
+6. [x] docs/packaging.md: Linux system-library requirements, unsigned
+   Windows note, Windows .exe resolution note.
