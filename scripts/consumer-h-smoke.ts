@@ -26,9 +26,11 @@ import { dirname, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..")
-const helperPath = process.env.SOLID_GPUI_HELPER ?? resolve(root, "target/debug/solid-gpui-helper")
 const harnessPath = resolve(root, "tests/consumer-h/harness.ts")
 
+// Windows: cargo emits helper.exe; resolve the sibling before the pre-flight.
+let helperPath = process.env.SOLID_GPUI_HELPER ?? resolve(root, "target/debug/solid-gpui-helper")
+if (!existsSync(helperPath) && existsSync(`${helperPath}.exe`)) helperPath = `${helperPath}.exe`
 if (!existsSync(helperPath)) {
   throw new Error(`helper binary is missing: ${helperPath}; run cargo build -p solid-gpui-helper`)
 }

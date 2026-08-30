@@ -39,9 +39,12 @@ tree-sitter-yaml = "=0.7.2"
 tree-sitter-css = "=0.25.0"
 tree-sitter-html = "=0.23.2"
 # macOS: Metal is always available; font-kit enables real glyph rasterization.
-# Linux (Phase 2+): switch to features = ["wayland", "x11"].
+# Linux: x11 (Xvfb/Xorg) + wayland backends; the features are inert on macOS
+# (gpui_platform target-gates the Linux dependencies internally).
 gpui_platform = { git = "https://github.com/zed-industries/zed", features = [
     "font-kit",
+    "wayland",
+    "x11",
 ] }
 
 [dev-dependencies]

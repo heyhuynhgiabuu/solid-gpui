@@ -24,13 +24,15 @@ import { dirname, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..")
-const helperPath = process.env.SOLID_GPUI_HELPER ?? resolve(root, "target/debug/solid-gpui-helper")
 const harnessPath = resolve(root, "tests/gate3-gui/overlay-harness.ts")
 
 if (process.env.SOLID_GPUI_GATE3_GUI !== "1") {
   console.log("GATE3 GUI SMOKE SKIPPED — set SOLID_GPUI_GATE3_GUI=1 with a window server to run it")
   process.exit(0)
 }
+// Windows: cargo emits helper.exe; resolve the sibling before the pre-flight.
+let helperPath = process.env.SOLID_GPUI_HELPER ?? resolve(root, "target/debug/solid-gpui-helper")
+if (!existsSync(helperPath) && existsSync(`${helperPath}.exe`)) helperPath = `${helperPath}.exe`
 if (!existsSync(helperPath)) {
   throw new Error(`helper binary is missing: ${helperPath}; run cargo build -p solid-gpui-helper`)
 }
