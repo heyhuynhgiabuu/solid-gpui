@@ -67,7 +67,8 @@ jobs:
             libgbm-dev \
             libpipewire-0.3-dev \
             libspa-0.2-dev \
-            libclang-dev
+            libclang-dev \
+            libfontconfig1-dev
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy, rustfmt
@@ -144,8 +145,8 @@ jobs:
             libspa-0.2-dev \
             libclang-dev \
             libfontconfig1-dev \
-            libxkbcommon0 \
-            libxkbcommon-x11-0 \
+            libxkbcommon-dev \
+            libxkbcommon-x11-dev \
             libxcb-cursor0 \
             libgl1 \
             xvfb
