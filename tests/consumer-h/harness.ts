@@ -119,7 +119,8 @@ try {
     // so poll like the helper's own window tests instead of trusting one
     // macrotask turn (bounded: ~2s worst case, settles in one turn normally).
     let settled = false
-    for (let attempt = 0; attempt < 40 && !settled; attempt++) {
+    // 6s budget for slow CI runners (early exit on the first settling poll).
+    for (let attempt = 0; attempt < 240 && !settled; attempt++) {
       await new Promise<void>((resolve) => setTimeout(resolve, 25))
       await handle.renderer.flush()
       settled =

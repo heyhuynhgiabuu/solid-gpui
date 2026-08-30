@@ -41,8 +41,14 @@ export function resolveHelperBinary(deps: ResolveDeps): HelperResolution {
   const production = deps.env["SOLID_GPUI_NO_DEV_FALLBACK"] === "1"
 
   // 2. Monorepo dev target: no npm packages needed while developing here.
-  const devPath = resolve(deps.moduleDir, "../../../target/debug/solid-gpui-helper")
-  if (!production && deps.exists(devPath)) return { path: devPath, source: "dev-target" }
+  // Windows: cargo emits solid-gpui-helper.exe; try the sibling when the
+  // extension-less path is absent so a Windows checkout resolves like macOS.
+  const devBase = resolve(deps.moduleDir, "../../../target/debug/solid-gpui-helper")
+  if (!production) {
+    if (deps.exists(devBase)) return { path: devBase, source: "dev-target" }
+    const devExe = `${devBase}.exe`
+    if (deps.exists(devExe)) return { path: devExe, source: "dev-target" }
+  }
 
   // 3. Prebuilt platform package (end users; optionalDependencies).
   const pkg = PLATFORM_PACKAGES[`${deps.platform} ${deps.arch}`]
@@ -64,7 +70,7 @@ export function resolveHelperBinary(deps: ResolveDeps): HelperResolution {
       ]
     : [
         `SOLID_GPUI_HELPER env override`,
-        devPath,
+        `${devBase} (or ${devBase}.exe on Windows)`,
         pkg ? `${pkg} (optional dependency)` : `no prebuilt helper for ${deps.platform}-${deps.arch}`,
       ]
   const fix = production

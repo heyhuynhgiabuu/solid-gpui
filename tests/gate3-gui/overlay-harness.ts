@@ -73,7 +73,9 @@ const contentIdOf = (afterBatch: number): number | undefined =>
  * mutations flow from the GPUI main thread — cross-pipe ordering is not
  * guaranteed, so wait like the helper's own window tests do. */
 async function until(flush: () => Promise<void>, predicate: () => boolean, label: string): Promise<void> {
-  for (let attempt = 0; attempt < 120 && !predicate(); attempt++) {
+  // 12s budget: CI runners are slower than a dev machine; the loop exits on
+  // the first satisfying flush, so local runs keep their single-poll speed.
+  for (let attempt = 0; attempt < 480 && !predicate(); attempt++) {
     await new Promise<void>((resolve) => setTimeout(resolve, 25))
     await flush()
   }

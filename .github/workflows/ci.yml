@@ -1,9 +1,13 @@
 # CI for solid-gpui.
 #
-# The headless helper tests run on Linux, Windows, and macOS. Real-window
-# suites remain GUI-gated: they need a desktop session and stay covered by
-# local macOS runs without weakening the platform-independent gates below.
-# TypeScript suites are platform-independent and run on Linux.
+# The headless helper tests run on Linux, Windows, and macOS. TypeScript
+# suites are platform-independent and run on Linux.
+#
+# gui-evidence drives the real-window smokes on hosted runners with a window
+# server (macOS WindowServer; Linux under Xvfb; Windows desktop session). It
+# runs with continue-on-error while evidence is being collected: a red job
+# means "not yet claimed", not "broken main". Per-OS support badges are
+# recorded in ROADMAP.md only after these jobs pass.
 
 name: ci
 
@@ -105,3 +109,53 @@ jobs:
       - run: bunx tsx scripts/node-smoke.ts
       - run: bun run smoke:consumer-jsx
       - run: bun run smoke:consumer-h
+
+  gui-evidence:
+    name: gui-evidence (${{ matrix.os == 'macos-14' && 'macOS' || matrix.os == 'ubuntu-latest' && 'Linux, Xvfb' || 'Windows' }})
+    runs-on: ${{ matrix.os }}
+    continue-on-error: true
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-14, ubuntu-latest, windows-latest]
+    env:
+      SOLID_GPUI_SKIP_GUI_TESTS: "1"
+      SOLID_GPUI_GATE0_GUI: "1"
+      SOLID_GPUI_GATE3_GUI: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Install GPUI Linux build dependencies + Xvfb
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential \
+            pkg-config \
+            libwayland-dev \
+            libegl-dev \
+            libgbm-dev \
+            libpipewire-0.3-dev \
+            libspa-0.2-dev \
+            libclang-dev \
+            libfontconfig1-dev \
+            xvfb
+      - run: cargo build -p solid-gpui-helper
+      - run: bun install --frozen-lockfile
+      - name: consumer-h GUI smoke (real window)
+        if: runner.os != 'Linux'
+        run: bun run smoke:consumer-h
+      - name: consumer-h GUI smoke (real window, Xvfb)
+        if: runner.os == 'Linux'
+        run: xvfb-run -a bun run smoke:consumer-h
+      - name: gate3 overlay GUI smoke (real window)
+        if: runner.os != 'Linux'
+        run: bun run smoke:gate3-gui
+      - name: gate3 overlay GUI smoke (real window, Xvfb)
+        if: runner.os == 'Linux'
+        run: xvfb-run -a bun run smoke:gate3-gui

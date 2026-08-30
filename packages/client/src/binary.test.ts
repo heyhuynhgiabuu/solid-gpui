@@ -73,6 +73,16 @@ describe("resolveHelperBinary", () => {
     expect(r).toEqual({ path: "/repo/target/debug/solid-gpui-helper", source: "dev-target" })
   })
 
+  test("Windows dev target resolves the .exe sibling (cargo emits a .exe there)", () => {
+    const r = resolveHelperBinary(
+      fakeDeps({
+        platform: "win32",
+        exists: (p) => p === "/repo/target/debug/solid-gpui-helper.exe",
+      }),
+    )
+    expect(r).toEqual({ path: "/repo/target/debug/solid-gpui-helper.exe", source: "dev-target" })
+  })
+
   test("platform package is used when dev target is absent (end-user flow)", () => {
     const r = resolveHelperBinary(
       fakeDeps({
