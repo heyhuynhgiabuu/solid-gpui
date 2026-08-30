@@ -169,4 +169,4 @@ jobs:
         # A window manager is required for focus-transfer semantics: a bare
         # Xvfb display never focuses the window, so the overlay autofocus
         # never fires. openbox is the smallest honest stand-in.
-        run: xvfb-run -a bash -lc 'openbox & exec bun run smoke:gate3-gui' 
+        run: xvfb-run -a bash -lc 'openbox & sleep 2; exec bun run smoke:gate3-gui' 
