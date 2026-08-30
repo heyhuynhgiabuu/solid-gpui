@@ -60,14 +60,23 @@ The order is risk/dependency order, not strict priority: distribution needs
 may pull a later item earlier. Do not spend time on polish while a **no-go**
 gap remains open.
 
-### 1. Hosted per-OS GUI evidence
+### 1. Hosted per-OS GUI evidence (job live; Linux gate3 focus open)
 
-Hosted CI today runs headless tests on Linux and Windows; real-window
-behavior is only proven locally on macOS. Add hosted jobs that drive the
-existing window smokes (`smoke:gate3-gui`, `smoke:consumer-h`) on runners with
-a window server (macOS runners have one; Linux needs Xvfb; Windows desktop
-sessions look viable). A platform gets a support badge only after this —
-headless green is never presented as GUI proof.
+The `gui-evidence` CI job now drives the real-window smokes on hosted
+runners. Status (2026-08-30):
+
+- **macOS: passing.** Full window smokes green on hosted runners.
+- **Windows: passing.** First hosted Windows GUI run succeeded outright
+  (after fixing Windows helper.exe resolution in the dev-target chain).
+- **Linux: partially passing.** `smoke:consumer-h` passes under Xvfb; the
+  gate3 overlay smoke times out waiting for focus transfer into the overlay
+  even with a window manager (openbox) running — a real gpui-linux focus
+  behavior difference to dig into, not a CI config issue.
+
+The job runs `continue-on-error` until all three OSes pass consistently; a
+red job means "not yet claimed", never "broken main". A platform gets a
+support badge only after this job is green and stable — headless green is
+never presented as GUI proof.
 
 ### 2. Linux and Windows packaging
 

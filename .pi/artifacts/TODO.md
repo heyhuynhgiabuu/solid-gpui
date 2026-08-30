@@ -1113,3 +1113,18 @@ Follow-up to the floem/gpui-component research and the A/B/C decision
    feature-delta table vs lxsmnsyc/solid-gpui (both directions, dated).
    README + ROADMAP links. Review pass 1 NOT MERGEABLE (helper leak major,
    root leak, mock-click re-fire, Dynamic coverage gap) - all fixed.
+
+### 2026-08-30 - ROADMAP item 1: hosted per-OS GUI evidence job
+status: partial
+
+The gui-evidence CI job (macOS/Linux-Xvfb/Windows matrix) now runs the real
+window smokes on hosted runners, continue-on-error while evidence collects.
+
+1. [x] Job live; macOS PASS, Windows PASS (first hosted Windows GUI run;
+   fixed Windows helper.exe dev-target resolution + smoke pre-flights),
+   Linux consumer-h PASS under Xvfb.
+2. [ ] Linux gate3 overlay focus transfer times out under Xvfb+openbox —
+   real gpui-linux focus difference, needs its own slice (local Linux
+   tooling or deeper gpui_linux reading). Recorded in ROADMAP item 1.
+3. [x] Windows dev-target .exe resolution bug fixed in the client
+   (binary.ts, regression-tested) — found by this job.
