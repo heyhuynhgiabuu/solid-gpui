@@ -68,7 +68,9 @@ jobs:
             libpipewire-0.3-dev \
             libspa-0.2-dev \
             libclang-dev \
-            libfontconfig1-dev
+            libfontconfig1-dev \
+            libxkbcommon-dev \
+            libxkbcommon-x11-dev
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy, rustfmt
@@ -149,7 +151,8 @@ jobs:
             libxkbcommon-x11-dev \
             libxcb-cursor0 \
             libgl1 \
-            xvfb
+            xvfb \
+            openbox
       - run: cargo build -p solid-gpui-helper
       - run: bun install --frozen-lockfile
       - name: consumer-h GUI smoke (real window)
@@ -161,6 +164,9 @@ jobs:
       - name: gate3 overlay GUI smoke (real window)
         if: runner.os != 'Linux'
         run: bun run smoke:gate3-gui
-      - name: gate3 overlay GUI smoke (real window, Xvfb)
+      - name: gate3 overlay GUI smoke (real window, Xvfb + openbox)
         if: runner.os == 'Linux'
-        run: xvfb-run -a bun run smoke:gate3-gui
+        # A window manager is required for focus-transfer semantics: a bare
+        # Xvfb display never focuses the window, so the overlay autofocus
+        # never fires. openbox is the smallest honest stand-in.
+        run: xvfb-run -a bash -lc 'openbox & exec bun run smoke:gate3-gui' 
