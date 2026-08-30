@@ -60,23 +60,23 @@ The order is risk/dependency order, not strict priority: distribution needs
 may pull a later item earlier. Do not spend time on polish while a **no-go**
 gap remains open.
 
-### 1. Hosted per-OS GUI evidence (job live; Linux gate3 focus open)
+### 1. Hosted per-OS GUI evidence (job live; all three OSes green once)
 
-The `gui-evidence` CI job now drives the real-window smokes on hosted
-runners. Status (2026-08-30):
+The `gui-evidence` CI job drives the real-window smokes on hosted runners.
+Status (2026-08-30):
 
-- **macOS: passing.** Full window smokes green on hosted runners.
-- **Windows: passing.** First hosted Windows GUI run succeeded outright
-  (after fixing Windows helper.exe resolution in the dev-target chain).
-- **Linux: partially passing.** `smoke:consumer-h` passes under Xvfb; the
-  gate3 overlay smoke times out waiting for focus transfer into the overlay
-  even with a window manager (openbox) running — a real gpui-linux focus
-  behavior difference to dig into, not a CI config issue.
+- **macOS: green** on every run.
+- **Windows: green** on every run (first hosted Windows GUI run succeeded
+  outright, after fixing helper.exe dev-target resolution).
+- **Linux: green once** (consumer-h under Xvfb; gate3 overlay under
+  Xvfb + openbox). One earlier run timed out on focus transfer — treat
+  Linux as green-but-watch: it stays in continue-on-error until stable
+  across several runs.
 
-The job runs `continue-on-error` until all three OSes pass consistently; a
-red job means "not yet claimed", never "broken main". A platform gets a
-support badge only after this job is green and stable — headless green is
-never presented as GUI proof.
+The job keeps `continue-on-error` until Linux is consistently green; a red
+job means "not yet claimed", never "broken main". A platform gets a support
+badge only after this job is green and stable — headless green is never
+presented as GUI proof.
 
 ### 2. Linux and Windows packaging
 
