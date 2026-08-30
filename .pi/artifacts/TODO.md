@@ -1121,3 +1121,26 @@ delivered in chat; per user request the research itself is NOT recorded here).
 4. [ ] ROADMAP infra notes when relevant: gpui is now on crates.io (0.2.2);
    migration from the pinned zed git rev is a real future path; agent-skills/
    llms.txt style consumer docs once there are consumers.
+
+### 2026-08-29 - README/ROADMAP rewrite (pi-style OSS docs)
+status: done
+
+User asked to rewrite both docs simpler, learning from earendil-works/pi's
+OSS style (one-line pitch, quickstart-first, plain language, explicit
+non-goals, details pushed to docs/).
+
+1. [x] README: 328 → 207 lines, zero internal gate codes (S14/P9/P11/Gate-N
+   decoded to plain words). Order: pitch + diagram → status → quickstart
+   (npm path) → the SSR trap → why-this-exists → what-works (one section
+   with the four feature snippets instead of five scattered gate-narrative
+   sections) → how-it-works → trust boundary → version compat → packages →
+   development commands → docs table → limitations. All facts kept: helper
+   resolution order, Babel config, engines, poison semantics, macOS-only
+   helpers, compaction-not-adopted.
+2. [x] ROADMAP: 396 → 139 lines. North star + works-today/direction/not-yet
+   kept; "Done" merged with the old evidence prose (human-in-the-loop probe
+   included); "Next" reduced to five ordered items (hosted per-OS GUI
+   evidence, Linux/Windows packaging, signing/clean-machine, first real
+   consumer, deferred-by-evidence); guardrails and version pins kept;
+   research links kept. Cross-references checked (no doc linked into
+   removed README anchors).
