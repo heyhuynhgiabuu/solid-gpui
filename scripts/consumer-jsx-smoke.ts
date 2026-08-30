@@ -51,14 +51,14 @@ if (!generated) throw new Error("Solid Babel transform returned no generated mod
 const tempRoot = resolve(root, ".pi/review-tmp")
 mkdirSync(tempRoot, { recursive: true })
 const tempDir = mkdtempSync(join(tempRoot, "consumer-jsx-"))
-const generatedPath = join(tempDir, "fixture.mjs")
+const generatedPath = join(tempDir, "fixture.mts")
 const harnessPath = join(tempDir, "harness.mjs")
 writeFileSync(generatedPath, generated)
 writeFileSync(
   harnessPath,
   `import { spawnHelper } from "@solid-gpui/client";
 import { mountJsx } from "@solid-gpui/solid/jsx";
-import { App, setLabel } from ${JSON.stringify(pathToFileURL(generatedPath).href)};
+import { App, setLabel, setPane } from ${JSON.stringify(pathToFileURL(generatedPath).href)};
 
 const connection = spawnHelper({ binary: ${JSON.stringify(helperPath)}, mode: "transport" });
 const sent = [];
@@ -75,12 +75,25 @@ try {
   if (initialCount === 0) throw new Error("compiled JSX produced no initial helper batch");
 
   setLabel("updated");
+  setPane("notes");
   await new Promise((resolve) => setTimeout(resolve, 0));
   await handle.renderer.flush();
   const updateBatches = sent.slice(initialCount);
   const updateOps = updateBatches.flatMap((batch) => batch.mutations.map((mutation) => mutation.op));
   if (sent.length <= initialCount || !updateOps.includes("setText")) {
     throw new Error(JSON.stringify({ initialCount, sendCount: sent.length, updateOps }));
+  }
+  // <Dynamic> swap: the NotesPane subtree must arrive as new nodes after the
+  // component identity flips (compiled accessor unwrap through insert).
+  const updateTexts = updateBatches
+    .flatMap((batch) => batch.mutations)
+    .filter((m) => m.op === "setText")
+    .map((m) => ("text" in m ? m.text : ""));
+  if (!updateTexts.some((t) => t.includes("notes pane"))) {
+    throw new Error("Dynamic pane swap did not render NotesPane: " + JSON.stringify(updateTexts));
+  }
+  if (!updateOps.includes("removeChild")) {
+    throw new Error("Dynamic swap should detach the previous pane: " + JSON.stringify(updateOps));
   }
   console.log(JSON.stringify({ initialCount, updateBatches: updateBatches.length, updateOps }));
 } finally {

@@ -16,6 +16,7 @@
 import { Show, For, Switch, Match, createMemo } from "solid-js"
 import { createSolidRenderer, type HostNode } from "./renderer"
 import { mount } from "./render"
+import { assertReactivityLive } from "./reactivity-canary"
 import type { RenderHandle, RenderOptions } from "./render"
 export type { RenderOptions } from "./render"
 import type { Send } from "./renderer"
@@ -71,6 +72,9 @@ export async function mountJsx(
   code: () => JSX.Element,
   opts: RenderOptions = {},
 ): Promise<RenderHandle> {
+  // Check reactivity BEFORE spawning: a canary throw must not leak a helper
+  // process the caller never received a handle for.
+  await assertReactivityLive()
   const connection = opts.connection ?? spawnHelper({ mode: "window" })
   // A mounted root must be a HostNode at runtime. JSX's public element type
   // also includes component/flow values and primitives for child positions;
@@ -142,3 +146,59 @@ export function createComponent(comp: unknown, props: unknown): unknown {
 // Flow components are renderer-agnostic: re-exported from solid-js so the
 // compiler plugin's builtIns imports resolve from this module.
 export { Show, For, Switch, Match, createMemo as memo }
+
+/**
+ * Universal `<Dynamic>`: render whichever component or intrinsic tag
+ * `component` currently names —
+ * `<Dynamic component={() => kind() === "a" ? A : B} prop={x()} />`.
+ * Solid's core has no universal Dynamic, so this lives here.
+ *
+ * Ported from lxsmnsyc/solid-gpui (MIT), packages/solid-gpui/src/index.ts —
+ * the accessor-returning shape is what the universal insert path unwraps.
+ * Per-key getters in `rest` keep prop reads reactive across component swaps,
+ * and the intrinsic-tag branch re-applies props through a tracked effect.
+ */
+export interface DynamicProps {
+  /** A component function, or the tag name of an intrinsic element. */
+  readonly component: string | ((props: Record<string, unknown>) => JSX.Element)
+  readonly children?: unknown
+  [key: string]: unknown
+}
+
+export function Dynamic(props: DynamicProps): JSX.Element {
+  const rest: Record<string, unknown> = {}
+  for (const key of Object.keys(props)) {
+    if (key === "component") continue
+    Object.defineProperty(rest, key, {
+      get: () => props[key],
+      enumerable: true,
+      configurable: true,
+    })
+  }
+  // An accessor on purpose: the universal insert unwraps functions, so a
+  // component-identity swap re-renders through the normal insert path.
+  return (() => {
+    const component = props.component
+    if (typeof component === "function") {
+      return createComponent(component, rest) as JSX.Element
+    }
+    const element = createElement(component)
+    const keys = Object.keys(rest).filter((key) => key !== "children")
+    effect(
+      () => {
+        const snapshot: Record<string, unknown> = {}
+        for (const key of keys) snapshot[key] = rest[key]
+        return snapshot
+      },
+      (snapshot: Record<string, unknown>) => {
+        for (const [key, value] of Object.entries(snapshot)) setProp(element, key, value)
+      },
+    )
+    const children = rest.children
+    if (children !== undefined && children !== null) {
+      const nodes = Array.isArray(children) ? children : [children]
+      for (const node of nodes) insertNode(element, node as HostNode)
+    }
+    return element
+  }) as unknown as JSX.Element
+}

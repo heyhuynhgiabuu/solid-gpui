@@ -178,7 +178,14 @@ cargo clippy --all-targets && cargo fmt --all -- --check
 Window-smoke checks need a real display and a built helper; without one they
 print a skip note (`SOLID_GPUI_GATE3_GUI=1 bun run smoke:gate3-gui`,
 `SOLID_GPUI_GATE0_GUI=1 bun run smoke:consumer-h`). The manual
-real-keyboard/IME probe is `bun run probe:keyboard`.
+real-keyboard/IME probe is `bun run probe:keyboard`. For component work
+without a Rust toolchain, point the helper env at the mock host — it speaks
+the same protocol, validates through the same decoders, and prints the tree:
+
+```sh
+SOLID_GPUI_HELPER=$PWD/scripts/mock-host.mjs \
+  SOLID_GPUI_MOCK_DUMP=1 bun --conditions=browser run app.ts
+```
 
 ## Documentation
 
@@ -187,6 +194,7 @@ real-keyboard/IME probe is `bun run probe:keyboard`.
 | [docs/packaging.md](./docs/packaging.md) | App distribution, sidecar helper, version pairing, signing, diagnostics, update/rollback |
 | [docs/performance.md](./docs/performance.md) | Dated benchmark baselines across all boundaries; measurement policy |
 | [docs/tailwind-subset.md](./docs/tailwind-subset.md) | The exact class matrix `class` accepts |
+| [docs/comparison.md](./docs/comparison.md) | Positioning vs Tauri/Floem/gpui-shell and the closest sibling project |
 | [ROADMAP.md](./ROADMAP.md) | What is done, what is next, what will not happen |
 | [AGENTS.md](./AGENTS.md) | Project invariants and contribution rules (humans and agents) |
 

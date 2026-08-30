@@ -89,7 +89,11 @@ execution is blocked on credentials).
 Every prior item exists so that an actual application can adopt this stack.
 The honest priority: put it in front of one real project, and let its
 requirements — not speculation — pick the next work items (multi-window?
-more widgets? other platforms?).
+more widgets? other platforms?). A feature-by-feature comparison with the
+closest sibling implementation (MIT) and the wider ecosystem lives in
+[docs/comparison.md](./docs/comparison.md); it is also the list of borrowed
+ideas worth re-checking there (drag & drop, window options, a bundler-native
+compiler export).
 
 ### 5. Deferred by evidence, not by forgetting
 

@@ -22,6 +22,7 @@ const bindShell = (c: CommandChannel) => ({
 })
 import { createSolidRenderer, type HostNode, type SolidGpuiRenderer } from "./renderer"
 import { makeH, type H } from "./h"
+import { assertReactivityLive } from "./reactivity-canary"
 
 export interface RenderOptions {
   /** Reuse an existing connection (e.g. across bun --hot remounts). */
@@ -66,6 +67,9 @@ export async function render(
   code: (h: H) => HostNode,
   opts: RenderOptions = {},
 ): Promise<RenderHandle> {
+  // Check reactivity BEFORE spawning: a canary throw must not leak a helper
+  // process the caller never received a handle for.
+  await assertReactivityLive()
   const connection = opts.connection ?? spawnHelper({ mode: "window" })
   return mount(connection, {}, code)
 }
@@ -87,6 +91,7 @@ export async function mount(
       // Route through the client's per-seq correlation; ReplyError propagates.
       return connection.sendBatch(batch)
     })
+  void options
   const suite: SolidGpuiRenderer = {
     renderer,
     render,

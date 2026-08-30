@@ -1,4 +1,5 @@
 export { createSolidRenderer } from "./renderer"
+export { Dynamic, type DynamicProps } from "./jsx"
 export type { HostNode, Send, SolidGpuiRenderer } from "./renderer"
 export type { JSX, GpuiElementEvent, GpuiEventHandler, GpuiKeyBindings } from "./jsx-runtime"
 export { render } from "./render"

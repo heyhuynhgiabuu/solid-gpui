@@ -3053,5 +3053,55 @@
     "rawStatus": "failure",
     "resultValid": true,
     "completedAt": 1788018763145
+  },
+  {
+    "id": "mtf8feg3-2acb",
+    "agentType": "reviewer",
+    "description": "Review canary+Dynamic+mock-host slice",
+    "sessionName": "task-mtf8feg3-2acb",
+    "startedAt": 1788059451660,
+    "paneId": "w3:pHA",
+    "handle": {
+      "backend": "herdr",
+      "resourceId": "w3:pHA",
+      "socketPath": "/Users/huynhgiabuu/.config/herdr/herdr.sock",
+      "terminalId": "term_65a3b082055b645",
+      "agentName": "reviewer-mtf8feg3",
+      "foregroundProcessGroupId": 42264
+    },
+    "piDir": "/Users/huynhgiabuu/dev/projects/solid-gpui/.pi",
+    "dir": "/Users/huynhgiabuu/dev/projects/solid-gpui/.pi/artifacts/tasks",
+    "cwd": "/Users/huynhgiabuu/dev/projects/solid-gpui",
+    "status": "cancelled",
+    "background": true,
+    "reportedStatus": "unknown",
+    "rawStatus": "unknown",
+    "resultValid": false,
+    "completedAt": 1788060824879
+  },
+  {
+    "id": "mtf9aiel-2a8a",
+    "agentType": "reviewer",
+    "description": "Review canary Dynamic mock-host slice",
+    "sessionName": "task-mtf9aiel-2a8a",
+    "startedAt": 1788060902564,
+    "paneId": "w3:pHB",
+    "handle": {
+      "backend": "herdr",
+      "resourceId": "w3:pHB",
+      "socketPath": "/Users/huynhgiabuu/.config/herdr/herdr.sock",
+      "terminalId": "term_65a3b5ea23cb846",
+      "agentName": "reviewer-mtf9aiel",
+      "foregroundProcessGroupId": 46340
+    },
+    "piDir": "/Users/huynhgiabuu/dev/projects/solid-gpui/.pi",
+    "dir": "/Users/huynhgiabuu/dev/projects/solid-gpui/.pi/artifacts/tasks",
+    "cwd": "/Users/huynhgiabuu/dev/projects/solid-gpui",
+    "status": "done",
+    "background": true,
+    "reportedStatus": "failure",
+    "rawStatus": "failure",
+    "resultValid": true,
+    "completedAt": 1788061463166
   }
 ]

@@ -19,6 +19,7 @@ import {
   createComponent,
   Show,
   For,
+  Dynamic,
 } from "./jsx"
 import type { Mutation, MutationBatch } from "@solid-gpui/protocol"
 import type { Send } from "./renderer"
@@ -67,6 +68,41 @@ describe("jsx runtime bindings", () => {
         .filter((m): m is Extract<Mutation, { op: "setText" }> => m.op === "setText")
         .map((m) => m.text)
       expect(texts).toEqual(["# v1", "# v2"])
+    } finally {
+      resetJsxRuntime()
+    }
+  })
+
+  // The Dynamic component-swap branch (accessor unwrap through insert) is
+  // covered end-to-end by the compiled consumer-jsx smoke (Bun + Node, real
+  // helper): it flips a pane signal and asserts NotesPane text + removeChild.
+  // Raw-binding unit tests fight the compiler-owned insert semantics, so only
+  // the intrinsic-tag branch is unit-tested here.
+
+  test("Dynamic intrinsic tag branch inserts children and applies props", async () => {
+    const rec = recording()
+    const suite = initJsxRuntime(rec.send)
+    try {
+      const root = createElement("div")
+      insert(
+        root,
+        createComponent(Dynamic as never, {
+          component: "div",
+          style: { padding: 4 },
+          children: createTextNode("static pane"),
+        }),
+        null,
+        null,
+      )
+      await suite.flush()
+      const ops = rec.batches.flatMap((b) => b.mutations.map((m) => m.op))
+      expect(ops).toContain("setStyle")
+      expect(ops).toContain("appendChild")
+      const texts = rec.batches
+        .flatMap((b) => b.mutations)
+        .filter((m): m is Extract<Mutation, { op: "setText" }> => m.op === "setText")
+        .map((m) => m.text)
+      expect(texts).toContain("static pane")
     } finally {
       resetJsxRuntime()
     }

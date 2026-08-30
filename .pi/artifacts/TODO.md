@@ -543,68 +543,6 @@ r2 NOT MERGEABLE: tint fallback alpha-0; fixes c3b25a8+225d09a; r3 CLEAN)
       f32) vẫn invisible; fix = One Dark text OPAQUE hsla(221,.11,.86,1)
       khớp default hiệu lực của gpui (cite fallback_themes.rs). r3 CLEAN.
 
-### 2026-08-27 - Gate 4 runtime contract + sidecar packaging baseline
-status: done | updated: 2026-08-27
-
-Goal: close Gate 4's headlessly-verifiable half — a production helper-
-resolution guard, packaged-binary permission enforcement, declared runtime
-ranges, and the signing/packaging runbook — leaving hosted GUI evidence and
-cert-dependent signing as explicit user/hosted actions.
-
-#### Scope decisions (safe assumptions under AFK)
-
-- Production guard is opt-in via `SOLID_GPUI_NO_DEV_FALLBACK=1`, set by the
-  app launcher; library users keep the dev-target convenience untouched.
-- The explicit helper-path API (SOLID_GPUI_HELPER / spawnHelper binary) is the
-  sanctioned "launcher" contract; no bespoke bundle-layout resolver is added
-  until a concrete app layout exists (ROADMAP allows launcher OR API).
-- Declared runtimes: Bun ≥ 1.4, Node ≥ 20 (LTS 20/22/24 verified for the
-  client's node: APIs). engines fields are advisory.
-- Signing/notarization steps are documented for the user to run (certs are
-  user-held); release workflow keeps packaging + exec smoke as CI evidence.
-
-#### Slices
-
-1. Production resolution guard in binary.ts (RED first): skip dev target,
-   production-specific guidance error — verify: focused client tests
-2. pack-helper.mjs chmod 0o755 after copy — verify: script dry-run + release
-   workflow packaged-binary smoke as evidence
-3. engines fields + README runtime-declaration section
-4. docs/packaging.md runbook (bundle layout, launcher contract, signing,
-   upgrades, cleanup); full gates; independent review; close
-
-#### Verification
-
-- RED observed: the two production-guard tests failed before the binary.ts
-  change (dev target still won under the flag; error mentioned cargo).
-- `bun run test` 227 pass / 0 fail across 23 files; `bun run typecheck`,
-  `bun run check:release` (with the new engines field), and
-  `git diff --check` exited 0.
-- Pack evidence: `node scripts/pack-helper.mjs --target darwin-arm64
-  --binary target/debug/solid-gpui-helper` produced a packaged binary at mode
-  0755 (`.pi/review-tmp/g4-pack/`); the release workflow's existing packaged-
-  binary smoke remains the CI-side execution proof.
-- docs/packaging.md records the launcher contract (`SOLID_GPUI_HELPER` +
-  `SOLID_GPUI_NO_DEV_FALLBACK=1` before spawn), bundle layout, codesign/
-  notarytool steps with user-held certs, version pinning, and crash-cleanup
-  expectations; README declares Bun ≥ 1.4 / Node ≥ 20 and links it.
-- Remaining Gate 4 exit items are explicitly external: clean-machine launch
-  with user-signed artifacts and hosted Windows/Linux GUI evidence.
-
-#### Review outcome
-
-- Independent review (general agent, full envelope) returned `partial` with a
-  single [blocker]: engines lived only in the private root manifest, so the
-  published packages did not declare Node ≥ 20. Fixed by adding `engines:
-  {node: ">=20"}` to the client, solid, and protocol package manifests;
-  re-verified by repacking `@solid-gpui/client` and inspecting the staged
-  manifest (engines present), plus `check:release`, the full 227-test suite,
-  both consumer typechecks, and `git diff --check` — all green.
-- Reviewer-verified evidence carried into the record: guard tests 7/7
-  (binary.test.ts:31-90), chmod observed mode 755 on the packaged helper,
-  runbook accuracy (signing/clean-machine marked external), release smoke
-  path release.yml:89-92.
-
 ### 2026-08-27 - Gate 3-a pointer outside-click dismissal
 status: done | updated: 2026-08-27
 
@@ -1144,3 +1082,34 @@ non-goals, details pushed to docs/).
    consumer, deferred-by-evidence); guardrails and version pins kept;
    research links kept. Cross-references checked (no doc linked into
    removed README anchors).
+
+### 2026-08-30 - Pha B: borrow-the-best slice (canary, Dynamic, mock-host)
+status: done
+
+Follow-up to the floem/gpui-component research and the A/B/C decision
+(B now, A as goal, C on the table). All local, no protocol break.
+
+1. [x] Reactivity canary: assertReactivityLive() throws at render()/mountJsx()
+   BEFORE spawning when solid-js resolves to the non-reactive server build
+   (the SSR trap now self-diagnoses instead of relying on README readers or a
+   console.warn). Two-arg compute/effect form; server stub drops the effect
+   callback so runs stays 0. Verified against the REAL server and client
+   builds. Review major (helper leak on throw) fixed: canary runs BEFORE
+   spawn; canary root disposer now actually returned (root leak fixed).
+2. [x] Dynamic ported from lxsmnsyc/solid-gpui (MIT, attribution in-file +
+   THIRD_PARTY_NOTICES.md): accessor-returning swap, per-key reactive getters,
+   intrinsic-tag branch with tracked prop effect. Unit tests for the
+   intrinsic branch; component-swap branch covered by the compiled
+   consumer-jsx smoke.
+3. [x] Mock host (scripts/mock-host.mjs + tests): protocol-faithful
+   (decodes via @solid-gpui/protocol), mirror tree, getStats/dumpTree/
+   resetTree, unsupported elsewhere, MOCK_DUMP/MOCK_CLICK hooks (click fires
+   exactly once - regression-tested after review caught the re-fire), EOF
+   exit 0. Component work now possible with no Rust toolchain.
+4. [x] smoke:consumer-jsx latent bug fixed: generated fixture .mjs -> .mts
+   (babel parses TS but does not strip it; bun mis-stripped generics in .mjs
+   into comparison operators, "number is not iterable").
+5. [x] docs/comparison.md: positioning vs Tauri/Floem/gpui-shell and the
+   feature-delta table vs lxsmnsyc/solid-gpui (both directions, dated).
+   README + ROADMAP links. Review pass 1 NOT MERGEABLE (helper leak major,
+   root leak, mock-click re-fire, Dynamic coverage gap) - all fixed.
