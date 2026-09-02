@@ -7,6 +7,8 @@
 #
 # Requires repo secret NPM_TOKEN (automation, publish rights on @solid-gpui/*).
 # Without the secret the job validates everything and stops before publish.
+# Packages publish PRIVATE (npm restricted, ADR 008); going public later is a
+# deliberate flip documented in docs/packaging.md ("Package visibility").
 
 name: release
 
@@ -81,6 +83,12 @@ jobs:
     permissions:
       contents: read
       id-token: write
+    env:
+      # The secrets context is NOT available in step-level `if` expressions
+      # (the workflow fails to parse and GitHub marks every push run failed —
+      # including tag runs, which would kill the first real release). Job-level
+      # env MAY read secrets, so the gate lives here and steps branch on it.
+      NPM_PUBLISH_ENABLED: ${{ secrets.NPM_TOKEN != '' }}
     steps:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
@@ -113,7 +121,7 @@ jobs:
         env:
           SOLID_GPUI_HELPER: ${{ github.workspace }}/dist/pack/helper-darwin-arm64/solid-gpui-helper
       - name: Publish platform packages (must precede the TS packages)
-        if: ${{ secrets.NPM_TOKEN != '' }}
+        if: env.NPM_PUBLISH_ENABLED == 'true'
         run: |
           for d in dist/pack/helper-*; do
             (cd "$d" && npm publish --access public)
@@ -121,7 +129,7 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
       - name: Publish TS packages
-        if: ${{ secrets.NPM_TOKEN != '' }}
+        if: env.NPM_PUBLISH_ENABLED == 'true'
         run: |
           npm publish dist/pack/solid-gpui-protocol --access public
           npm publish dist/pack/solid-gpui-client --access public
@@ -129,5 +137,5 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
       - name: No NPM_TOKEN — validation-only
-        if: ${{ secrets.NPM_TOKEN == '' }}
+        if: env.NPM_PUBLISH_ENABLED != 'true'
         run: echo "NPM_TOKEN absent; everything built and validated, nothing published."
