@@ -22,6 +22,10 @@ bun add @solid-gpui/solid solid-js@2.0.0-rc.5   # or: npm i …
 bun add -d @solidjs/babel-plugin@2.0.0-rc.5 @babel/core
 ```
 
+Packages publish **private** (npm restricted) — installs need an invitation
+or token with access to the `@solid-gpui` scope
+([docs/packaging.md](./docs/packaging.md), "Package visibility").
+
 ```tsx
 import { mountJsx } from "@solid-gpui/solid/jsx"
 

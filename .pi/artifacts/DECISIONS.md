@@ -116,3 +116,23 @@ wire.
 **Consequence.** The S14b public primitives are JSX-runtime components with a
 controlled string value. Item identity/disabled state is static for this slice;
 outside-click dismissal and IME-composition arrow suppression remain deferred.
+
+### 2026-09-02 - Release hardening: private npm + workflow eval fix
+
+#### ADR 008: npm packages publish private (restricted)
+
+**Decision.** Every `@solid-gpui/*` package — the three TS packages and all
+helper platform packages — publishes with `--access restricted` for 0.1.0.
+
+**Why.** Prerelease API on a niche stack: private keeps the discovery
+surface minimal while the first real consumer (invite-based) drives
+requirements. Un-publishing or restricting after a public release is
+messier than the reverse flip, which is one registry setting plus one flag
+in release.yml.
+
+**Consequence.** Installs need scope access (registry invite or granular
+token); the publishing npm account needs a paid plan. README quickstart and
+docs/packaging.md state this so a stranger's E403 is self-explaining. The
+same commit that fixes release.yml also moves the NPM_TOKEN gate out of
+step-level `if` (secrets context is unreadable there — the workflow failed
+to parse on every push, so even a tagged run would have died at 0 s).

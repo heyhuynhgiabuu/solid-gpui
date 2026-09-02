@@ -45,6 +45,21 @@ MyApp.app/
 - The npm model (`@solid-gpui/helper-*` optionalDependencies) stays available
   for library users; an application bundle should ship the sidecar explicitly.
 
+## Package visibility (npm private by default)
+
+All `@solid-gpui/*` packages publish **private** (`--access restricted`,
+ADR 008) while the API is a prerelease and the audience is invite-only:
+
+- Installing requires npm auth with access to the `@solid-gpui` scope — an
+  org/user invite on the registry, or a granular token with read rights to
+  the packages. A stranger's `npm i @solid-gpui/solid` fails E403/E404 by
+  design.
+- Publishing restricted packages requires a paid npm plan on the publishing
+  account; the release secret's account must hold it or publish fails.
+- Going public later is a deliberate flip, not a default: change access on
+  the registry (package settings) and `--access restricted` → `--access
+  public` in `release.yml` in the same commit.
+
 ## Signing and notarization (macOS; user-held certificates)
 
 Prerequisites you must own: a Developer ID Application certificate and an

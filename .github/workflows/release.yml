@@ -124,16 +124,16 @@ jobs:
         if: env.NPM_PUBLISH_ENABLED == 'true'
         run: |
           for d in dist/pack/helper-*; do
-            (cd "$d" && npm publish --access public)
+            (cd "$d" && npm publish --access restricted)
           done
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
       - name: Publish TS packages
         if: env.NPM_PUBLISH_ENABLED == 'true'
         run: |
-          npm publish dist/pack/solid-gpui-protocol --access public
-          npm publish dist/pack/solid-gpui-client --access public
-          npm publish dist/pack/solid-gpui-solid --access public
+          npm publish dist/pack/solid-gpui-protocol --access restricted
+          npm publish dist/pack/solid-gpui-client --access restricted
+          npm publish dist/pack/solid-gpui-solid --access restricted
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
       - name: No NPM_TOKEN — validation-only
