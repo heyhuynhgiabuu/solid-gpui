@@ -1078,3 +1078,39 @@ package.json files in lockstep.
    known non-blocking noise).
 4. [x] ROADMAP + README versions to rc.5 (detailed diff rationale in this
    block; ROADMAP keeps the short version-pins form).
+
+### 2026-09-02 - Release hardening + local release dry-run
+status: done
+
+Goal: repo release-ready; the three user-held items (npm-token/tag, certs,
+consumer) are the only remaining gates. Two real defects found and fixed
+before any credential exists.
+
+1. [x] release.yml NEVER RAN: GitHub failed workflow eval on every push
+   (0 s failure, "workflow file issue") because `secrets` is unreadable in
+   step-level `if` — the first real tag would have died the same way.
+   Fix: job-level env `NPM_PUBLISH_ENABLED: ${{ secrets.NPM_TOKEN != '' }}`
+   (job env MAY read secrets); steps branch on `env.NPM_PUBLISH_ENABLED`.
+2. [x] npm private per user decision: both publish steps now
+   `--access restricted` (ADR 008 in DECISIONS.md). docs/packaging.md gains
+   "Package visibility" (E403 for strangers is by design; paid plan needed
+   on the publishing account; flip-to-public = registry setting + one flag).
+   README quickstart says installs need scope access.
+3. [x] TODO.md harness truncation restored (Gate 3-b block rebuilt from
+   HEAD before any of today's work; diff was a silent -68 lines).
+4. [x] LOCAL RELEASE DRY-RUN (all of release.yml minus publish):
+   fresh `cargo build --release` (release profile compiles current tree),
+   `pack:all` + pack-helper darwin-arm64, `check-release.mjs --tag v0.1.0`
+   OK, tarballs audited flat, then scratch E2E under real Node 24: npm
+   install from the four local tarballs, helper resolved via the platform
+   package (no env), mode 0755 preserved, getStats {helperVersion 0.1.0,
+   protocolVersion 1}, batch-01 ack seq 42 applied 12, exit 0.
+   (Scratch: ~/dev/scratch/release-dry-run — one path bug in MY override,
+   not in the pipeline; release.yml publishes dirs, not tgzs.)
+5. [ ] User-held: add NPM_TOKEN (needs a PAID npm plan for restricted
+   publish) → tag v0.1.0 runs the full release. v0.1.0 publishes client
+   pinning ONLY darwin helpers (deliberate); linux/win helper packages
+   publish in the same run, and the client pins + check-release targets
+   flip at the NEXT version. certs → packaging.md runbook; consumer →
+   invite flow per "Package visibility". Community post draft predates the
+   private-npm decision — revisit before posting.
