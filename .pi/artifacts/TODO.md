@@ -543,103 +543,6 @@ r2 NOT MERGEABLE: tint fallback alpha-0; fixes c3b25a8+225d09a; r3 CLEAN)
       f32) vẫn invisible; fix = One Dark text OPAQUE hsla(221,.11,.86,1)
       khớp default hiệu lực của gpui (cite fallback_themes.rs). r3 CLEAN.
 
-### 2026-08-27 - Gate 3-a pointer outside-click dismissal
-status: done | updated: 2026-08-27
-
-Goal: close the most user-visible deferred S14b edge — click outside an open
-overlay dismisses it — via one protocol event, helper detection, renderer
-prop, and select wiring. Protocol v1 discipline: both languages lockstep, new
-parity fixture, no snapshot regen (batch-01 untouched).
-
-#### Design (from recon of pinned gpui 35aab21)
-
-- New EventType `outsideClick` (variant-name camelCase is automatic). Wire:
-  `{type:event,id,eventType:outsideClick,x?,y?}` — decodeEvent already
-carries optional coords generically.
-- Helper detection: when a node subscribes OutsideClick, its rendered element
-  is wrapped in a tiny custom element (ImeAnchor precedent) whose paint()
-  records bounds and registers a next-frame window-level MouseDown listener
-  (paint-phase-only API, cleared per frame — no accumulation); Bubble-phase
-  press outside the recorded bounds emits the event through the injectable
-  sink. Bounds map rebuilds each render frame (no stale pruning debt).
-- Renderer: `onOutsideClick` prop → setEventListener; select.Root subscribes
-  and maps it to closeMenu() so every select/combobox instance dismisses.
-- Testability: gpui TestAppWindow::simulate_mouse_down/up works HEADLESSLY —
-  the helper slice gets a real end-to-end test (mount via TestApp, click
-  outside → sink sees outsideClick; click inside → nothing) with no window
-  server.
-
-#### Slices
-
-1. Protocol both sides + event parity fixture + renderer/select RED→GREEN
-2. Helper wrapper element + sink emission (TestApp RED→GREEN, headless)
-3. select dismissal unit coverage + deferred-edges test update + README
-   deferral wording
-4. Full gates + cross-language + independent review; close block
-
-#### Verification
-
-- RED observed on every layer before its GREEN: TS fixture decode rejected
-  `outsideClick`; the outside-click suite failed with no listener registered;
-  Rust fixture test failed on the f64 canonical-form trap (fixed by writing
-  `401.0`/`93.0` — the known serde lesson); the helper TestApp test failed
-  with zero emissions until the detector existed, then caught its own test-
-  setup bug (a TEXT child ignores size styles → bounds 1920×26) before going
-  green with a real 100×100 DIV.
-- Headless end-to-end proof: mount → paint registration →
-  `simulate_mouse_down(300,300)` emits exactly one outsideClick with
-  position; second frame re-registration → press at (50,50) emits nothing
-  (crates/helper/src/host.rs, `headless_render_tests`).
-- Cross-language: `event-outside-click-01.json` parses and re-emits
-  byte-exact in Rust and decodes in TS; `EventType` union + EVENT_TYPES +
-  Rust enum variant in lockstep; no fixture-snapshot regen owed (batch-01
-  untouched).
-- `bun run test` 231 pass / 0 fail across 24 files (select deferral test
-  updated: composition assertions retained, outside-click wording now
-  shipped); `bun run typecheck`, both consumer typechecks, `check:release`,
-  `cargo fmt --check`, `cargo clippy --all-targets --locked -- -D warnings`,
-  and full locked protocol+helper suites all green (only the known block
-  v0.1.6 future-incompat note remains).
-
-#### Review outcome
-
-- Independent review (full envelope, status success, confidence high) verdict
-  **MERGEABLE**: event sets 17/17 in lockstep, fixture byte-exact round trip,
-  snapshot untouched, paint-only next-frame-cleared registration verified
-  against pinned gpui source (window.rs:4848-4861), wrap-after-overlays
-  confirmed, helper-owned refusal intact both sides, all commands green
-  (231 bun tests, helper/protocol cargo suites, clippy, fmt, tsc).
-- One comment-only should-fix applied: select.Root comment now states that
-  anchored-menu presses DO emit outsideClick and why Bubble ordering makes
-  that safe. Reviewer suggestions also applied: the headless test now
-  asserts non-accumulation directly (3 frames → exactly 2 events), the
-  Bubble-over-Capture rationale lives on the detector doc comment, and the
-  ROADMAP Gate 3 bullet is annotated headless-landed with GUI evidence still
-  owed.
-- Open Gate 3 remainder (not this slice's debt, recorded by reviewer):
-  focus transfer/restoration, keyboard-nav hardening, IME-composition-safe
-  arrows, generic popover positioning/clipping, and per-OS GUI evidence.
-
-#### Verification
-
-- RED observed twice before implementation: `utilities.test.ts` failed on the
-  missing module; `class-prop.test.ts` failed on missing merge/diagnostic
-  behavior (class produced nothing, className stayed silent, variants absent).
-- First GREEN attempt regressed four existing suites (phantom empty
-  hover/active/dragOver setStyle ops per style touch); fixed by refusing
-  empty-vs-undefined layer emissions; suites re-ran green before proceeding.
-- `bun run test` 225 pass / 0 fail across 23 files (was 198 pre-slice);
-  `bun run typecheck`, `bun run check:consumer-jsx`, `bun run check:release`,
-  and `git diff --check` exited 0.
-- Real-helper proof: class-compiled styles (spacing + palette + variant
-  layers + radius) acked with an honest applied count through `--stdio`
-  (transport); `smoke:consumer-jsx` compiled `class="p-4 flex gap-4
-  hover:bg-blue-500"` through the universal plugin and the helper acked it on
-  both Bun and Node legs; `smoke:consumer-h` still green.
-- Matrix doc `docs/tailwind-subset.md` documents every supported family, the
-  exact deviation policy, and the refusal list; README's limitation bullet now
-  points to it instead of claiming Tailwind is wholly unsupported.
-
 ### 2026-08-27 - Gate 3-b overlay focus transfer and restoration
 status: done | updated: 2026-08-27
 
@@ -1151,3 +1054,27 @@ status: partial (code ready; pins flip at first publish)
    builds on all three OSes in debug today.
 6. [x] docs/packaging.md: Linux system-library requirements, unsigned
    Windows note, Windows .exe resolution note.
+
+### 2026-08-30 - SolidJS 2.0.0-rc.5 research + bump
+status: done
+
+Same discipline as rc.4: tarball-level diff, assumption re-verification, both
+package.json files in lockstep.
+
+1. [x] Diff review: createComponent byte-identical; universal = peerDep bump
+   only; babel-plugin rc.5 is the "universal text is text" compile-time fix
+   (static text under custom renderers no longer double-escaped - closes the
+   literal-`&lt;` gap); signals continues engine hardening (patch/optimistic
+   work); solid-js adds until/TimeoutError (additive, unused by us) and a
+   hydrating-aware For lazy-list refinement. babel-preset-solid still has no
+   rc.5 (stays rc.2; unused).
+2. [x] Canary server-stub assumption re-verified against the REAL rc.5
+   server build (throws) and client build (resolves). One-arg createEffect
+   prod behavior unchanged category.
+3. [x] Bump: root + packages/solid to rc.5 (lockstep), lock pruned, no rc.4
+   left. Gates: bun 254/254 (canary included), tsc x3, smoke:consumer-jsx
+   (compiled JSX through babel rc.5, Bun+Node real helper), smoke:consumer-h,
+   smoke:node, cargo 219, fmt, clippy (block future-incompat warning is the
+   known non-blocking noise).
+4. [x] ROADMAP + README versions to rc.5 (detailed diff rationale in this
+   block; ROADMAP keeps the short version-pins form).

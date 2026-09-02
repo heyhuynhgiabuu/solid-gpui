@@ -19,7 +19,7 @@ Solid JSX + signals → NDJSON mutation batches → Rust helper → GPUI window
 
 Where that stands:
 
-- **Works today:** macOS-first prerelease. Solid `2.0.0-rc.4`, one helper per
+- **Works today:** macOS-first prerelease. Solid `2.0.0-rc.5`, one helper per
   window, typed style maps with a documented Tailwind-compatible class subset,
   working select/combobox overlays with real focus/IME/anchoring semantics,
   dialogs, menus, markdown, lists, theming.
@@ -137,7 +137,7 @@ compiler export).
 
 ## Version pins
 
-- Solid `2.0.0-rc.4` (runtime, `@solidjs/universal`, `@solidjs/web`, Babel
+- Solid `2.0.0-rc.5` (runtime, `@solidjs/universal`, `@solidjs/web`, Babel
   plugin, signals) — kept aligned in **both** `package.json` files; a split
   resolution installs two solid-js copies and silently kills reactivity.
 - Bun `1.4.0` / Node LTS 20-24 for the client, always with

@@ -21,11 +21,11 @@
   "dependencies": {
     "@solid-gpui/client": "workspace:*",
     "@solid-gpui/protocol": "workspace:*",
-    "@solidjs/universal": "2.0.0-rc.4",
-    "solid-js": "2.0.0-rc.4"
+    "@solidjs/universal": "2.0.0-rc.5",
+    "solid-js": "2.0.0-rc.5"
   },
   "peerDependencies": {
-    "solid-js": "^2.0.0-rc.4"
+    "solid-js": "^2.0.0-rc.5"
   },
   "scripts": {
     "test": "bun --conditions=browser test"
