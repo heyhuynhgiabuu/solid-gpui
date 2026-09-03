@@ -37,7 +37,11 @@ import {
 export interface CanaryDeps {
   createRoot: (fn: (dispose: () => void) => unknown) => unknown
   createSignal: (initial: number) => [() => number, (n: number) => void]
-  createEffect: (compute: () => unknown, effect: (value: never) => void) => unknown
+  // Exact engine signature (rc.6 removed the one-arg overload). Structural
+  // stand-ins lose to the async-tolerant ComputeFunction under strict
+  // function types; the server-stub fake in the test asserts its way in with
+  // a comment instead.
+  createEffect: typeof createEffect
   flush: () => Promise<void> | void
 }
 

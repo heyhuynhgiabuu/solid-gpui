@@ -210,14 +210,24 @@ export function createSolidRenderer(send: Send): SolidGpuiRenderer {
       let ran = 0
       sigRoot((dispose) => {
         const [s, set] = sigCreate(0)
-        sigEffect(() => {
-          void s()
-          ran++
-        })
+        // Compute/effect pair (the one-arg form throws MISSING_EFFECT_FN on
+        // the 2.0 engine — this probe was silently dead until rc.6 removed
+        // its types). Fresh object per compute keeps the effect re-running.
+        // Both flushes happen while the root is ALIVE: a disposed root's
+        // queued runs are cancelled (the canary flushes before dispose for
+        // the same reason), and the first flush covers engines that run the
+        // initial pass on the scheduler instead of at creation.
+        sigEffect(
+          () => ({ read: s() }),
+          () => {
+            ran++
+          },
+        )
+        flushSolid()
         set(1)
+        flushSolid()
         dispose()
       })
-      flushSolid()
       if (ran < 2 && typeof console !== "undefined") {
         console.warn(
           "[solid-gpui] Solid effects are not re-running in this runtime. " +

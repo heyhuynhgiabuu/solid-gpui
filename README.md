@@ -18,8 +18,8 @@ The helper binary ships in per-platform npm packages (the esbuild model; today
 `darwin-arm64` and `darwin-x64`):
 
 ```sh
-bun add @solid-gpui/solid solid-js@2.0.0-rc.5   # or: npm i …
-bun add -d @solidjs/babel-plugin@2.0.0-rc.5 @babel/core
+bun add @solid-gpui/solid solid-js@2.0.0-rc.6   # or: npm i …
+bun add -d @solidjs/babel-plugin@2.0.0-rc.6 @babel/core
 ```
 
 Packages publish **private** (npm restricted) — installs need an invitation
@@ -150,7 +150,7 @@ The helper never evaluates JavaScript received over the wire.
 
 ## Solid version compatibility
 
-Targets Solid `2.0.0-rc.5` with the matching `@solidjs/universal`,
+Targets Solid `2.0.0-rc.6` with the matching `@solidjs/universal`,
 `@solidjs/web`, and compiler packages — kept aligned in **both** `package.json`
 files (a split resolution installs two solid-js copies and silently kills
 reactivity). Solid 1.x is unsupported; the pinned probe in
@@ -204,7 +204,7 @@ SOLID_GPUI_HELPER=$PWD/scripts/mock-host.mjs \
 
 ## Current limitations
 
-- Solid `2.0.0-rc.5` is itself a prerelease; keep runtime/universal/compiler
+- Solid `2.0.0-rc.6` is itself a prerelease; keep runtime/universal/compiler
   versions aligned.
 - macOS has the full local evidence; hosted CI covers Linux/Windows headless
   only. Prebuilt helpers are macOS-only so far.

@@ -1114,3 +1114,65 @@ before any credential exists.
    flip at the NEXT version. certs → packaging.md runbook; consumer →
    invite flow per "Package visibility". Community post draft predates the
    private-npm decision — revisit before posting.
+
+### 2026-09-02 - SolidJS 2.0.0-rc.6 research + bump
+status: done
+
+Same discipline as rc.4/rc.5: tarball-level diff of all five tracked crates,
+release-notes cross-check, canary re-verification against the REAL builds,
+both package.json files in lockstep.
+
+1. [x] Diff review (rc.5 → rc.6 tarballs, unpacked + diffed):
+   - solid-js: createComponent BYTE-IDENTICAL in prod/server/dev. Changes
+     are SSR/hydration-only: server.js pending-proxy became a status
+     machine (pending/ready/error) adding has/ownKeys/
+     getOwnPropertyDescriptor traps; solid.js hydration gate simplified;
+     dev.js console footer now points perf/graph codes at
+     DEV.attribution + the new @solidjs/diagnostics package. Zero overlap
+     with our no-hydration custom renderer.
+   - @solidjs/universal: additive RendererEffectOptions ({name}) threaded
+     through effect/insert/spread for dev attribution (#3063); prod
+     tree-shakes it. Compiled output for OUR config (universal, Show/For/
+     style/events fixture) is BYTE-IDENTICAL rc5→rc6 — verified
+     empirically with both plugin versions side by side.
+   - @solidjs/babel-plugin: experimental TSRX frontend (.tsrx files,
+     syntax option) + hydratable DOM-property fixes. Gains an OPTIONAL
+     peer @tsrx/core (peerDependenciesMeta.optional), lazily require'd
+     only for .tsrx sources / syntax:"tsrx" — unreachable from our .tsx
+     universal path. Origin ecosystem-legit (tsrx-org, trueadm et al.);
+     NOT in our lockfile (only as the optionalPeers declaration).
+   - @solidjs/signals: dev diagnostics (async waterfall detection,
+     hot-scope fanout aggregate, settle-walk invariants) + real async
+     store/optimistic fixes incl. #3181 (a REAL rc.5 wedge — TanStack
+     Query adapter loads wedged). TYPE CHANGE (32bc013): the one-arg
+     createEffect overload removed; TS now requires the compute/effect
+     pair. babel-preset-solid still rc.2 (unused).
+   - @solidjs/web: peer floor bump only; we never import it (alignment pin).
+2. [x] Canary re-verified against the REAL rc.6 builds: server build
+   (node condition) → canary THROWS with the named guidance (rc.6 also
+   warns on server-side signal writes now — the trap gets louder
+   upstream); browser condition → resolves, reactivity live. Probe
+   deleted after running (rc.5 precedent).
+3. [x] Type fallout fixed (caught by the consumer typecheck suites, exactly
+   their job): renderer.ts reactivity probe converted to the compute/
+   effect pair — it had been silently DEAD at runtime since rc.3 (one-arg
+   throws MISSING_EFFECT_FN; its try/catch swallowed it; the canary
+   already replaced it as the real guard). CanaryDeps.createEffect now
+   `typeof createEffect` (structural stand-ins lose to the async-
+   tolerant ComputeFunction under strict function types — tried twice);
+   the test's server-stub fake asserts into the slot with a comment (it
+   deliberately models the looser server.js signature).
+4. [x] Bump: root + packages/solid to rc.6 (lockstep), lock pruned, single
+   solid-js copy (symlink into bun's store verified; no @tsrx/core entry).
+5. [x] Gates: bun 254/254 · tsc ×3 · consumer typechecks ×3 · smoke:node +
+   smoke:consumer-jsx + smoke:consumer-h (real helper) · cargo
+   protocol+helper · clippy · fmt · git diff --check. README/ROADMAP pins
+   to rc.6.
+6. [x] Independent review round 1: NOT MERGEABLE — my probe conversion kept
+   dispose()-before-flush(): a disposed root's queued runs are cancelled,
+   so ran stayed 0 on CORRECT runtimes and the SSR warning would fire for
+   everyone. Fixed: both flushes run while the root is alive (canary
+   flushes before dispose for the same reason); probe body verified
+   empirically under BOTH conditions (browser: ran=2, no warn; server
+   stub: ran=0, warn fires). Gates re-run green; verdict round 2 pending.
+

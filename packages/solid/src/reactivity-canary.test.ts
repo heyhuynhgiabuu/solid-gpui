@@ -36,9 +36,12 @@ const stubDeps = (): CanaryDeps => {
         },
       ]
     },
-    createEffect: (compute: () => unknown) => {
-      compute()
-    },
+    // The stub models the SERVER build's createEffect (a looser runtime
+    // signature than the engine's generic — server.js's serverEffect takes
+    // (compute, effect) without constraints), so it asserts into the slot.
+    createEffect: ((compute: (previous: unknown) => unknown) => {
+      compute(undefined)
+    }) as unknown as CanaryDeps["createEffect"],
     flush: async () => {},
   }
 }
