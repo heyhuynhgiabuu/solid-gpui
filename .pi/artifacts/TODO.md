@@ -1177,4 +1177,10 @@ both package.json files in lockstep.
    stub: ran=0, warn fires). Round 2 MERGEABLE on all items.
 7. [x] Pushed 4f7b7b9..9d2508e; CI run 33717816442 green in 2m06s (all
    suites + gui-evidence on the 3-OS matrix).
+8. [x] Release dry-run re-verified at rc.6 (the published manifests changed
+   with the bump): pack:all + pack-helper darwin-arm64 + check-release
+   --tag v0.1.0 OK; fresh npm install from the four tarballs under Node
+   24.21 (no env override) resolved the helper via the platform package
+   (mode 0755 kept), getStats {helperVersion 0.1.0, protocolVersion 1},
+   batch-01 ack seq 42 applied 12, exit 0.
 
