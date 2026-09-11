@@ -1168,11 +1168,13 @@ both package.json files in lockstep.
    smoke:consumer-jsx + smoke:consumer-h (real helper) · cargo
    protocol+helper · clippy · fmt · git diff --check. README/ROADMAP pins
    to rc.6.
-6. [x] Independent review round 1: NOT MERGEABLE — my probe conversion kept
+6. [x] Independent review: round 1 NOT MERGEABLE — my probe conversion kept
    dispose()-before-flush(): a disposed root's queued runs are cancelled,
    so ran stayed 0 on CORRECT runtimes and the SSR warning would fire for
    everyone. Fixed: both flushes run while the root is alive (canary
    flushes before dispose for the same reason); probe body verified
    empirically under BOTH conditions (browser: ran=2, no warn; server
-   stub: ran=0, warn fires). Gates re-run green; verdict round 2 pending.
+   stub: ran=0, warn fires). Round 2 MERGEABLE on all items.
+7. [x] Pushed 4f7b7b9..9d2508e; CI run 33717816442 green in 2m06s (all
+   suites + gui-evidence on the 3-OS matrix).
 
