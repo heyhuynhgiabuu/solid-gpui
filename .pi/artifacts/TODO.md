@@ -1238,3 +1238,15 @@ builds, both package.json files in lockstep.
    typechecks x3 · smoke:node + smoke:consumer-jsx + smoke:consumer-h (real
    helper) · cargo protocol+helper · clippy · fmt · git diff --check.
    README/ROADMAP pins to rc.7.
+6. [x] Independent review: MERGEABLE — two wording fixes in this record
+   applied (createComponent claim scoped to rc.6 -> rc.7 per build; the new
+   CJS dev artifact is signals' node.dev.cjs, solid-js ships
+   solid.dev.cjs/server.dev.cjs). Pushed d12cab2; CI run 34583782735 green
+   (rust x3, ts, gui-evidence x3, node-smoke).
+7. [x] Release dry-run re-verified at rc.7: pack:all + pack-helper
+   darwin-arm64 + check-release --tag v0.1.0 OK; published tarball carries
+   solid-js/@solidjs/universal 2.0.0-rc.7 + peer ^2.0.0-rc.7; fresh npm
+   install from the tarballs under Node 24.21 resolved solid-js rc.7 and
+   the helper via the platform package (mode 0755), getStats
+   {helperVersion 0.1.0, protocolVersion 1}, batch-01 ack seq 42 applied
+   12, exit 0.
