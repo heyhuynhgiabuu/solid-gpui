@@ -1184,3 +1184,57 @@ both package.json files in lockstep.
    (mode 0755 kept), getStats {helperVersion 0.1.0, protocolVersion 1},
    batch-01 ack seq 42 applied 12, exit 0.
 
+
+### 2026-09-11 - SolidJS 2.0.0-rc.7 research + bump
+status: done
+
+Same discipline as rc.4/rc.5/rc.6: tarball-level diff of all five tracked
+crates, release-notes cross-check, canary re-verification against the REAL
+builds, both package.json files in lockstep.
+
+1. [x] Diff review (rc.6 → rc.7 tarballs, unpacked + diffed):
+   - solid-js: createComponent UNCHANGED rc.6 -> rc.7 in all four builds
+     (prod/dev/server/server.dev — byte-identical per build). Dev artifacts
+     renamed to the <entry>.dev.* convention (dev.js -> solid.dev.js,
+     dev.cjs -> solid.dev.cjs; new server.dev.js/server.dev.cjs) with
+     `development` conditions added on the server exports branches —
+     exports-map only, no deep-import surface of ours. Prod bundle deltas = patch-channel export removals,
+     hydration/SSR internals, and the For `$ll` seam stripped. Real fixes:
+     #3310 (queued effects preserved when pending actions merge — stale DOM
+     after commit), the rc.6 P1 store sweep (#3271/#3282/#3283/#3284), #3296
+     same-batch reset notify, #3303 refresh() halt, #3258 revert (derived
+     store seeds accept Partial again).
+   - @solidjs/universal: ONLY the patchDriver removal from the renderer
+     object + dev rename + solid-js peer floor ^rc.7. Nothing else moved.
+   - @solidjs/babel-plugin: the experimental patch channel is REMOVED
+     (patch.ts/patch-driver.ts deleted, registerPatch/registerRowOps/
+     registerSlotPatch/patchableRaw + patchDriver/rowProof/driveList gone,
+     `patchDriver` compiler option dropped) — an opt-in surface we never
+     referenced (verified by grep, zero hits). Also document-shell template
+     validation (#3259) and a hydration-id ref+spread fix; the optional
+     @tsrx/core peer stays optional and uninstalled.
+   - @solidjs/signals: patch/patch-hooks deleted; new dev CJS build
+     (dist/node.dev.cjs, selected by the development condition on the
+     require branch — a CJS host previously got DEV === undefined);
+     attribution engine grows
+     (feedback/flights/fallbacks/origin/LONG_HOLD/SILENT_HOLD thresholds —
+     dev-only, folds out of prod); createTrackedEffect deprecated (JSDoc);
+     createEffect signature UNCHANGED (no repeat of rc.6's type churn).
+     Type changes: Store<T> preserves the supplied type, derived-store
+     seeds accept Partial<T> again. Store-family bundles shrink ~900 B.
+   - @solidjs/web: alignment pin; never imported.
+2. [x] Our-surface verification: zero references to any removed
+   patch-channel API in the repo; compiled universal output BYTE-IDENTICAL
+   bp6 vs bp7 for a fixture covering Show/For (keyed, non-keyed, fallback)/
+   spread/ref/style/events; `$ll` absent from the rc.7 universal + signals
+   dist (it was a DOM list-driver hint we never read).
+3. [x] Canary re-verified against the REAL rc.7 builds: server build (node
+   condition) → throws with the named guidance; browser condition →
+   resolves, reactivity live. Probe deleted after running.
+4. [x] Bump: root + packages/solid to rc.7 (lockstep), peer floor
+   ^2.0.0-rc.7, lock pruned, single solid-js copy (symlink into bun's store
+   verified), signals rc.7 nested under it, no @tsrx/core entry.
+5. [x] Gates: bun 254/254 · tsc x3 (no type fallout this round) · consumer
+   typechecks x3 · smoke:node + smoke:consumer-jsx + smoke:consumer-h (real
+   helper) · cargo protocol+helper · clippy · fmt · git diff --check.
+   README/ROADMAP pins to rc.7.
